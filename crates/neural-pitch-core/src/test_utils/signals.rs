@@ -26,6 +26,14 @@ pub fn sine_wave(freq_hz: f32, sample_rate_hz: u32, n_samples: usize) -> Vec<f32
 /// Generate a vibrato signal: a sinusoid whose instantaneous frequency
 /// oscillates around `center_hz` at `vibrato_hz`, with peak deviation
 /// `vibrato_extent_cents` cents.
+///
+/// The vibrato modulator is phase-shifted so the *centre* of the requested
+/// window sits exactly on a zero crossing of the modulator. As a result the
+/// average instantaneous frequency over the window is exactly `center_hz`,
+/// even when the window covers less than a full vibrato period. Without this
+/// shift, a window starting at the rising edge of a 5 Hz vibrato modulator
+/// would carry a +20-30 cent bias for any 42 ms analysis frame, which would
+/// make `yin_vibrato_within_10_cents` unsatisfiable.
 pub fn vibrato_signal(
     center_hz: f32,
     vibrato_hz: f32,
@@ -40,10 +48,14 @@ pub fn vibrato_signal(
     let mut phase: f32 = 0.0;
     let extent_ratio = (vibrato_extent_cents / 1200.0).exp2(); // semitone ratio at peak
     let log2_ratio = (extent_ratio).log2(); // == vibrato_extent_cents / 1200
+    // Centre the window on a zero crossing of the modulator: `sin(2pi*v*t + phi)`
+    // is zero at t = centre when phi = -2*pi*v*t_centre.
+    let t_centre = (n_samples as f32 / sr) * 0.5;
+    let mod_phase_offset = -TAU * vibrato_hz * t_centre;
     for n in 0..n_samples {
         let t = n as f32 / sr;
-        // Frequency-modulation: f(t) = center * 2^(extent_octaves * sin(2*pi*v*t))
-        let mod_octaves = log2_ratio * (TAU * vibrato_hz * t).sin();
+        // Frequency-modulation: f(t) = center * 2^(extent_octaves * sin(2*pi*v*t + phi))
+        let mod_octaves = log2_ratio * (TAU * vibrato_hz * t + mod_phase_offset).sin();
         let f_inst = center_hz * mod_octaves.exp2();
         phase += TAU * f_inst / sr;
         out.push(phase.sin());
