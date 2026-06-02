@@ -1,0 +1,46 @@
+# Rust
+/target
+**/*.rs.bk
+Cargo.lock.bak
+
+# Node / frontend
+/node_modules
+/dist
+/.vite
+/coverage
+*.tsbuildinfo
+
+# Tauri build outputs
+/src-tauri/target
+/src-tauri/gen/schemas
+
+# Tooling
+.pre-commit-cache
+
+# Models / datasets (always fetched, never committed)
+/models/
+/tests/data/
+
+# Recordings (developer scratch)
+/recordings/
+
+# OS noise
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# IDE
+/.idea
+/.vscode/*
+!/.vscode/extensions.json
+!/.vscode/settings.json
+
+# Logs
+/logs
+*.log
+
+# Local env
+.env
+.env.local

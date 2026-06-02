@@ -1,0 +1,27 @@
+[package]
+name        = "neural-pitch-core"
+description = "Pure-Rust core: pitch detection, audio I/O abstractions, music theory, modular pipeline traits."
+version.workspace      = true
+edition.workspace      = true
+rust-version.workspace = true
+license.workspace      = true
+authors.workspace      = true
+repository.workspace   = true
+readme.workspace       = true
+
+[features]
+default = []
+neural  = []  # Phase 2 brings in ort + Viterbi + PESTO/CREPE backends
+dataset = []  # Phase 2/Tier-3 dataset-gated tests
+
+[dependencies]
+thiserror = { workspace = true }
+tracing   = { workspace = true }
+serde     = { workspace = true }
+
+[dev-dependencies]
+proptest  = "1"
+approx    = "0.5"
+
+[lints]
+workspace = true

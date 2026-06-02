@@ -1,0 +1,11 @@
+[build]
+rustflags = ["-D", "warnings"]
+
+[target.x86_64-unknown-linux-gnu]
+rustflags = ["-D", "warnings"]
+
+[target.aarch64-apple-darwin]
+rustflags = ["-D", "warnings"]
+
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-D", "warnings"]

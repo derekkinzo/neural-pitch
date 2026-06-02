@@ -1,0 +1,36 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "NeuralPitch",
+  "version": "0.1.0",
+  "identifier": "com.derekkinzo.neuralpitch",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "NeuralPitch",
+        "width": 1200,
+        "height": 800,
+        "resizable": true,
+        "fullscreen": false
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; img-src 'self' data:; font-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "category": "Music",
+    "copyright": "Copyright © 2026 Derek Kinzo",
+    "shortDescription": "Pitch-detection app for singers.",
+    "longDescription": "NeuralPitch is a modular, FOSS pitch-detection app focused on singers learning their range and intonation.",
+    "icon": [
+      "icons/icon.png"
+    ]
+  }
+}

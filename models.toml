@@ -1,0 +1,35 @@
+# neural-pitch model manifest
+#
+# This file declares third-party model weights that the application fetches at
+# runtime (or via a developer setup script). Weights are NEVER committed to the
+# repository — they are downloaded on demand and verified against the SHA-256
+# digest recorded here.
+#
+# Schema (per [[models]] entry):
+#   name              = string   — stable identifier used by the loader
+#   version           = string   — upstream version or release tag
+#   sha256            = string   — lowercase hex digest of the artifact bytes
+#   url_primary       = string   — canonical download URL
+#   url_mirror        = string   — optional fallback URL (same SHA-256)
+#   size_bytes        = integer  — expected size in bytes (sanity check)
+#   license_spdx      = string   — SPDX license identifier of the weights
+#   notice_required   = bool     — whether the upstream license requires NOTICE
+#   notice_text_path  = string   — path to bundled NOTICE/LICENSE excerpt
+#
+# Phase 2 populates this file with the actual model entries. Until then the
+# manifest is intentionally empty so tooling can parse it without errors.
+
+# Example (commented out — do not uncomment without supplying real values):
+#
+# [[models]]
+# name             = "example-pitch-model"
+# version          = "1.0.0"
+# sha256           = "0000000000000000000000000000000000000000000000000000000000000000"
+# url_primary      = "https://example.com/models/example-pitch-model-1.0.0.bin"
+# url_mirror       = "https://mirror.example.com/models/example-pitch-model-1.0.0.bin"
+# size_bytes       = 0
+# license_spdx     = "Apache-2.0"
+# notice_required  = true
+# notice_text_path = "docs/licenses/example-pitch-model-NOTICE.txt"
+
+models = []
