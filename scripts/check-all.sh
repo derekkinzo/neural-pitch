@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
+# Runs the same gate CI runs. Use before pushing.
 set -euo pipefail
-
-# Runs the same checks that pre-commit and CI run.
-# Useful for local "validate before pushing."
 
 run() {
   local label="$1"
@@ -14,9 +12,10 @@ run() {
 
 run "cargo fmt --check"      cargo fmt --all -- --check
 run "cargo clippy"           cargo clippy --workspace --all-targets --all-features -- -D warnings
-run "cargo test"             cargo test --workspace
+run "cargo test"             cargo test --workspace --all-features
 run "npm run typecheck"      npm run typecheck
-run "npm run format"         npm run format
+run "npm run format --check" npm run format -- --check
+run "npm run lint"           npm run lint
 
 echo
-echo "✅ all checks passed."
+echo "all checks passed."

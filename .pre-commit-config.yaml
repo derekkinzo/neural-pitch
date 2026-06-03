@@ -26,6 +26,18 @@ repos:
         exclude: "docs/research/.*\\.md"
   - repo: local
     hooks:
+      - id: eslint
+        name: eslint
+        language: system
+        entry: npm run lint --silent --
+        types_or: [ts, tsx]
+        pass_filenames: false
+      - id: typecheck
+        name: tsc --noEmit
+        language: system
+        entry: npm run typecheck --silent
+        types_or: [ts, tsx]
+        pass_filenames: false
       - id: commit-msg-format
         name: commit-msg-format
         language: script

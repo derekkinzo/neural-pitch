@@ -11,10 +11,11 @@ cargo fmt --all -- --check
 cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo test --workspace --all-features
 npm run typecheck
+npm run lint
 npm run format -- --check
 ```
 
-All five must be clean. CI runs the same gate plus a Linux/macOS/Windows × stable/beta test matrix and a `cargo deny` audit.
+`scripts/check-all.sh` runs the same gate. All six must be clean. CI runs the same gate plus a Linux/macOS/Windows × stable/beta test matrix and a `cargo deny` audit.
 
 ## Commit format
 

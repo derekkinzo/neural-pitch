@@ -109,6 +109,21 @@ jobs:
       - name: npm typecheck
         run: npm run typecheck
 
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+      - name: npm install
+        run: npm install
+      - name: npm run lint
+        run: npm run lint
+
   test:
     name: test (${{ matrix.os }} / ${{ matrix.toolchain }})
     runs-on: ${{ matrix.os }}
