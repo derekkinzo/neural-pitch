@@ -29,7 +29,7 @@
     "@typescript-eslint/parser": "^8",
     "@vitejs/plugin-react": "^4",
     "autoprefixer": "^10",
-    "eslint": "^9",
+    "eslint": "^10",
     "eslint-plugin-react": "^7",
     "eslint-plugin-react-hooks": "^5",
     "postcss": "^8",
