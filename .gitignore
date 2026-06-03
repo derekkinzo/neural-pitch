@@ -41,6 +41,12 @@ Thumbs.db
 /logs
 *.log
 
+# Playwright / E2E
+/playwright-report/
+/test-results/
+/blob-report/
+/tests/e2e/.auth
+
 # Local env
 .env
 .env.local

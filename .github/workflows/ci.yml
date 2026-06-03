@@ -108,6 +108,8 @@ jobs:
         run: npm install
       - name: npm typecheck
         run: npm run typecheck
+      - name: tsc -p tests/e2e
+        run: npx tsc -p tests/e2e/tsconfig.json
 
   lint:
     name: lint
@@ -194,3 +196,34 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: cargo build --release
         run: cargo build --release --workspace
+
+  e2e-mock:
+    name: e2e-mock
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+      - name: npm install
+        run: npm install
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: pw-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium webkit
+      - name: Run Playwright E2E (Chromium + WebKit)
+        run: npx playwright test --project=chromium --project=webkit
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 14

@@ -22,3 +22,4 @@ This directory contains the locked architecture decisions for `neural-pitch`. Ea
 | [ADR-0016](0016-test-pyramid-tier-1-day-1.md)                             | Test pyramid: Tier 1 day 1; Tiers 2–4 phased                                               |
 | [ADR-0017](0017-observability-tracing-tauri-plugin-log-no-telemetry.md)   | Observability: tracing + tauri-plugin-log; per-frame analysis cache; no telemetry          |
 | [ADR-0018](0018-triple-layer-enforcement-convention-pre-commit-ci.md)     | Triple-layer enforcement: convention + pre-commit + CI                                     |
+| [ADR-0019](0019-tier-5-e2e-playwright-mcp.md)                             | Tier 5 UI E2E: Playwright MCP browser-mode per-PR + tauri-driver nightly Linux/Windows     |

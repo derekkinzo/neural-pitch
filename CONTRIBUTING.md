@@ -13,9 +13,10 @@ cargo test --workspace --all-features
 npm run typecheck
 npm run lint
 npm run format -- --check
+npm run e2e          # requires `npx playwright install` once on a fresh machine
 ```
 
-`scripts/check-all.sh` runs the same gate. All six must be clean. CI runs the same gate plus a Linux/macOS/Windows × stable/beta test matrix and a `cargo deny` audit.
+`scripts/check-all.sh` runs the same gate. All seven must be clean. CI runs the same gate plus a Linux/macOS/Windows × stable/beta test matrix, a `cargo deny` audit, and the Tier-5 `e2e-mock` job (Chromium + WebKit). Tier-5 details live in [`docs/design/TEST-PLAN.md`](docs/design/TEST-PLAN.md) §6.
 
 ## Commit format
 
