@@ -1,4 +1,7 @@
 [toolchain]
-channel = "1.85"
+# Pinned to 1.88 (June 2025) because RUSTSEC-2026-0009 is fixed only in
+# `time` 0.3.47, which requires Rust 1.88. Edition 2024 features and the
+# workspace.lints feature are also available in 1.85+.
+channel = "1.88"
 components = ["rustfmt", "clippy", "rust-analyzer", "rust-src", "rust-docs"]
 profile = "default"

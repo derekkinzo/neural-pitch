@@ -21,7 +21,7 @@ From the first commit:
 - The pure-Rust core lives in `crates/neural-pitch-core/` and contains no `tauri::*` or `tauri_plugin_*` imports.
 - Audio I/O is abstracted behind traits (`PitchEstimator`, `FrameSink`, future `AudioBackend`) so future mobile audio backends (oboe on Android, AVAudioEngine on iOS) can substitute without core changes.
 - Bundle ID is `com.<org>.neuralpitch` (lowercase), matching Apple/Google conventions.
-- Edition 2024, MSRV 1.85.
+- Edition 2024, MSRV 1.88 (bumped from 1.85 to consume `time` 0.3.47, which patches RUSTSEC-2026-0009).
 
 No mobile builds are produced until Phase 6.
 

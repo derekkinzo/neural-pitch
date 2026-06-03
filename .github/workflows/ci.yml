@@ -112,6 +112,11 @@ jobs:
   test:
     name: test (${{ matrix.os }} / ${{ matrix.toolchain }})
     runs-on: ${{ matrix.os }}
+    env:
+      # Override rust-toolchain.toml so the matrix actually exercises
+      # stable + beta (rather than being silently pinned to MSRV by
+      # the toolchain file).
+      RUSTUP_TOOLCHAIN: ${{ matrix.toolchain }}
     strategy:
       fail-fast: false
       matrix:
