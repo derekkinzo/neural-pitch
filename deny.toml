@@ -1,12 +1,16 @@
 [advisories]
-yanked = "warn"
-ignore = [
-  # rust-unic crate family is unmaintained; pulled in transitively by Tauri's
-  # tauri-utils -> urlpattern -> unic-ucd-ident. No safe upgrade available
-  # and no alternative crate path. Revisit when Tauri or urlpattern migrates
-  # to icu4x or unicode-rs. Tracking: https://github.com/rustsec/advisory-db/issues/2414
-  "RUSTSEC-2025-0098",
-]
+# Vulnerabilities are hard errors and must be addressed.
+vulnerability = "deny"
+# Unmaintained advisories are informational. The Tauri / cpal / audio
+# crate chains pull in many transitively-unmaintained crates (gtk-rs GTK3
+# bindings, rust-unic, paste, derivative, etc.) that we cannot upgrade
+# without Tauri's upstream migrating first. Surface them as warnings so
+# we see them, but do not fail CI on something we cannot fix.
+unmaintained = "warn"
+unsound       = "deny"
+notice        = "warn"
+yanked        = "warn"
+ignore        = []
 
 [licenses]
 confidence-threshold = 0.93
