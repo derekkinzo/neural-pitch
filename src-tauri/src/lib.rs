@@ -25,5 +25,8 @@ pub fn run() {
 /// Phase 0 placeholder command. Replaced in Phase 1 with start_capture / stop_capture / etc.
 #[tauri::command]
 fn greet(name: &str) -> String {
-    format!("Hello, {name}! NeuralPitch core says: A4 default = {} Hz", 440.0)
+    format!(
+        "Hello, {name}! NeuralPitch core says: A4 default = {} Hz",
+        440.0
+    )
 }

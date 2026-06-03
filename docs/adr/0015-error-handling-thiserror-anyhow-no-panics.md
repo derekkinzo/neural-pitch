@@ -9,7 +9,7 @@ Accepted — 2026-06-02.
 The app spans three error-handling contexts:
 
 1. **Library crates** (`neural-pitch-core`, future `-io`, `-ml`) — public API surface; callers should be able to `match` on the error variant.
-2. **Application code** (`src-tauri/`) — gluing things together; callers care about *context* (what was being attempted) more than the specific variant.
+2. **Application code** (`src-tauri/`) — gluing things together; callers care about _context_ (what was being attempted) more than the specific variant.
 3. **Audio callback** — real-time; must not panic, must not allocate, must not block.
 
 A single error-handling style across all three either burdens the application code with `From` boilerplate or leaves library callers without typed errors.

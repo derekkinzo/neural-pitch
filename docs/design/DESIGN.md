@@ -4,7 +4,7 @@
 
 **Active.** This is the canonical architecture and design document for the NeuralPitch project, locked at the 2026-06-02 design interview. It is the single source of truth for project shape, dependency selection, module layout, real-time pipeline topology, persistence, concurrency, testing, observability, and roadmap. Conflicts between this document and any other artefact in the repository are resolved in favour of this document; updates land via pull request and are recorded in the ADR index (§17).
 
-This document supersedes the three upstream research reports as the *decision* surface; those reports remain authoritative as the *evidence* surface and are cited by relative path throughout. The reports are:
+This document supersedes the three upstream research reports as the _decision_ surface; those reports remain authoritative as the _evidence_ surface and are cited by relative path throughout. The reports are:
 
 - [`../research/RESEARCH-REPORT.md`](../research/RESEARCH-REPORT.md) — DSP, ML, and ecosystem survey.
 - [`../research/MODULAR-PITCH-RESEARCH.md`](../research/MODULAR-PITCH-RESEARCH.md) — modular pitch-pipeline research, trait surface, per-stem dispatch.
@@ -22,10 +22,10 @@ This file lives at `docs/design/DESIGN.md`; the `../research/...` paths above re
 
 The project explicitly designs for a small, well-known audience. Anonymous-internet-stranger ergonomics, growth funnels, and engagement loops are not in scope.
 
-| Persona | Role | Skill assumption | What they need from the app |
-|---|---|---|---|
-| **Self (primary)** | Developer-author; singer learning their own voice | Comfortable in Rust, audio DSP, terminal; intermediate musician | Trustworthy live pitch readout for vocal practice; vocal range and intonation feedback; a sandbox to learn neural pitch detection by building it |
-| **Friends / contributors (secondary)** | Casual testers; a handful of musicians the author knows personally | Mixed: one-click installs expected, but tolerant of rough edges | Install on macOS / Linux / Windows; sing into it; report bugs in plain language; optionally clone, build, and contribute |
+| Persona                                | Role                                                               | Skill assumption                                                | What they need from the app                                                                                                                      |
+| -------------------------------------- | ------------------------------------------------------------------ | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Self (primary)**                     | Developer-author; singer learning their own voice                  | Comfortable in Rust, audio DSP, terminal; intermediate musician | Trustworthy live pitch readout for vocal practice; vocal range and intonation feedback; a sandbox to learn neural pitch detection by building it |
+| **Friends / contributors (secondary)** | Casual testers; a handful of musicians the author knows personally | Mixed: one-click installs expected, but tolerant of rough edges | Install on macOS / Linux / Windows; sing into it; report bugs in plain language; optionally clone, build, and contribute                         |
 
 Implication for the design: the user-experience bar is "would I personally use this every day, and would I be comfortable handing the binary to a friend who sings". It is **not** "would a stranger discovering this on a store page have a frictionless onboarding". This authorises certain low-cost simplifications that a commercial product could not make — for example, defaulting to visual-only feedback with no through-monitoring (Phase 1, see ADR-0006), shipping recordings into a single app-managed library directory (ADR-0012), and deferring localisation infrastructure beyond a single English locale source — all with the architectural seams in place to relax these assumptions later.
 
@@ -33,16 +33,16 @@ Implication for the design: the user-experience bar is "would I personally use t
 
 The phased roadmap from §13 is the canonical scope statement; this section reproduces only the per-phase headline so that downstream sections can reference it.
 
-| Phase | Headline scope |
-|---|---|
-| 0 | Project skeleton, TDD harness, CI, golden tables — no Tauri UI |
-| 1 | Live monophonic tuner; YIN / MPM with auto-prior; visual-only feedback; no recording; no neural |
-| 2 | Recording + playback; offline pYIN; PESTO ONNX neural backend behind `feature = "neural"`; vocal range; vibrato detection |
-| 3 | File upload; whole-mix Basic Pitch polyphonic transcription; MIDI export |
-| 4 | Ear-training games (movable-do solfege; Smule-style karaoke pitch ribbon) |
-| 5 | Stem separation (HTDemucs default, BS-RoFormer additive when GPU detected) and per-stem detector dispatch |
-| 6 | Mobile iOS + Android via Tauri Mobile |
-| 7 | Optional learning side-quests (pure-Rust PESTO via burn / candle; fine-tunes; OSS contributions) |
+| Phase | Headline scope                                                                                                            |
+| ----- | ------------------------------------------------------------------------------------------------------------------------- |
+| 0     | Project skeleton, TDD harness, CI, golden tables — no Tauri UI                                                            |
+| 1     | Live monophonic tuner; YIN / MPM with auto-prior; visual-only feedback; no recording; no neural                           |
+| 2     | Recording + playback; offline pYIN; PESTO ONNX neural backend behind `feature = "neural"`; vocal range; vibrato detection |
+| 3     | File upload; whole-mix Basic Pitch polyphonic transcription; MIDI export                                                  |
+| 4     | Ear-training games (movable-do solfege; Smule-style karaoke pitch ribbon)                                                 |
+| 5     | Stem separation (HTDemucs default, BS-RoFormer additive when GPU detected) and per-stem detector dispatch                 |
+| 6     | Mobile iOS + Android via Tauri Mobile                                                                                     |
+| 7     | Optional learning side-quests (pure-Rust PESTO via burn / candle; fine-tunes; OSS contributions)                          |
 
 The phase ordering — ear-training before stem separation — is locked by ADR-0009.
 
@@ -50,13 +50,13 @@ The phase ordering — ear-training before stem separation — is locked by ADR-
 
 The following are intentionally out of scope. Each non-goal is a deliberate negative constraint that excludes feature work, defends design simplicity, and signals to contributors what kinds of pull requests will not be accepted.
 
-| Non-goal | Rationale |
-|---|---|
-| **Not a recording studio / DAW** | No multi-track timeline editing, no plug-in hosting, no mixing, no mastering, no MIDI sequencing. The recording feature (Phase 2) exists only to capture single-take vocal performances for analysis and review. |
-| **Not a real-time performance / monitoring tool** | Phase 1 is **visual-only feedback, no through-monitoring** (ADR-0006). No latency-critical headphone mix; no live-on-stage use case. A future `MonitoringPipeline` is allowed as an additive sibling, but the Phase 1 latency budget (see §13) is sized for visual reaction, not audio reinjection. |
-| **Not a commercial product** | No telemetry, no crash reports, no analytics, no ads, no in-app purchases, no accounts, no cloud sync. All behaviour is local-only; the only network calls are explicit user-initiated model downloads (Phase 2+). License-encumbered model weights are correspondingly only a concern at the level of redistributing the FOSS app, not commercial sale. |
-| **Not a social / community platform** | No accounts, no sharing, no leaderboards, no song library exchange, no user-generated-content store. Recordings are stored in a per-user app-managed library on the local filesystem and never leave the device unless the user manually exports a file. |
-| **Not a generic audio-analysis framework** | The Rust core is reusable (designed with no Tauri imports so it can later back a CLI or mobile shell), but the public surface is shaped by the singing-voice primary use case. Generality across arbitrary instruments is a Phase 1 advanced setting and a Phase 5 stem-separation outcome — not a v0.1 design driver. |
+| Non-goal                                          | Rationale                                                                                                                                                                                                                                                                                                                                                |
+| ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Not a recording studio / DAW**                  | No multi-track timeline editing, no plug-in hosting, no mixing, no mastering, no MIDI sequencing. The recording feature (Phase 2) exists only to capture single-take vocal performances for analysis and review.                                                                                                                                         |
+| **Not a real-time performance / monitoring tool** | Phase 1 is **visual-only feedback, no through-monitoring** (ADR-0006). No latency-critical headphone mix; no live-on-stage use case. A future `MonitoringPipeline` is allowed as an additive sibling, but the Phase 1 latency budget (see §13) is sized for visual reaction, not audio reinjection.                                                      |
+| **Not a commercial product**                      | No telemetry, no crash reports, no analytics, no ads, no in-app purchases, no accounts, no cloud sync. All behaviour is local-only; the only network calls are explicit user-initiated model downloads (Phase 2+). License-encumbered model weights are correspondingly only a concern at the level of redistributing the FOSS app, not commercial sale. |
+| **Not a social / community platform**             | No accounts, no sharing, no leaderboards, no song library exchange, no user-generated-content store. Recordings are stored in a per-user app-managed library on the local filesystem and never leave the device unless the user manually exports a file.                                                                                                 |
+| **Not a generic audio-analysis framework**        | The Rust core is reusable (designed with no Tauri imports so it can later back a CLI or mobile shell), but the public surface is shaped by the singing-voice primary use case. Generality across arbitrary instruments is a Phase 1 advanced setting and a Phase 5 stem-separation outcome — not a v0.1 design driver.                                   |
 
 ### 1.5 Anchoring quotes from the research
 
@@ -84,26 +84,26 @@ This section enumerates the load-bearing principles that govern every subsequent
 
 The principles are derived from three upstream sources:
 
-| Source | Path |
-|---|---|
-| Research report (DSP, ML, ecosystem survey) | [`../research/RESEARCH-REPORT.md`](../research/RESEARCH-REPORT.md) |
-| Modular pitch-pipeline research (trait shape, backend menu) | [`../research/MODULAR-PITCH-RESEARCH.md`](../research/MODULAR-PITCH-RESEARCH.md) |
-| Repo conventions (idiom, hygiene, FOSS norms) | [`../research/REPO-CONVENTIONS-REPORT.md`](../research/REPO-CONVENTIONS-REPORT.md) |
+| Source                                                      | Path                                                                               |
+| ----------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Research report (DSP, ML, ecosystem survey)                 | [`../research/RESEARCH-REPORT.md`](../research/RESEARCH-REPORT.md)                 |
+| Modular pitch-pipeline research (trait shape, backend menu) | [`../research/MODULAR-PITCH-RESEARCH.md`](../research/MODULAR-PITCH-RESEARCH.md)   |
+| Repo conventions (idiom, hygiene, FOSS norms)               | [`../research/REPO-CONVENTIONS-REPORT.md`](../research/REPO-CONVENTIONS-REPORT.md) |
 
 ### 2.1 Summary table
 
-| # | Principle | One-line consequence |
-|---|---|---|
-| P1 | Modular trait boundaries before vertical features | Backends sit behind traits before any concrete backend is written. |
-| P2 | Pure-Rust core, Tauri only at the shell boundary | `neural-pitch-core` has zero `tauri::*` imports. |
-| P3 | The audio callback is sacred | No `alloc`, no lock, no syscall, no panic in the cpal callback. |
-| P4 | Tests before code (TDD) | Every public function lands with its failing test in the same series. |
-| P5 | Idiomatic Rust + Linux-kernel commit hygiene | `clippy::pedantic`, `unsafe_code = "forbid"`, kernel-style commits, DCO. |
-| P6 | FOSS-first, no telemetry, local-only data | Dual MIT OR Apache-2.0; zero outbound traffic except user-initiated model downloads. |
-| P7 | Auto-detect over user-config | The singing primary use case must Just Work without an instrument selector. |
-| P8 | Ship visual-only Phase 1, modular for monitoring later | No through-monitoring path day 1; `MonitoringPipeline` reserved as additive sibling. |
-| P9 | Bake mobile-shape day 1, defer mobile builds | `crate-type = ["staticlib","cdylib","rlib"]`, lib name `neural_pitch_lib`, no actual mobile targets until Phase 6. |
-| P10 | Fail loudly in tests, gracefully in production | `unwrap`/`expect` denied in production code; tests exempt; production paths return `Result`. |
+| #   | Principle                                              | One-line consequence                                                                                               |
+| --- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
+| P1  | Modular trait boundaries before vertical features      | Backends sit behind traits before any concrete backend is written.                                                 |
+| P2  | Pure-Rust core, Tauri only at the shell boundary       | `neural-pitch-core` has zero `tauri::*` imports.                                                                   |
+| P3  | The audio callback is sacred                           | No `alloc`, no lock, no syscall, no panic in the cpal callback.                                                    |
+| P4  | Tests before code (TDD)                                | Every public function lands with its failing test in the same series.                                              |
+| P5  | Idiomatic Rust + Linux-kernel commit hygiene           | `clippy::pedantic`, `unsafe_code = "forbid"`, kernel-style commits, DCO.                                           |
+| P6  | FOSS-first, no telemetry, local-only data              | Dual MIT OR Apache-2.0; zero outbound traffic except user-initiated model downloads.                               |
+| P7  | Auto-detect over user-config                           | The singing primary use case must Just Work without an instrument selector.                                        |
+| P8  | Ship visual-only Phase 1, modular for monitoring later | No through-monitoring path day 1; `MonitoringPipeline` reserved as additive sibling.                               |
+| P9  | Bake mobile-shape day 1, defer mobile builds           | `crate-type = ["staticlib","cdylib","rlib"]`, lib name `neural_pitch_lib`, no actual mobile targets until Phase 6. |
+| P10 | Fail loudly in tests, gracefully in production         | `unwrap`/`expect` denied in production code; tests exempt; production paths return `Result`.                       |
 
 ### 2.2 P1 — Modular trait boundaries before vertical features
 
@@ -149,14 +149,14 @@ The shell crate (`src-tauri/`) is the only place that implements this trait agai
 
 The cpal input callback is a real-time context. The following are forbidden inside it:
 
-| Forbidden | Reason |
-|---|---|
-| `Box::new`, `Vec::push` past capacity, any allocation | Allocator may take a global lock or page-fault. |
-| `std::sync::Mutex`, `RwLock`, `parking_lot::Mutex` | Priority inversion, unbounded wait. |
-| `println!`, `eprintln!`, `tracing::*`, `log::*` | I/O syscall, formatter alloc. |
-| `tauri::*` emit, channel send other than `rtrb::Producer::push` | Runtime crossing, alloc. |
-| File I/O, network I/O | Syscall, unbounded latency. |
-| `unwrap`, `expect`, `panic!`, `?` on a fallible type that can fail | Unwinding in RT context. |
+| Forbidden                                                          | Reason                                          |
+| ------------------------------------------------------------------ | ----------------------------------------------- |
+| `Box::new`, `Vec::push` past capacity, any allocation              | Allocator may take a global lock or page-fault. |
+| `std::sync::Mutex`, `RwLock`, `parking_lot::Mutex`                 | Priority inversion, unbounded wait.             |
+| `println!`, `eprintln!`, `tracing::*`, `log::*`                    | I/O syscall, formatter alloc.                   |
+| `tauri::*` emit, channel send other than `rtrb::Producer::push`    | Runtime crossing, alloc.                        |
+| File I/O, network I/O                                              | Syscall, unbounded latency.                     |
+| `unwrap`, `expect`, `panic!`, `?` on a fallible type that can fail | Unwinding in RT context.                        |
 
 The only legal egress from the callback is `rtrb::Producer::push` of a `Copy` sample frame. Ring-buffer-full increments an `AtomicU64` drop counter and returns. A worker thread reads the counter for diagnostics. See [`../research/RESEARCH-REPORT.md`](../research/RESEARCH-REPORT.md) for the cpal/rtrb pattern survey and the cpal sole-maintainer caveat.
 
@@ -170,13 +170,13 @@ Idiom and hygiene baselines come from [`../research/REPO-CONVENTIONS-REPORT.md`]
 
 ### 2.7 P6 — FOSS-first, no telemetry, local-only data
 
-| Aspect | Decision |
-|---|---|
-| License | dual `MIT OR Apache-2.0` (ADR-0001); `LICENSE-MIT` and `LICENSE-APACHE` at repo root |
-| Telemetry | none, ever, except explicit user-initiated model downloads |
-| Crash reporting | none |
-| Data residence | local only — recordings and analysis cache in platform user-data dir |
-| Future opt-in telemetry | permitted only as opt-in with a user-visible toggle |
+| Aspect                  | Decision                                                                             |
+| ----------------------- | ------------------------------------------------------------------------------------ |
+| License                 | dual `MIT OR Apache-2.0` (ADR-0001); `LICENSE-MIT` and `LICENSE-APACHE` at repo root |
+| Telemetry               | none, ever, except explicit user-initiated model downloads                           |
+| Crash reporting         | none                                                                                 |
+| Data residence          | local only — recordings and analysis cache in platform user-data dir                 |
+| Future opt-in telemetry | permitted only as opt-in with a user-visible toggle                                  |
 
 ### 2.8 P7 — Auto-detect over user-config wherever possible
 
@@ -190,41 +190,42 @@ Phase 1 ships visual feedback only (ADR-0006). The architecture reserves a `Moni
 
 No mobile builds until Phase 6 (ADR-0002), but the build shape is mobile-ready from the first commit:
 
-| Aspect | Day 1 setting | Why |
-|---|---|---|
-| Lib name | `neural_pitch_lib` | iOS/Android Tauri Mobile expects this shape |
-| Crate-type | `["staticlib","cdylib","rlib"]` | Static for iOS, cdylib for Android, rlib for tests |
-| Bundle ID | `com.<org>.neuralpitch` (lowercase) | Apple/Google bundle-ID conventions |
-| Edition | 2024 | — |
-| MSRV | `rust-version = "1.85"` | Pinned to support edition 2024 |
+| Aspect     | Day 1 setting                       | Why                                                |
+| ---------- | ----------------------------------- | -------------------------------------------------- |
+| Lib name   | `neural_pitch_lib`                  | iOS/Android Tauri Mobile expects this shape        |
+| Crate-type | `["staticlib","cdylib","rlib"]`     | Static for iOS, cdylib for Android, rlib for tests |
+| Bundle ID  | `com.<org>.neuralpitch` (lowercase) | Apple/Google bundle-ID conventions                 |
+| Edition    | 2024                                | —                                                  |
+| MSRV       | `rust-version = "1.85"`             | Pinned to support edition 2024                     |
 
 ### 2.11 P10 — Fail loudly in tests, gracefully in production
 
-| Layer | Error type | Panic policy |
-|---|---|---|
-| Library crates (`neural-pitch-core`, future `-io`, `-ml`) | `thiserror`-derived `Error` enum, one per crate | No panics; `clippy::unwrap_used`/`expect_used` denied |
-| Application layer (`src-tauri/`) | `anyhow::Result<T>` with `.context(...)` on bubble-up | No panics |
-| Tauri commands | `Result<T, String>` formatted as `format!("{e:#}")` | No panics |
-| Audio callback (P3) | drop-counter only | Forbidden absolutely |
-| Tests | `unwrap`/`expect` allowed and encouraged | Loud failures preferred |
+| Layer                                                     | Error type                                            | Panic policy                                          |
+| --------------------------------------------------------- | ----------------------------------------------------- | ----------------------------------------------------- |
+| Library crates (`neural-pitch-core`, future `-io`, `-ml`) | `thiserror`-derived `Error` enum, one per crate       | No panics; `clippy::unwrap_used`/`expect_used` denied |
+| Application layer (`src-tauri/`)                          | `anyhow::Result<T>` with `.context(...)` on bubble-up | No panics                                             |
+| Tauri commands                                            | `Result<T, String>` formatted as `format!("{e:#}")`   | No panics                                             |
+| Audio callback (P3)                                       | drop-counter only                                     | Forbidden absolutely                                  |
+| Tests                                                     | `unwrap`/`expect` allowed and encouraged              | Loud failures preferred                               |
 
 ADR-0015 locks this policy.
 
 ### 2.12 Interaction matrix
 
-| Decision | Principles in play | Resolution |
-|---|---|---|
-| No through-monitoring in Phase 1 | P8 wins over hypothetical "feature parity with tuner apps" | Visual-only ships first; monitoring is additive. |
-| `tauri::ipc::Channel` only used in shell crate | P2 over convenience of importing Tauri in core | Channel sender owned by shell; core emits via `FrameSink` trait. |
-| Manual instrument selector demoted | P7 over flexibility | Auto-instrument is default; selector moved to advanced settings. |
-| `crates/-io` and `crates/-ml` not split day 1 | P1 modular boundaries vs. YAGNI | Trait boundaries day 1; crate boundaries when there is a second consumer. |
-| Audio-callback drop counter | P3 over visibility into drops | `AtomicU64` increment in callback; worker reads and logs. |
+| Decision                                       | Principles in play                                         | Resolution                                                                |
+| ---------------------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------- |
+| No through-monitoring in Phase 1               | P8 wins over hypothetical "feature parity with tuner apps" | Visual-only ships first; monitoring is additive.                          |
+| `tauri::ipc::Channel` only used in shell crate | P2 over convenience of importing Tauri in core             | Channel sender owned by shell; core emits via `FrameSink` trait.          |
+| Manual instrument selector demoted             | P7 over flexibility                                        | Auto-instrument is default; selector moved to advanced settings.          |
+| `crates/-io` and `crates/-ml` not split day 1  | P1 modular boundaries vs. YAGNI                            | Trait boundaries day 1; crate boundaries when there is a second consumer. |
+| Audio-callback drop counter                    | P3 over visibility into drops                              | `AtomicU64` increment in callback; worker reads and logs.                 |
 
 ## 3. Recommended Stack
 
 This section enumerates the dependency stack frozen by the 2026-06-02 design interview. Every row in the table below is authoritative and overrides any conflicting recommendation in upstream research. Sources: [`../research/RESEARCH-REPORT.md`](../research/RESEARCH-REPORT.md) §2 and [`../research/MODULAR-PITCH-RESEARCH.md`](../research/MODULAR-PITCH-RESEARCH.md) §2. Naming/edition/MSRV constraints come from [`../research/REPO-CONVENTIONS-REPORT.md`](../research/REPO-CONVENTIONS-REPORT.md).
 
 The "Day" column uses these values:
+
 - **D1** — present from Phase 0.
 - **P1** — added during Phase 1 (live monophonic tuner).
 - **P2** — added during Phase 2 (record/playback, neural backend, vocal range, vibrato).
@@ -237,68 +238,68 @@ Version pins below reflect the intent at the design freeze. Concrete pin values 
 
 ### 3.1 Stack table
 
-| Layer | Choice | Version target | License | Role | Day |
-|---|---|---|---|---|---|
-| Shell | Tauri | 2.x | Apache-2.0 OR MIT | Desktop window, IPC, plugin host; mobile-shaped lib emitted day 1 | D1 |
-| Tauri plugin: store | `tauri-plugin-store` | 2.x | Apache-2.0 OR MIT | Settings JSON in OS-correct config dir | D1 |
-| Tauri plugin: log | `tauri-plugin-log` | 2.x | Apache-2.0 OR MIT | OS-blessed log file paths | D1 |
-| Tauri plugin: dialog | `tauri-plugin-dialog` | 2.x | Apache-2.0 OR MIT | Native open/save dialogs (file upload Phase 3) | P3 |
-| Tauri plugin: fs | `tauri-plugin-fs` | 2.x | Apache-2.0 OR MIT | Scoped filesystem reads for Phase 3 file upload (capability-gated) | P3 |
-| Frontend framework | React | 19.x | MIT | UI; chosen over SvelteKit for shadcn/ui ecosystem alignment (ADR-0003) | D1 |
-| Frontend bundler | Vite | current LTS at design freeze | MIT | Dev server + production bundle | D1 |
-| Frontend language | TypeScript | 5.x (strict) | Apache-2.0 | `tsc --noEmit` in CI; `strict: true` | D1 |
-| State management | Zustand | 5.x | MIT | Lightweight store; no Redux boilerplate | D1 |
-| CSS framework | Tailwind CSS | 4.x | MIT | Utility classes; design-token consistency | D1 |
-| Component primitives | shadcn/ui (radix-ui) | radix 1.x | MIT | Accessible primitives; copy-in pattern | D1 |
-| Frontend canvas: waveform | wavesurfer.js | 7.x | BSD-3-Clause | Recording playback view + Spectrogram plugin | P2 |
-| Frontend canvas: notation | OpenSheetMusicDisplay | 1.x | BSD-3-Clause | MusicXML rendering for transcription/ear-training | P3 |
-| Audio capture + playback | `cpal` | latest 0.x at design freeze | Apache-2.0 OR MIT | Cross-platform mic + speaker; sole maintainer seeking handoff (cpal issue #981) — vendor-and-patch posture | D1 |
-| Decode | `symphonia` | latest 0.x | MPL-2.0 | WAV/FLAC/MP3 day 1; AAC/M4A/OGG/AIFF behind app-level Cargo features | D1 |
-| Encode (recording, FLAC) | `flacenc-rs` | latest 0.x | Apache-2.0 | Pure-Rust FLAC encoder; FLAC is the default recording format (ADR-0011) | P2 |
-| Encode (recording, WAV) | `hound` | 3.x | Apache-2.0 OR MIT | WAV encoder behind advanced-settings opt-in | P2 |
-| FFT (complex) | `rustfft` | 6.x | Apache-2.0 OR MIT | SIMD; transitive via realfft | D1 |
-| FFT (real) | `realfft` | 3.x | Apache-2.0 OR MIT | Real-input FFT; spectrogram + vibrato pipelines | D1 |
-| Resampling | `rubato` | 0.x (latest) | MIT | Sinc / FFT / polynomial; needed for 16 kHz neural inputs | P2 |
-| Filters | `biquad` | 0.x | MIT | Pre-emphasis, anti-alias, mains-hum notch | D1 |
-| Mel spectrogram | `mel_spec` | 0.x | MIT | librosa parity; YAMNet/Basic Pitch front-end | P2 |
-| SPSC ring buffer | `rtrb` | 0.x | MIT OR Apache-2.0 | Wait-free audio-callback → DSP-worker hand-off | D1 |
-| MPMC channel | `crossbeam-channel` | 0.5.x | MIT OR Apache-2.0 | Fan-out from DSP worker to multiple consumers | D1 |
-| Async cancellation | `tokio-util` (`CancellationToken`) | 0.7.x | MIT | Cross-runtime cooperative cancellation | D1 |
-| Mutex (non-audio) | `parking_lot` | 0.12.x | MIT OR Apache-2.0 | Faster than `std::sync::Mutex`; non-poisoning | D1 |
-| Tensors | `ndarray` | major matching `ort` 2.0-rc at P2 entry (target 0.16.x) | MIT OR Apache-2.0 | Standard input shape for `ort` / `tract` | P2 |
-| ML inference (default) | `ort` | 2.0-rc.x (`load-dynamic`) | MIT OR Apache-2.0 | Wraps ONNX Runtime; PESTO + YAMNet + Basic Pitch | P2 |
-| ML inference (fallback) | `tract` | 0.x (latest) | MIT OR Apache-2.0 | Pure-Rust escape hatch; mobile-friendlier | P6 |
-| Persistence (relational) | `rusqlite` | latest 0.x at design freeze (`bundled`) | MIT | Recordings library + per-recording analysis cache (ADR-0012) | P2 |
-| Migrations | `refinery` | 0.x | MIT OR Apache-2.0 | Versioned forward-only SQL migrations for `rusqlite` | P2 |
-| Path resolution | `directories` | 5.x | MIT OR Apache-2.0 | Cross-platform user-data / config / cache dirs | D1 |
-| File locking | `fs2` | 0.4.x | MIT OR Apache-2.0 | Exclusive flock for model resolver download lock | P2 |
-| HTTP client (model downloads) | `reqwest` (rustls-tls) | 0.12.x | MIT OR Apache-2.0 | User-initiated model downloads; rustls avoids OpenSSL on Windows/macOS | P2 |
-| Optional model resolver | `hf_hub` | latest 0.x | Apache-2.0 | Optional Hugging Face Hub client for model resolution where licenses permit | P2 |
-| MIDI export | `midly` | 0.5.x | Unlicense OR MIT | SMF 0/1/2 with 14-bit pitch bends | P3 |
-| SoundFont synthesis | `oxisynth` | 0.x | MIT OR Apache-2.0 | SoundFont 2 player for ear-training drills (Phase 4) | P4 |
-| Drum onset (Phase 5) | `aubio-rs` or pure-Rust onset detector | latest | dual | Drum onset/beat tracking for percussion stem; final crate selected at Phase 5 design pass | P5 |
-| Async runtime | `tokio` | 1.x (`rt-multi-thread`, `macros`, `sync`, `fs`, `time`, `net`) | MIT | Tauri commands + HTTP model downloads only; NOT used inside DSP worker | D1 |
-| Long-lived workers | `std::thread` | std | n/a | DSP worker + offline analysis jobs | D1 |
-| UI streaming | `tauri::ipc::Channel<T>` | Tauri 2.x | Apache-2.0 OR MIT | DSP-to-UI per-frame stream; shell-side only | D1 |
-| TS-side type generation | `ts-rs` or `specta` (final pick at Phase 1 entry) | latest | MIT | Generates TS types for Tauri command payloads | D1 |
-| Errors (libs) | `thiserror` | 1.x | MIT OR Apache-2.0 | One enum per crate at the library boundary | D1 |
-| Errors (app) | `anyhow` | 1.x | MIT OR Apache-2.0 | Tauri commands; `.context(...)` on bubble-up | D1 |
-| Logging | `tracing` + `tracing-subscriber` | 0.1.x / 0.3.x | MIT | Structured spans/events; pretty-stderr dev, JSON-rotating-file release | D1 |
-| Serialization | `serde` + `serde_json` | 1.x | MIT OR Apache-2.0 | Settings, IPC payloads, model manifest | D1 |
-| Config (TOML) | `toml` | 0.8.x | MIT OR Apache-2.0 | `models.toml` manifest parsing | P2 |
-| UUIDs | `uuid` | 1.x (`v7`, `serde`) | Apache-2.0 OR MIT | Stable recording IDs (UUIDv7 for time-ordered keys) | P2 |
-| Time | `chrono` | 0.4.x (`serde`) | MIT OR Apache-2.0 | Recording timestamps, filename formatting | P2 |
-| Property testing | `proptest` | 1.x (dev-dep) | MIT OR Apache-2.0 | Round-trip + windowing invariants | D1 |
-| Test harness | `cargo test` | n/a | n/a | Tier 1 synthesized signals + golden tables | D1 |
-| Benchmarks | `criterion` | 0.5.x (dev-dep) | Apache-2.0 OR MIT | Pitch-detector and FFT micro-bench; not on CI hot path | P1 |
-| Build profile lint | `cargo deny` | 0.x | Apache-2.0 OR MIT | License + advisory + duplicate-version gate | D1 |
-| Lint | `clippy` | toolchain-pinned | dual | `-D warnings`; `pedantic` warn; `unwrap_used`/`expect_used`/`panic` deny | D1 |
-| Format | `rustfmt` | toolchain-pinned | dual | `cargo fmt --check` in pre-commit + CI | D1 |
-| Toolchain pin | `rust-toolchain.toml` | edition 2024, MSRV 1.85 | n/a | `rustfmt` + `clippy` components declared | D1 |
-| Pre-commit framework | `pre-commit` | 3.x | MIT | Hooks driver | D1 |
-| Frontend lint | ESLint + Prettier | 9.x / 3.x | MIT | `eslint --max-warnings 0`; ts-aware config | D1 |
-| Build/release | GitHub Actions | n/a | n/a | Linux/macOS/Windows × stable/beta matrix | D1 |
-| Telemetry / crash reporting | (none) | n/a | n/a | Local-only; no network calls except user-initiated model downloads | D1 |
+| Layer                         | Choice                                            | Version target                                                 | License           | Role                                                                                                       | Day |
+| ----------------------------- | ------------------------------------------------- | -------------------------------------------------------------- | ----------------- | ---------------------------------------------------------------------------------------------------------- | --- |
+| Shell                         | Tauri                                             | 2.x                                                            | Apache-2.0 OR MIT | Desktop window, IPC, plugin host; mobile-shaped lib emitted day 1                                          | D1  |
+| Tauri plugin: store           | `tauri-plugin-store`                              | 2.x                                                            | Apache-2.0 OR MIT | Settings JSON in OS-correct config dir                                                                     | D1  |
+| Tauri plugin: log             | `tauri-plugin-log`                                | 2.x                                                            | Apache-2.0 OR MIT | OS-blessed log file paths                                                                                  | D1  |
+| Tauri plugin: dialog          | `tauri-plugin-dialog`                             | 2.x                                                            | Apache-2.0 OR MIT | Native open/save dialogs (file upload Phase 3)                                                             | P3  |
+| Tauri plugin: fs              | `tauri-plugin-fs`                                 | 2.x                                                            | Apache-2.0 OR MIT | Scoped filesystem reads for Phase 3 file upload (capability-gated)                                         | P3  |
+| Frontend framework            | React                                             | 19.x                                                           | MIT               | UI; chosen over SvelteKit for shadcn/ui ecosystem alignment (ADR-0003)                                     | D1  |
+| Frontend bundler              | Vite                                              | current LTS at design freeze                                   | MIT               | Dev server + production bundle                                                                             | D1  |
+| Frontend language             | TypeScript                                        | 5.x (strict)                                                   | Apache-2.0        | `tsc --noEmit` in CI; `strict: true`                                                                       | D1  |
+| State management              | Zustand                                           | 5.x                                                            | MIT               | Lightweight store; no Redux boilerplate                                                                    | D1  |
+| CSS framework                 | Tailwind CSS                                      | 4.x                                                            | MIT               | Utility classes; design-token consistency                                                                  | D1  |
+| Component primitives          | shadcn/ui (radix-ui)                              | radix 1.x                                                      | MIT               | Accessible primitives; copy-in pattern                                                                     | D1  |
+| Frontend canvas: waveform     | wavesurfer.js                                     | 7.x                                                            | BSD-3-Clause      | Recording playback view + Spectrogram plugin                                                               | P2  |
+| Frontend canvas: notation     | OpenSheetMusicDisplay                             | 1.x                                                            | BSD-3-Clause      | MusicXML rendering for transcription/ear-training                                                          | P3  |
+| Audio capture + playback      | `cpal`                                            | latest 0.x at design freeze                                    | Apache-2.0 OR MIT | Cross-platform mic + speaker; sole maintainer seeking handoff (cpal issue #981) — vendor-and-patch posture | D1  |
+| Decode                        | `symphonia`                                       | latest 0.x                                                     | MPL-2.0           | WAV/FLAC/MP3 day 1; AAC/M4A/OGG/AIFF behind app-level Cargo features                                       | D1  |
+| Encode (recording, FLAC)      | `flacenc-rs`                                      | latest 0.x                                                     | Apache-2.0        | Pure-Rust FLAC encoder; FLAC is the default recording format (ADR-0011)                                    | P2  |
+| Encode (recording, WAV)       | `hound`                                           | 3.x                                                            | Apache-2.0 OR MIT | WAV encoder behind advanced-settings opt-in                                                                | P2  |
+| FFT (complex)                 | `rustfft`                                         | 6.x                                                            | Apache-2.0 OR MIT | SIMD; transitive via realfft                                                                               | D1  |
+| FFT (real)                    | `realfft`                                         | 3.x                                                            | Apache-2.0 OR MIT | Real-input FFT; spectrogram + vibrato pipelines                                                            | D1  |
+| Resampling                    | `rubato`                                          | 0.x (latest)                                                   | MIT               | Sinc / FFT / polynomial; needed for 16 kHz neural inputs                                                   | P2  |
+| Filters                       | `biquad`                                          | 0.x                                                            | MIT               | Pre-emphasis, anti-alias, mains-hum notch                                                                  | D1  |
+| Mel spectrogram               | `mel_spec`                                        | 0.x                                                            | MIT               | librosa parity; YAMNet/Basic Pitch front-end                                                               | P2  |
+| SPSC ring buffer              | `rtrb`                                            | 0.x                                                            | MIT OR Apache-2.0 | Wait-free audio-callback → DSP-worker hand-off                                                             | D1  |
+| MPMC channel                  | `crossbeam-channel`                               | 0.5.x                                                          | MIT OR Apache-2.0 | Fan-out from DSP worker to multiple consumers                                                              | D1  |
+| Async cancellation            | `tokio-util` (`CancellationToken`)                | 0.7.x                                                          | MIT               | Cross-runtime cooperative cancellation                                                                     | D1  |
+| Mutex (non-audio)             | `parking_lot`                                     | 0.12.x                                                         | MIT OR Apache-2.0 | Faster than `std::sync::Mutex`; non-poisoning                                                              | D1  |
+| Tensors                       | `ndarray`                                         | major matching `ort` 2.0-rc at P2 entry (target 0.16.x)        | MIT OR Apache-2.0 | Standard input shape for `ort` / `tract`                                                                   | P2  |
+| ML inference (default)        | `ort`                                             | 2.0-rc.x (`load-dynamic`)                                      | MIT OR Apache-2.0 | Wraps ONNX Runtime; PESTO + YAMNet + Basic Pitch                                                           | P2  |
+| ML inference (fallback)       | `tract`                                           | 0.x (latest)                                                   | MIT OR Apache-2.0 | Pure-Rust escape hatch; mobile-friendlier                                                                  | P6  |
+| Persistence (relational)      | `rusqlite`                                        | latest 0.x at design freeze (`bundled`)                        | MIT               | Recordings library + per-recording analysis cache (ADR-0012)                                               | P2  |
+| Migrations                    | `refinery`                                        | 0.x                                                            | MIT OR Apache-2.0 | Versioned forward-only SQL migrations for `rusqlite`                                                       | P2  |
+| Path resolution               | `directories`                                     | 5.x                                                            | MIT OR Apache-2.0 | Cross-platform user-data / config / cache dirs                                                             | D1  |
+| File locking                  | `fs2`                                             | 0.4.x                                                          | MIT OR Apache-2.0 | Exclusive flock for model resolver download lock                                                           | P2  |
+| HTTP client (model downloads) | `reqwest` (rustls-tls)                            | 0.12.x                                                         | MIT OR Apache-2.0 | User-initiated model downloads; rustls avoids OpenSSL on Windows/macOS                                     | P2  |
+| Optional model resolver       | `hf_hub`                                          | latest 0.x                                                     | Apache-2.0        | Optional Hugging Face Hub client for model resolution where licenses permit                                | P2  |
+| MIDI export                   | `midly`                                           | 0.5.x                                                          | Unlicense OR MIT  | SMF 0/1/2 with 14-bit pitch bends                                                                          | P3  |
+| SoundFont synthesis           | `oxisynth`                                        | 0.x                                                            | MIT OR Apache-2.0 | SoundFont 2 player for ear-training drills (Phase 4)                                                       | P4  |
+| Drum onset (Phase 5)          | `aubio-rs` or pure-Rust onset detector            | latest                                                         | dual              | Drum onset/beat tracking for percussion stem; final crate selected at Phase 5 design pass                  | P5  |
+| Async runtime                 | `tokio`                                           | 1.x (`rt-multi-thread`, `macros`, `sync`, `fs`, `time`, `net`) | MIT               | Tauri commands + HTTP model downloads only; NOT used inside DSP worker                                     | D1  |
+| Long-lived workers            | `std::thread`                                     | std                                                            | n/a               | DSP worker + offline analysis jobs                                                                         | D1  |
+| UI streaming                  | `tauri::ipc::Channel<T>`                          | Tauri 2.x                                                      | Apache-2.0 OR MIT | DSP-to-UI per-frame stream; shell-side only                                                                | D1  |
+| TS-side type generation       | `ts-rs` or `specta` (final pick at Phase 1 entry) | latest                                                         | MIT               | Generates TS types for Tauri command payloads                                                              | D1  |
+| Errors (libs)                 | `thiserror`                                       | 1.x                                                            | MIT OR Apache-2.0 | One enum per crate at the library boundary                                                                 | D1  |
+| Errors (app)                  | `anyhow`                                          | 1.x                                                            | MIT OR Apache-2.0 | Tauri commands; `.context(...)` on bubble-up                                                               | D1  |
+| Logging                       | `tracing` + `tracing-subscriber`                  | 0.1.x / 0.3.x                                                  | MIT               | Structured spans/events; pretty-stderr dev, JSON-rotating-file release                                     | D1  |
+| Serialization                 | `serde` + `serde_json`                            | 1.x                                                            | MIT OR Apache-2.0 | Settings, IPC payloads, model manifest                                                                     | D1  |
+| Config (TOML)                 | `toml`                                            | 0.8.x                                                          | MIT OR Apache-2.0 | `models.toml` manifest parsing                                                                             | P2  |
+| UUIDs                         | `uuid`                                            | 1.x (`v7`, `serde`)                                            | Apache-2.0 OR MIT | Stable recording IDs (UUIDv7 for time-ordered keys)                                                        | P2  |
+| Time                          | `chrono`                                          | 0.4.x (`serde`)                                                | MIT OR Apache-2.0 | Recording timestamps, filename formatting                                                                  | P2  |
+| Property testing              | `proptest`                                        | 1.x (dev-dep)                                                  | MIT OR Apache-2.0 | Round-trip + windowing invariants                                                                          | D1  |
+| Test harness                  | `cargo test`                                      | n/a                                                            | n/a               | Tier 1 synthesized signals + golden tables                                                                 | D1  |
+| Benchmarks                    | `criterion`                                       | 0.5.x (dev-dep)                                                | Apache-2.0 OR MIT | Pitch-detector and FFT micro-bench; not on CI hot path                                                     | P1  |
+| Build profile lint            | `cargo deny`                                      | 0.x                                                            | Apache-2.0 OR MIT | License + advisory + duplicate-version gate                                                                | D1  |
+| Lint                          | `clippy`                                          | toolchain-pinned                                               | dual              | `-D warnings`; `pedantic` warn; `unwrap_used`/`expect_used`/`panic` deny                                   | D1  |
+| Format                        | `rustfmt`                                         | toolchain-pinned                                               | dual              | `cargo fmt --check` in pre-commit + CI                                                                     | D1  |
+| Toolchain pin                 | `rust-toolchain.toml`                             | edition 2024, MSRV 1.85                                        | n/a               | `rustfmt` + `clippy` components declared                                                                   | D1  |
+| Pre-commit framework          | `pre-commit`                                      | 3.x                                                            | MIT               | Hooks driver                                                                                               | D1  |
+| Frontend lint                 | ESLint + Prettier                                 | 9.x / 3.x                                                      | MIT               | `eslint --max-warnings 0`; ts-aware config                                                                 | D1  |
+| Build/release                 | GitHub Actions                                    | n/a                                                            | n/a               | Linux/macOS/Windows × stable/beta matrix                                                                   | D1  |
+| Telemetry / crash reporting   | (none)                                            | n/a                                                            | n/a               | Local-only; no network calls except user-initiated model downloads                                         | D1  |
 
 ### 3.2 Day-1 `Cargo.toml` workspace dependencies
 
@@ -407,20 +408,20 @@ directories        = { workspace = true }
 
 ### 3.3 Notes on specific pins
 
-| Decision | Rationale |
-|---|---|
-| `cpal` pinned to a specific `0.x` patch | Sole maintainer is publicly seeking handoff (cpal issue #981); pin reduces accidental surface-area churn. The exact patch is fixed at design freeze and recorded in the lockfile. |
-| `symphonia` default features only | Day-1 build needs WAV/FLAC/MP3 only; AAC/M4A/OGG/AIFF land as app-level Cargo features. |
-| FLAC encoder = `flacenc-rs` | Pure-Rust, actively maintained, FLAC-only. Symphonia's encoder support is read-focused; `flacenc-rs` is the encoder we actually ship. |
-| `ort = "2.0-rc.x"` (when added P2) | Release-candidate is the actively maintained line. `load-dynamic` keeps the ONNX Runtime DLL/.so/.dylib out of the binary. |
-| `tract` deferred to P6 | Cited only as the mobile/pure-Rust fallback. |
-| `rusqlite` over `sqlx` | Synchronous API is correct for this workload (analysis cache writes off the audio path); avoids dragging tokio into the storage layer. `bundled` ships SQLite to dodge per-platform system-library version skew. |
-| `refinery` for migrations | Versioned forward-only SQL files (`V0001__init.sql` etc.) checked into the repo and embedded in the binary. |
-| `directories` for user-data paths | Single cross-platform crate; avoids hand-rolling per-OS path logic. |
-| `fs2` for file locks | Exclusive flock during model download. Note the platform difference: Windows releases the lock on file-handle close (so process crash auto-releases); on Linux/macOS the lock is also handle-scoped via `fcntl(F_OFD_*)`. A janitor sweep on app startup removes any stale `<target>.partial` files. |
-| `reqwest` with `rustls-tls` | rustls avoids OpenSSL on Windows/macOS — significantly easier cross-compilation, especially for Phase 6 mobile. |
-| Edition 2024 + MSRV 1.85 | Per [`../research/REPO-CONVENTIONS-REPORT.md`](../research/REPO-CONVENTIONS-REPORT.md); 1.85 is the stable that ships Edition 2024 support. |
-| Dual-license `MIT OR Apache-2.0` | Per Rust ecosystem convention (ADR-0001); both `LICENSE-MIT` and `LICENSE-APACHE` files at repo root. |
+| Decision                                | Rationale                                                                                                                                                                                                                                                                                            |
+| --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `cpal` pinned to a specific `0.x` patch | Sole maintainer is publicly seeking handoff (cpal issue #981); pin reduces accidental surface-area churn. The exact patch is fixed at design freeze and recorded in the lockfile.                                                                                                                    |
+| `symphonia` default features only       | Day-1 build needs WAV/FLAC/MP3 only; AAC/M4A/OGG/AIFF land as app-level Cargo features.                                                                                                                                                                                                              |
+| FLAC encoder = `flacenc-rs`             | Pure-Rust, actively maintained, FLAC-only. Symphonia's encoder support is read-focused; `flacenc-rs` is the encoder we actually ship.                                                                                                                                                                |
+| `ort = "2.0-rc.x"` (when added P2)      | Release-candidate is the actively maintained line. `load-dynamic` keeps the ONNX Runtime DLL/.so/.dylib out of the binary.                                                                                                                                                                           |
+| `tract` deferred to P6                  | Cited only as the mobile/pure-Rust fallback.                                                                                                                                                                                                                                                         |
+| `rusqlite` over `sqlx`                  | Synchronous API is correct for this workload (analysis cache writes off the audio path); avoids dragging tokio into the storage layer. `bundled` ships SQLite to dodge per-platform system-library version skew.                                                                                     |
+| `refinery` for migrations               | Versioned forward-only SQL files (`V0001__init.sql` etc.) checked into the repo and embedded in the binary.                                                                                                                                                                                          |
+| `directories` for user-data paths       | Single cross-platform crate; avoids hand-rolling per-OS path logic.                                                                                                                                                                                                                                  |
+| `fs2` for file locks                    | Exclusive flock during model download. Note the platform difference: Windows releases the lock on file-handle close (so process crash auto-releases); on Linux/macOS the lock is also handle-scoped via `fcntl(F_OFD_*)`. A janitor sweep on app startup removes any stale `<target>.partial` files. |
+| `reqwest` with `rustls-tls`             | rustls avoids OpenSSL on Windows/macOS — significantly easier cross-compilation, especially for Phase 6 mobile.                                                                                                                                                                                      |
+| Edition 2024 + MSRV 1.85                | Per [`../research/REPO-CONVENTIONS-REPORT.md`](../research/REPO-CONVENTIONS-REPORT.md); 1.85 is the stable that ships Edition 2024 support.                                                                                                                                                          |
+| Dual-license `MIT OR Apache-2.0`        | Per Rust ecosystem convention (ADR-0001); both `LICENSE-MIT` and `LICENSE-APACHE` files at repo root.                                                                                                                                                                                                |
 
 ## 4. Repository and Workspace Layout
 
@@ -530,13 +531,13 @@ This canonical design document lives at `docs/design/DESIGN.md`. All `../researc
 
 ### 4.2 YAGNI posture on crate splits
 
-[`../research/REPO-CONVENTIONS-REPORT.md`](../research/REPO-CONVENTIONS-REPORT.md) explicitly warns that pre-created crate boundaries are a refactoring tax with no offsetting benefit until a concrete consumer appears. The locked decision is to *plan* the full fan-out but only *create* the boundaries on demand.
+[`../research/REPO-CONVENTIONS-REPORT.md`](../research/REPO-CONVENTIONS-REPORT.md) explicitly warns that pre-created crate boundaries are a refactoring tax with no offsetting benefit until a concrete consumer appears. The locked decision is to _plan_ the full fan-out but only _create_ the boundaries on demand.
 
-| Crate | Day 0 | Trigger to split |
-|---|---|---|
-| `crates/neural-pitch-core` | Created | Always present — DSP, traits, analyzers, note model. |
-| `crates/neural-pitch-io` | Deferred | When a second audio backend (oboe/coreaudio) or a non-Tauri consumer (CLI) demands an I/O abstraction crate not naturally housed in `core`. The DSP worker and `tauri::ipc::Channel`-backed `FrameSink` impl currently live in `src-tauri/`; if a CLI consumer needs them, they migrate to this crate. |
-| `crates/neural-pitch-ml` | Deferred | When a second inference backend (e.g., tract fallback alongside ort, or burn/candle PESTO from Phase 7) makes the ML surface large enough to warrant isolation. |
+| Crate                      | Day 0    | Trigger to split                                                                                                                                                                                                                                                                                       |
+| -------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `crates/neural-pitch-core` | Created  | Always present — DSP, traits, analyzers, note model.                                                                                                                                                                                                                                                   |
+| `crates/neural-pitch-io`   | Deferred | When a second audio backend (oboe/coreaudio) or a non-Tauri consumer (CLI) demands an I/O abstraction crate not naturally housed in `core`. The DSP worker and `tauri::ipc::Channel`-backed `FrameSink` impl currently live in `src-tauri/`; if a CLI consumer needs them, they migrate to this crate. |
+| `crates/neural-pitch-ml`   | Deferred | When a second inference backend (e.g., tract fallback alongside ort, or burn/candle PESTO from Phase 7) makes the ML surface large enough to warrant isolation.                                                                                                                                        |
 
 Until those triggers fire, ML and I/O modules live as sub-modules inside `neural-pitch-core` (or, for Tauri-coupled glue, inside `src-tauri/src/lib.rs`).
 
@@ -546,17 +547,17 @@ This section specifies the module tree of the `neural-pitch-core` crate, the can
 
 ### 5.1 Crate identity
 
-| Field | Value |
-|---|---|
-| Cargo name | `neural-pitch-core` |
-| Path in workspace | `crates/neural-pitch-core/` |
-| Edition | `2024` |
-| `rust-version` | `1.85` |
-| License | `MIT OR Apache-2.0` |
-| Crate type | `rlib` (default) |
-| External Tauri symbols | none (pure-Rust, mobile-portable) |
-| Default features | `decoder-symphonia` |
-| Optional features | `neural`, `pyin`, `dataset`, `debug-overlay` |
+| Field                  | Value                                        |
+| ---------------------- | -------------------------------------------- |
+| Cargo name             | `neural-pitch-core`                          |
+| Path in workspace      | `crates/neural-pitch-core/`                  |
+| Edition                | `2024`                                       |
+| `rust-version`         | `1.85`                                       |
+| License                | `MIT OR Apache-2.0`                          |
+| Crate type             | `rlib` (default)                             |
+| External Tauri symbols | none (pure-Rust, mobile-portable)            |
+| Default features       | `decoder-symphonia`                          |
+| Optional features      | `neural`, `pyin`, `dataset`, `debug-overlay` |
 
 The mobile-shaped multi-crate-type (`staticlib`, `cdylib`, `rlib`) lives in `src-tauri/Cargo.toml` (P9); this core crate is plain `rlib` so it can be reused by a future CLI, by tests, or by a Phase-6 mobile shell that wraps it.
 
@@ -733,13 +734,13 @@ The `Option<&Path>` shape replaces an earlier "always required, ignored for clas
 
 ### 5.5 Cargo feature matrix
 
-| Feature | Default | Pulls in | Effect |
-|---|---|---|---|
-| `decoder-symphonia` | on | `symphonia` (wav/flac/mp3) | Enables `audio::decoder::SymphoniaDecoder`. |
-| `pyin` | off | `pyin` (Sytronik port) | Enables `Backend::PYin`. Phase 2. |
-| `neural` | off | `ort 2.0-rc`, `ndarray` | Enables `Backend::OnnxPesto`, `Backend::OnnxCrepeTiny`, neural Viterbi decoder, YAMNet auto-prior. Phase 2. |
-| `dataset` | off | none (test-only) | Enables Tier 3 dataset-slice tests. Phase 2. |
-| `debug-overlay` | off | none | Enables `DebugFrame` emission and the `toggle_debug_overlay` command for the dev overlay. Phase 1+. |
+| Feature             | Default | Pulls in                   | Effect                                                                                                      |
+| ------------------- | ------- | -------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `decoder-symphonia` | on      | `symphonia` (wav/flac/mp3) | Enables `audio::decoder::SymphoniaDecoder`.                                                                 |
+| `pyin`              | off     | `pyin` (Sytronik port)     | Enables `Backend::PYin`. Phase 2.                                                                           |
+| `neural`            | off     | `ort 2.0-rc`, `ndarray`    | Enables `Backend::OnnxPesto`, `Backend::OnnxCrepeTiny`, neural Viterbi decoder, YAMNet auto-prior. Phase 2. |
+| `dataset`           | off     | none (test-only)           | Enables Tier 3 dataset-slice tests. Phase 2.                                                                |
+| `debug-overlay`     | off     | none                       | Enables `DebugFrame` emission and the `toggle_debug_overlay` command for the dev overlay. Phase 1+.         |
 
 ### 5.6 Crate-level invariants
 
@@ -791,15 +792,15 @@ P3 (§2.4) is the canonical statement. Restated for this section:
 
 ### 6.3 Latency budget
 
-| Stage | Typical | Worst-case |
-|---|---|---|
-| OS audio capture buffer | 5–10 ms | 20 ms |
-| Ring-buffer hand-off | < 0.1 ms | < 0.1 ms |
-| DSP analysis (YIN @ 2048 / 48 kHz) | 5–10 ms | 20 ms |
-| Smoothing + VAD | < 1 ms | 2 ms |
-| FrameSink → IPC → WebView | 1–3 ms (JSON Channel) | 5–10 ms (Windows worst-case) |
-| Canvas render via rAF | 16 ms (one frame at 60 Hz) | 33 ms (two frames at p99) |
-| **Mic-to-screen total** | **~30–45 ms** | **~60–70 ms** |
+| Stage                              | Typical                    | Worst-case                   |
+| ---------------------------------- | -------------------------- | ---------------------------- |
+| OS audio capture buffer            | 5–10 ms                    | 20 ms                        |
+| Ring-buffer hand-off               | < 0.1 ms                   | < 0.1 ms                     |
+| DSP analysis (YIN @ 2048 / 48 kHz) | 5–10 ms                    | 20 ms                        |
+| Smoothing + VAD                    | < 1 ms                     | 2 ms                         |
+| FrameSink → IPC → WebView          | 1–3 ms (JSON Channel)      | 5–10 ms (Windows worst-case) |
+| Canvas render via rAF              | 16 ms (one frame at 60 Hz) | 33 ms (two frames at p99)    |
+| **Mic-to-screen total**            | **~30–45 ms**              | **~60–70 ms**                |
 
 Phase 1 acceptance (§13) is stated as p50 ≤ 45 ms and p99 ≤ 70 ms, measured mic-to-screen on the test rig described in the Tier-1 hardware-sanity check in §10.
 
@@ -807,11 +808,11 @@ Phase 1 acceptance (§13) is stated as p50 ≤ 45 ms and p99 ≤ 70 ms, measured
 
 The single rule: ring-buffer capacity is **3 × the active analyzer's `EstimatorConfig::window_size`**, rounded up to the next power of two.
 
-| Active estimator profile | `window_size` | Ring capacity (samples) |
-|---|---|---|
-| Live tuner — voice (default, YIN @ 48 kHz) | 2048 | 8192 |
-| Live tuner — bass profile (YIN @ 48 kHz) | 4096 | 16384 |
-| PESTO offline (Phase 2) | 960 | 4096 |
+| Active estimator profile                   | `window_size` | Ring capacity (samples) |
+| ------------------------------------------ | ------------- | ----------------------- |
+| Live tuner — voice (default, YIN @ 48 kHz) | 2048          | 8192                    |
+| Live tuner — bass profile (YIN @ 48 kHz)   | 4096          | 16384                   |
+| PESTO offline (Phase 2)                    | 960           | 4096                    |
 
 Rationale: capacity scales with the analyzer profile, not a hardcoded duration. PESTO is offline-only in Phase 2 — the live tuner stays YIN even when `feature = "neural"` is enabled. Phase-2-and-beyond live PESTO would require its own row in this table; that is deferred to whatever phase actually moves PESTO to the live path.
 
@@ -913,35 +914,35 @@ TS-side type definitions are generated from Rust types via `ts-rs` or `specta` (
 
 ### 7.5 Phase additions
 
-| Phase | Frontend addition | Notes |
-|---|---|---|
-| 1 | Tuner page, settings drawer, device picker | English-only strings; movable-do solfege deferred. |
-| 2 | Recordings list, playback waveform via wavesurfer.js, vocal-range chart | Settings expanded with neural-backend toggle (gated on `feature = "neural"` in core). |
-| 3 | File picker (uses `tauri-plugin-dialog` + `tauri-plugin-fs`; capability JSON updated to grant scoped read on user-picked paths), MIDI export action, OpenSheetMusicDisplay notation view | |
-| 4 | Ear-training page (movable-do solfege drills), karaoke pitch ribbon | SoundFont synthesis driven from Tauri via `oxisynth`. |
-| 5 | Per-stem analysis view | |
-| 6 | Mobile-shaped layouts (Tauri Mobile) | |
+| Phase | Frontend addition                                                                                                                                                                        | Notes                                                                                 |
+| ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| 1     | Tuner page, settings drawer, device picker                                                                                                                                               | English-only strings; movable-do solfege deferred.                                    |
+| 2     | Recordings list, playback waveform via wavesurfer.js, vocal-range chart                                                                                                                  | Settings expanded with neural-backend toggle (gated on `feature = "neural"` in core). |
+| 3     | File picker (uses `tauri-plugin-dialog` + `tauri-plugin-fs`; capability JSON updated to grant scoped read on user-picked paths), MIDI export action, OpenSheetMusicDisplay notation view |                                                                                       |
+| 4     | Ear-training page (movable-do solfege drills), karaoke pitch ribbon                                                                                                                      | SoundFont synthesis driven from Tauri via `oxisynth`.                                 |
+| 5     | Per-stem analysis view                                                                                                                                                                   |                                                                                       |
+| 6     | Mobile-shaped layouts (Tauri Mobile)                                                                                                                                                     |                                                                                       |
 
 ## 8. Persistence and Storage
 
 ### 8.1 Storage layout
 
-| Layer | Format | Backend | Purpose |
-|---|---|---|---|
-| Settings | JSON | `tauri-plugin-store` (ADR-0013) | User preferences |
-| Recordings library + analysis cache | SQLite | `rusqlite` + `refinery` (ADR-0012) | Recording metadata + per-recording analyzer outputs |
-| Audio files | FLAC (default) / WAV (opt-in) | filesystem | Single-take voice recordings |
-| Models | ONNX | filesystem | ML weights resolved by manifest |
+| Layer                               | Format                        | Backend                            | Purpose                                             |
+| ----------------------------------- | ----------------------------- | ---------------------------------- | --------------------------------------------------- |
+| Settings                            | JSON                          | `tauri-plugin-store` (ADR-0013)    | User preferences                                    |
+| Recordings library + analysis cache | SQLite                        | `rusqlite` + `refinery` (ADR-0012) | Recording metadata + per-recording analyzer outputs |
+| Audio files                         | FLAC (default) / WAV (opt-in) | filesystem                         | Single-take voice recordings                        |
+| Models                              | ONNX                          | filesystem                         | ML weights resolved by manifest                     |
 
 ### 8.2 Path resolution
 
 All paths are resolved via the `directories` crate so that platform conventions are honoured without hand-rolled logic:
 
-| OS | Recordings root |
-|---|---|
-| macOS | `~/Library/Application Support/NeuralPitch/recordings/` |
-| Linux | `$XDG_DATA_HOME/NeuralPitch/recordings/` (fallback `~/.local/share/...`) |
-| Windows | `%APPDATA%\NeuralPitch\recordings\` |
+| OS      | Recordings root                                                          |
+| ------- | ------------------------------------------------------------------------ |
+| macOS   | `~/Library/Application Support/NeuralPitch/recordings/`                  |
+| Linux   | `$XDG_DATA_HOME/NeuralPitch/recordings/` (fallback `~/.local/share/...`) |
+| Windows | `%APPDATA%\NeuralPitch\recordings\`                                      |
 
 ### 8.3 Recordings DB schema (Phase 2)
 
@@ -1007,15 +1008,15 @@ On manifest parse error, the Settings UI Neural section displays a banner: "Mode
 
 ### 9.1 Locked primitives
 
-| Concern | Primitive | Rationale |
-|---|---|---|
-| Audio callback → DSP worker | `rtrb` SPSC ring | Wait-free; the only legal egress from the RT context. |
-| DSP worker → UI | `tauri::ipc::Channel<T>` (via `FrameSink` trait in core) | Ordered, per-listener; small fixed payloads. |
-| Fan-in from multiple offline jobs | `crossbeam-channel` | MPMC; used only off the audio path. |
-| Cross-runtime cancellation | `tokio_util::CancellationToken` | Honoured by both tokio tasks and `std::thread` workers. |
-| Non-audio shared state | `parking_lot::Mutex` | Faster than `std::sync::Mutex`, non-poisoning. |
-| Async runtime | `tokio` | Tauri commands and HTTP only; never inside the DSP worker. |
-| Long-lived workers | `std::thread` | DSP worker is a dedicated OS thread, not a tokio task. |
+| Concern                           | Primitive                                                | Rationale                                                  |
+| --------------------------------- | -------------------------------------------------------- | ---------------------------------------------------------- |
+| Audio callback → DSP worker       | `rtrb` SPSC ring                                         | Wait-free; the only legal egress from the RT context.      |
+| DSP worker → UI                   | `tauri::ipc::Channel<T>` (via `FrameSink` trait in core) | Ordered, per-listener; small fixed payloads.               |
+| Fan-in from multiple offline jobs | `crossbeam-channel`                                      | MPMC; used only off the audio path.                        |
+| Cross-runtime cancellation        | `tokio_util::CancellationToken`                          | Honoured by both tokio tasks and `std::thread` workers.    |
+| Non-audio shared state            | `parking_lot::Mutex`                                     | Faster than `std::sync::Mutex`, non-poisoning.             |
+| Async runtime                     | `tokio`                                                  | Tauri commands and HTTP only; never inside the DSP worker. |
+| Long-lived workers                | `std::thread`                                            | DSP worker is a dedicated OS thread, not a tokio task.     |
 
 ### 9.2 Canonical worker startup pattern
 
@@ -1090,12 +1091,12 @@ Per ADR-0015 and P10:
 
 ADR-0016 locks the four-tier pyramid:
 
-| Tier | Trigger | Phase introduced | Gating |
-|---|---|---|---|
-| 1 | Synthesized signals (sine, vibrato, two-tone, noise, silence) + `proptest` + `frequency_to_note` golden table (MIDI 0–127) | Phase 0 | Every `cargo test` |
-| 2 | Philharmonia single-note voice fixtures in `tests/fixtures/` | Phase 1 | Every PR |
-| 3 | Dataset slices via `scripts/fetch-test-data.sh` to gitignored `tests/data/` | Phase 2 | `cargo test --features dataset` |
-| 4 | Full benchmarks (MAESTRO, MUSDB18-HQ) | Release time | Manual |
+| Tier | Trigger                                                                                                                    | Phase introduced | Gating                          |
+| ---- | -------------------------------------------------------------------------------------------------------------------------- | ---------------- | ------------------------------- |
+| 1    | Synthesized signals (sine, vibrato, two-tone, noise, silence) + `proptest` + `frequency_to_note` golden table (MIDI 0–127) | Phase 0          | Every `cargo test`              |
+| 2    | Philharmonia single-note voice fixtures in `tests/fixtures/`                                                               | Phase 1          | Every PR                        |
+| 3    | Dataset slices via `scripts/fetch-test-data.sh` to gitignored `tests/data/`                                                | Phase 2          | `cargo test --features dataset` |
+| 4    | Full benchmarks (MAESTRO, MUSDB18-HQ)                                                                                      | Release time     | Manual                          |
 
 ### 10.2 Phase-0 acceptance
 
@@ -1251,14 +1252,14 @@ ADR-0009 locks phase ordering: ear-training (Phase 4) precedes stem separation (
 
 ## 14. Cross-Cutting Risks
 
-| Risk | Surface | Mitigation |
-|---|---|---|
-| `cpal` sole-maintainer | Real-time audio path | Pin exact patch; vendor-and-patch posture; track issue #981; reserved fallback to platform-specific backends behind a future `crates/neural-pitch-io` boundary. |
-| PESTO LGPL counsel review | Phase 2 default neural backend | If counsel rejects, default flips to `OnnxCrepeTiny` (MIT). Crate API does not change. |
-| ONNX Runtime mobile footprint | Phase 6 | `tract` is the pre-declared fallback; `feature = "neural"` is sufficient surface to swap. |
-| Stack-table version skew | Build-time | Phase entry includes a "reconfirm versions" checklist; the recommended-stack open questions in §15 itemize the items to recheck. |
-| Stale lock files from crashed model downloads | Persistence | Janitor sweep at app startup; OS-level handle release on crash. |
-| Worker thread panic | Concurrency | `JoinHandle::is_finished()` + heartbeat `AtomicU64` watchdog; `check_dsp_health` Tauri command; UI banner with restart action. |
+| Risk                                          | Surface                        | Mitigation                                                                                                                                                      |
+| --------------------------------------------- | ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `cpal` sole-maintainer                        | Real-time audio path           | Pin exact patch; vendor-and-patch posture; track issue #981; reserved fallback to platform-specific backends behind a future `crates/neural-pitch-io` boundary. |
+| PESTO LGPL counsel review                     | Phase 2 default neural backend | If counsel rejects, default flips to `OnnxCrepeTiny` (MIT). Crate API does not change.                                                                          |
+| ONNX Runtime mobile footprint                 | Phase 6                        | `tract` is the pre-declared fallback; `feature = "neural"` is sufficient surface to swap.                                                                       |
+| Stack-table version skew                      | Build-time                     | Phase entry includes a "reconfirm versions" checklist; the recommended-stack open questions in §15 itemize the items to recheck.                                |
+| Stale lock files from crashed model downloads | Persistence                    | Janitor sweep at app startup; OS-level handle release on crash.                                                                                                 |
+| Worker thread panic                           | Concurrency                    | `JoinHandle::is_finished()` + heartbeat `AtomicU64` watchdog; `check_dsp_health` Tauri command; UI banner with restart action.                                  |
 
 ## 15. Open Questions and Deferred Decisions
 
@@ -1295,23 +1296,23 @@ The medium-severity reviewer concerns explicitly absorbed here (rather than fixe
 
 The full ADR index lives at [`../adr/README.md`](../adr/README.md). The locked decisions referenced from this design are:
 
-| ADR | Title |
-|---|---|
-| [ADR-0001](../adr/0001-license-and-foss-posture.md) | License and FOSS posture |
-| [ADR-0002](../adr/0002-mobile-ready-repo-and-crate-shape-day-1.md) | Mobile-ready repo and crate shape day 1 |
-| [ADR-0003](../adr/0003-frontend-stack-react-vite-ts-zustand-tailwind-shadcn.md) | Frontend stack: React 19 + Vite + TS strict + Zustand + Tailwind + shadcn/ui |
-| [ADR-0004](../adr/0004-default-note-name-system-english-with-formatter-trait.md) | Default note-name system: English; multi-system formatter trait day 1 |
-| [ADR-0005](../adr/0005-a4-reference-configurable-default-440.md) | A4 reference: configurable day 1, default 440 Hz |
-| [ADR-0006](../adr/0006-visual-only-feedback-phase-1.md) | Visual-only feedback Phase 1; modular for monitoring later |
-| [ADR-0007](../adr/0007-pitch-estimator-trait-and-auto-prior.md) | PitchEstimator trait + auto-prior; manual instrument selector demoted |
-| [ADR-0008](../adr/0008-phase-1-yin-mpm-only-neural-phase-2.md) | Phase 1 ships YIN/MPM only; neural backends Phase 2 |
-| [ADR-0009](../adr/0009-phase-ordering-ear-training-before-stem-separation.md) | Phase ordering: ear-training before stem separation |
-| [ADR-0010](../adr/0010-audio-formats-wav-flac-mp3-day-1.md) | Audio formats: WAV+FLAC+MP3 day 1; Cargo-feature-gated additions |
-| [ADR-0011](../adr/0011-recording-defaults-48k-24bit-mono-flac.md) | Recording defaults: 48 kHz / 24-bit / mono / FLAC |
-| [ADR-0012](../adr/0012-recordings-library-and-analysis-cache-sqlite.md) | Recordings library + per-recording analysis cache in SQLite |
-| [ADR-0013](../adr/0013-settings-via-tauri-plugin-store.md) | Settings via tauri-plugin-store, separate from recordings DB |
-| [ADR-0014](../adr/0014-concurrency-tokio-stdthread-rtrb.md) | Concurrency: tokio for Tauri/HTTP; std::thread for DSP worker; rtrb for audio boundary |
-| [ADR-0015](../adr/0015-error-handling-thiserror-anyhow-no-panics.md) | Error handling: thiserror in libs, anyhow in app, no panics in audio path |
-| [ADR-0016](../adr/0016-test-pyramid-tier-1-day-1.md) | Test pyramid: Tier 1 day 1; Tiers 2–4 phased |
-| [ADR-0017](../adr/0017-observability-tracing-tauri-plugin-log-no-telemetry.md) | Observability: tracing + tauri-plugin-log; per-frame analysis cache; no telemetry |
-| [ADR-0018](../adr/0018-triple-layer-enforcement-convention-pre-commit-ci.md) | Triple-layer enforcement: convention + pre-commit + CI |
+| ADR                                                                              | Title                                                                                  |
+| -------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| [ADR-0001](../adr/0001-license-and-foss-posture.md)                              | License and FOSS posture                                                               |
+| [ADR-0002](../adr/0002-mobile-ready-repo-and-crate-shape-day-1.md)               | Mobile-ready repo and crate shape day 1                                                |
+| [ADR-0003](../adr/0003-frontend-stack-react-vite-ts-zustand-tailwind-shadcn.md)  | Frontend stack: React 19 + Vite + TS strict + Zustand + Tailwind + shadcn/ui           |
+| [ADR-0004](../adr/0004-default-note-name-system-english-with-formatter-trait.md) | Default note-name system: English; multi-system formatter trait day 1                  |
+| [ADR-0005](../adr/0005-a4-reference-configurable-default-440.md)                 | A4 reference: configurable day 1, default 440 Hz                                       |
+| [ADR-0006](../adr/0006-visual-only-feedback-phase-1.md)                          | Visual-only feedback Phase 1; modular for monitoring later                             |
+| [ADR-0007](../adr/0007-pitch-estimator-trait-and-auto-prior.md)                  | PitchEstimator trait + auto-prior; manual instrument selector demoted                  |
+| [ADR-0008](../adr/0008-phase-1-yin-mpm-only-neural-phase-2.md)                   | Phase 1 ships YIN/MPM only; neural backends Phase 2                                    |
+| [ADR-0009](../adr/0009-phase-ordering-ear-training-before-stem-separation.md)    | Phase ordering: ear-training before stem separation                                    |
+| [ADR-0010](../adr/0010-audio-formats-wav-flac-mp3-day-1.md)                      | Audio formats: WAV+FLAC+MP3 day 1; Cargo-feature-gated additions                       |
+| [ADR-0011](../adr/0011-recording-defaults-48k-24bit-mono-flac.md)                | Recording defaults: 48 kHz / 24-bit / mono / FLAC                                      |
+| [ADR-0012](../adr/0012-recordings-library-and-analysis-cache-sqlite.md)          | Recordings library + per-recording analysis cache in SQLite                            |
+| [ADR-0013](../adr/0013-settings-via-tauri-plugin-store.md)                       | Settings via tauri-plugin-store, separate from recordings DB                           |
+| [ADR-0014](../adr/0014-concurrency-tokio-stdthread-rtrb.md)                      | Concurrency: tokio for Tauri/HTTP; std::thread for DSP worker; rtrb for audio boundary |
+| [ADR-0015](../adr/0015-error-handling-thiserror-anyhow-no-panics.md)             | Error handling: thiserror in libs, anyhow in app, no panics in audio path              |
+| [ADR-0016](../adr/0016-test-pyramid-tier-1-day-1.md)                             | Test pyramid: Tier 1 day 1; Tiers 2–4 phased                                           |
+| [ADR-0017](../adr/0017-observability-tracing-tauri-plugin-log-no-telemetry.md)   | Observability: tracing + tauri-plugin-log; per-frame analysis cache; no telemetry      |
+| [ADR-0018](../adr/0018-triple-layer-enforcement-convention-pre-commit-ci.md)     | Triple-layer enforcement: convention + pre-commit + CI                                 |

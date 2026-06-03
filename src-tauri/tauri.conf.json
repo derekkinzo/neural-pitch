@@ -29,8 +29,6 @@
     "copyright": "Copyright © 2026 Derek Kinzo",
     "shortDescription": "Pitch-detection app for singers.",
     "longDescription": "NeuralPitch is a modular, FOSS pitch-detection app focused on singers learning their range and intonation.",
-    "icon": [
-      "icons/icon.png"
-    ]
+    "icon": ["icons/icon.png"]
   }
 }

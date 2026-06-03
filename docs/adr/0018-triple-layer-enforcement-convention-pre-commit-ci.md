@@ -8,8 +8,8 @@ Accepted — 2026-06-02.
 
 A project-of-one with occasional contributors needs enforcement that:
 
-- catches issues *before* they get committed (cheap),
-- catches issues *before* they get merged (cheaper than catching them in production),
+- catches issues _before_ they get committed (cheap),
+- catches issues _before_ they get merged (cheaper than catching them in production),
 - and is documented enough that a contributor who cloned five minutes ago can comply without surprise.
 
 Relying on convention alone fails the moment the developer is tired. Relying on CI alone wastes minutes per commit on issues that a 200ms local hook would catch. Relying on pre-commit alone fails the moment someone forks without installing hooks.

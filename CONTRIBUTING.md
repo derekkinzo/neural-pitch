@@ -45,7 +45,7 @@ follow:
 Allowed `<subsys>` prefixes:
 
 | Prefix | Scope                                                  |
-|--------|--------------------------------------------------------|
+| ------ | ------------------------------------------------------ |
 | core   | `crates/neural-pitch-core` and other Rust core crates  |
 | ui     | Web frontend (React / Vite / TypeScript)               |
 | tauri  | `src-tauri/` shell, IPC, and packaging                 |
@@ -148,7 +148,7 @@ We use inclusive terminology in code, comments, commit messages, and
 documentation. The following terms are not allowed:
 
 | Don't use | Use instead                              |
-|-----------|------------------------------------------|
+| --------- | ---------------------------------------- |
 | master    | primary, main, leader, controller        |
 | slave     | replica, secondary, follower, responder  |
 | blacklist | denylist, blocklist, exclusion list      |

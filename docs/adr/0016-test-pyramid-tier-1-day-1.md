@@ -14,12 +14,12 @@ A graduated testing strategy is needed: synthesized signals as the day-1 fast in
 
 Four test tiers, phased:
 
-| Tier | Source | Phase introduced | Gating |
-|---|---|---|---|
-| 1 | Synthesized signals (sine, vibrato, two-tone, noise, silence) + `proptest` invariants + `frequency_to_note` golden table (MIDI 0–127) | Phase 0 | Every `cargo test`; CI required |
-| 2 | Philharmonia single-note voice fixtures, committed to `tests/fixtures/` (small, ~MB-sized subset) | Phase 1 | Every PR |
-| 3 | Dataset slices (Philharmonia full, MIR-1K) fetched by `scripts/fetch-test-data.sh` to gitignored `tests/data/` | Phase 2 | `cargo test --features dataset`; not on every CI run |
-| 4 | Full benchmarks (MAESTRO transcription, MUSDB18-HQ separation) | Release time | Manual; results recorded in CHANGELOG |
+| Tier | Source                                                                                                                                | Phase introduced | Gating                                               |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------- | ---------------- | ---------------------------------------------------- |
+| 1    | Synthesized signals (sine, vibrato, two-tone, noise, silence) + `proptest` invariants + `frequency_to_note` golden table (MIDI 0–127) | Phase 0          | Every `cargo test`; CI required                      |
+| 2    | Philharmonia single-note voice fixtures, committed to `tests/fixtures/` (small, ~MB-sized subset)                                     | Phase 1          | Every PR                                             |
+| 3    | Dataset slices (Philharmonia full, MIR-1K) fetched by `scripts/fetch-test-data.sh` to gitignored `tests/data/`                        | Phase 2          | `cargo test --features dataset`; not on every CI run |
+| 4    | Full benchmarks (MAESTRO transcription, MUSDB18-HQ separation)                                                                        | Release time     | Manual; results recorded in CHANGELOG                |
 
 Phase 0 acceptance is "CI green with Tier-1 tests passing".
 

@@ -37,6 +37,10 @@ missing_errors_doc       = "allow"
 missing_panics_doc       = "allow"
 unreadable_literal       = "allow"
 module_name_repetitions  = "allow"
+# Brand names (`NeuralPitch`, `PitchEstimator`, etc.) trigger this constantly;
+# enforcing it would require backticking every product/type name in every
+# doc comment. Not worth the friction.
+doc_markdown             = "allow"
 
 [workspace.dependencies]
 thiserror    = "2"

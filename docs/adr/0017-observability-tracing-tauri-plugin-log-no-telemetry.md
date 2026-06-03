@@ -11,7 +11,7 @@ The app needs two kinds of observability:
 1. **Logs** — structured, with span context, written somewhere a user (or developer-friend) can find them when something goes wrong.
 2. **Persistent per-frame outputs** — for offline analysis (vocal range, vibrato), the analyser output is itself a kind of observability that the user inspects.
 
-What it does *not* need: telemetry, crash reports, analytics. The FOSS posture (ADR-0001) is local-only.
+What it does _not_ need: telemetry, crash reports, analytics. The FOSS posture (ADR-0001) is local-only.
 
 ## Decision
 

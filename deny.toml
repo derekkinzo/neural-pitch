@@ -1,6 +1,12 @@
 [advisories]
 yanked = "warn"
-ignore = []
+ignore = [
+  # rust-unic crate family is unmaintained; pulled in transitively by Tauri's
+  # tauri-utils -> urlpattern -> unic-ucd-ident. No safe upgrade available
+  # and no alternative crate path. Revisit when Tauri or urlpattern migrates
+  # to icu4x or unicode-rs. Tracking: https://github.com/rustsec/advisory-db/issues/2414
+  "RUSTSEC-2025-0098",
+]
 
 [licenses]
 confidence-threshold = 0.93

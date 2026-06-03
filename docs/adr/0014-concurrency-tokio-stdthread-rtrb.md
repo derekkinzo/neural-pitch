@@ -16,7 +16,7 @@ Trying to run all three on tokio would force the audio callback through async ma
 
 ## Decision
 
-- **`rtrb` SPSC ring buffer** — the *only* legal egress from the audio callback. Wait-free, allocation-free, single-producer single-consumer fits the cpal-callback → DSP-worker hand-off.
+- **`rtrb` SPSC ring buffer** — the _only_ legal egress from the audio callback. Wait-free, allocation-free, single-producer single-consumer fits the cpal-callback → DSP-worker hand-off.
 - **`std::thread`** — the DSP worker is a dedicated, named OS thread. Long-lived; never destroyed except on shutdown.
 - **`tokio` (1.x, multi-thread runtime)** — Tauri commands and HTTP fetches (model downloads). Tokio is not used inside the DSP worker.
 - **`tauri::ipc::Channel<T>`** — the DSP-to-UI per-frame stream. Lives in the shell crate; surfaced to the worker via the `FrameSink` trait defined in `neural-pitch-core`.

@@ -20,7 +20,7 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 tauri          = { version = "2", features = [] }
 tauri-plugin-log = "2"
-neural-pitch-core = { path = "../crates/neural-pitch-core" }
+neural-pitch-core = { path = "../crates/neural-pitch-core", version = "0.1" }
 anyhow         = { workspace = true }
 tracing        = { workspace = true }
 tracing-subscriber = { workspace = true }
