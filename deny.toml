@@ -1,16 +1,14 @@
 [advisories]
-# Vulnerabilities are hard errors and must be addressed.
-vulnerability = "deny"
-# Unmaintained advisories are informational. The Tauri / cpal / audio
-# crate chains pull in many transitively-unmaintained crates (gtk-rs GTK3
-# bindings, rust-unic, paste, derivative, etc.) that we cannot upgrade
-# without Tauri's upstream migrating first. Surface them as warnings so
-# we see them, but do not fail CI on something we cannot fix.
-unmaintained = "warn"
-unsound       = "deny"
-notice        = "warn"
-yanked        = "warn"
-ignore        = []
+# cargo-deny v2 / v0.19+ schema:
+# Vulnerabilities and yanked crates are gated by `version` (set globally
+# on `[advisories]` is deprecated; ids are auto-evaluated and reported).
+# `unmaintained` accepts "all" | "workspace" | "transitive" | "none".
+# Set to "workspace" so unmaintained warnings only fail CI when we own
+# the dep directly. Tauri's huge transitive set of unmaintained gtk-rs
+# crates becomes an informational note instead of a blocker.
+unmaintained = "workspace"
+yanked = "warn"
+ignore = []
 
 [licenses]
 confidence-threshold = 0.93
