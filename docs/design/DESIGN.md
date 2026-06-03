@@ -450,8 +450,7 @@ neural-pitch/
 ├─ LICENSE-MIT                      # MIT license text
 ├─ LICENSE-APACHE                   # Apache-2.0 license text
 ├─ CHANGELOG.md                     # Keep-a-Changelog format; "Unreleased" section seeded
-├─ CONTRIBUTING.md                  # kernel-style commit format, DCO, hook install, review flow
-├─ SECURITY.md                      # vulnerability disclosure policy and contact channel
+├─ CONTRIBUTING.md                  # operational rulebook (commit format, DCO, validation gate)
 ├─ models.toml                      # ML model manifest (empty placeholder day 0; populated Phase 2+)
 │
 ├─ index.html                       # Vite entry HTML
@@ -1206,7 +1205,7 @@ ADR-0009 locks phase ordering: ear-training (Phase 4) precedes stem separation (
 
 ### 13.1 Phase 0 — Skeleton
 
-**Deliverables.** Workspace `Cargo.toml`; `crates/neural-pitch-core` with `PitchEstimator` trait (no impls yet), `NoteFormatter` trait + `EnglishFormatter`, `frequency_to_note` golden table; `src-tauri/` skeleton; CI Linux/macOS/Windows; pre-commit hooks; `LICENSE-MIT`/`LICENSE-APACHE`/`README.md`/`CONTRIBUTING.md`/`SECURITY.md`/`CHANGELOG.md`; commit-format hook.
+**Deliverables.** Workspace `Cargo.toml`; `crates/neural-pitch-core` with `PitchEstimator` trait (no impls yet), `NoteFormatter` trait + `EnglishFormatter`, `frequency_to_note` golden table; `src-tauri/` skeleton; CI Linux/macOS/Windows; pre-commit hooks; `LICENSE-MIT`/`LICENSE-APACHE`/`README.md`/`CONTRIBUTING.md`/`CHANGELOG.md`; commit-format hook.
 
 **Acceptance.** CI green; Tier-1 tests passing; `cargo deny` clean (when configured); no Tauri UI required.
 

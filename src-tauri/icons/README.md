@@ -1,13 +1,9 @@
-# Tauri Icons
+# Icons
 
-Drop platform icons here per the [Tauri icon docs](https://tauri.app/distribute/icon/).
+`icon.png` is the placeholder source. Regenerate the desktop icon set with:
 
-In Phase 1, a placeholder PNG can be supplied via the `tauri icon` command:
-
-```bash
-npx tauri icon path/to/source.png
+```sh
+npx tauri icon src-tauri/icons/icon.png
 ```
 
-This generates the full icon set (PNG, ICO, ICNS, and platform-specific assets) into this directory.
-
-Until Phase 1 lands a real icon, this directory is intentionally empty (other than this README and a `.gitkeep`) so the Tauri build does not fail on a missing directory.
+Then keep only the variants enumerated in `src-tauri/tauri.conf.json` `bundle.icon` (currently `32x32.png`, `128x128.png`, `128x128@2x.png`, `icon.icns`, `icon.ico`). Mobile and Microsoft Store derivatives are regenerated when Phase 6 (mobile) lands.
