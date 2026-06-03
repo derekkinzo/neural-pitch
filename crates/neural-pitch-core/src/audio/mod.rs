@@ -1,13 +1,28 @@
 //! Audio I/O abstractions.
 //!
-//! Day 1 only defines the [`AudioBlock`] data shape, the [`AudioDecoder`]
-//! trait, and the [`AudioError`] enum. Concrete decoder/encoder
-//! implementations (Symphonia, FLAC, WAV) land in Phase 1+ behind feature
-//! gates; see `docs/design/DESIGN.md` §5.2.
+//! Phase 1.0 defined only the [`AudioBlock`] data shape and the
+//! [`AudioDecoder`] trait. Phase 1.1 adds the live-capture surface:
+//! [`AudioBackend`], [`AudioBackendConfig`], [`AudioBackendEvent`], and the
+//! always-on [`MockAudioBackend`] used by Tier-2 deterministic tests. The
+//! cpal-backed [`CpalAudioBackend`] is gated behind `#[cfg(feature = "cpal")]`.
+//! Concrete file decoder/encoder implementations (Symphonia, FLAC, WAV) land
+//! in Phase 2 behind feature gates; see `docs/design/DESIGN.md` §5.2.
 
 use std::io;
 
 use thiserror::Error;
+
+pub mod backend;
+pub mod mock_backend;
+
+#[cfg(feature = "cpal")]
+pub mod cpal_backend;
+
+pub use backend::{AudioBackend, AudioBackendConfig, AudioBackendError, AudioBackendEvent};
+pub use mock_backend::{MockAudioBackend, Pacing, SampleSource};
+
+#[cfg(feature = "cpal")]
+pub use cpal_backend::CpalAudioBackend;
 
 /// One block of contiguous PCM audio samples, interleaved if multi-channel.
 ///
@@ -28,6 +43,7 @@ pub struct AudioBlock {
 
 /// Errors raised by audio decoders, encoders, and I/O glue.
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum AudioError {
     /// An OS-level I/O error occurred while reading or writing audio.
     #[error("audio I/O error: {0}")]
@@ -41,7 +57,7 @@ pub enum AudioError {
 
 /// File-format-agnostic decoder trait.
 ///
-/// Day 1 defines only the static `supported_extensions()` method. Streaming
+/// Phase 1 defines only the static `supported_extensions()` method. Streaming
 /// decode is intentionally deferred — see the design doc for the planned
 /// `decode_block(&mut self) -> Result<Option<AudioBlock>, AudioError>` API.
 pub trait AudioDecoder: Send {
@@ -50,7 +66,7 @@ pub trait AudioDecoder: Send {
     /// concrete decoder for a given file.
     fn supported_extensions(&self) -> &'static [&'static str];
 
-    // TODO(phase-1): add `decode_block(&mut self) -> Result<Option<AudioBlock>, AudioError>`
+    // TODO(phase-2): add `decode_block(&mut self) -> Result<Option<AudioBlock>, AudioError>`
     // for streaming decode. Implementations will hold an internal Symphonia
     // reader and yield ~1024-sample blocks.
 }

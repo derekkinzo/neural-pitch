@@ -8,6 +8,7 @@
 pub mod audio;
 pub mod error;
 pub mod music;
+pub mod pipeline;
 pub mod pitch;
 pub mod prelude;
 pub mod smoothing;

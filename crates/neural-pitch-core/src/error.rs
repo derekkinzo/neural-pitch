@@ -1,10 +1,12 @@
 //! Crate-wide error type. Forwards to per-module error enums via `#[from]` so
-//! callers can use `?` uniformly across pitch, music, and audio operations.
+//! callers can use `?` uniformly across pitch, music, audio, and pipeline
+//! operations.
 
 use thiserror::Error;
 
-use crate::audio::AudioError;
+use crate::audio::{AudioBackendError, AudioError};
 use crate::music::MusicError;
+use crate::pipeline::FrameSinkError;
 use crate::pitch::EstimatorError;
 
 /// Cross-cutting error type for `neural-pitch-core`.
@@ -25,4 +27,12 @@ pub enum CoreError {
     /// Audio I/O or decoding failed.
     #[error(transparent)]
     Audio(#[from] AudioError),
+
+    /// Live audio capture (cpal, mock) failed.
+    #[error(transparent)]
+    AudioBackend(#[from] AudioBackendError),
+
+    /// A pipeline frame sink failed to deliver an update.
+    #[error(transparent)]
+    Sink(#[from] FrameSinkError),
 }

@@ -1,0 +1,16 @@
+//! Phase 1.1 capture-to-update pipeline.
+//!
+//! The pipeline crate-internally couples three pieces:
+//!
+//! - [`crate::audio::AudioBackend`] (cpal in production, [`crate::audio::MockAudioBackend`]
+//!   in tests) — pushes interleaved-mono `f32` samples into an SPSC ring.
+//! - [`DspWorker`] — drains the ring, runs the configured pitch estimator,
+//!   smoother, and VAD, and emits [`PitchUpdate`] frames.
+//! - [`FrameSink`] — backend-agnostic delivery surface for updates. The
+//!   default [`ChannelFrameSink`] wraps an `mpsc::Sender<PitchUpdate>`.
+
+pub mod sink;
+pub mod worker;
+
+pub use sink::{ChannelFrameSink, FrameSink, FrameSinkError, PitchUpdate};
+pub use worker::{DspError, DspWorker};

@@ -10,18 +10,29 @@ repository.workspace   = true
 readme.workspace       = true
 
 [features]
-default = []
-neural  = []  # Phase 2 brings in ort + Viterbi + PESTO/CREPE backends
-dataset = []  # Phase 2/Tier-3 dataset-gated tests
+default = ["cpal"]
+cpal              = ["dep:cpal"]
+decoder-symphonia = []  # Phase 2 — Symphonia-backed file decoders
+neural            = []  # Phase 2 brings in ort + Viterbi + PESTO/CREPE backends
+pyin              = []  # Phase 2 — pYIN backend
+dataset           = []  # Phase 2/Tier-3 dataset-gated tests
+debug-overlay     = []  # Phase 1+ — diagnostic overlays for desktop shell
 
 [dependencies]
-thiserror = { workspace = true }
-tracing   = { workspace = true }
-serde     = { workspace = true }
+thiserror   = { workspace = true }
+tracing     = { workspace = true }
+serde       = { workspace = true }
+rtrb        = "0.3"
+tokio-util  = { version = "0.7", default-features = false }
+cpal        = { version = "0.17", optional = true }
 
 [dev-dependencies]
 proptest  = "1"
 approx    = "0.5"
+
+# Cancellation, sample-pacing, and DSP-worker tests need the integration tests
+# to compile against the same default feature set as the binary. No extra
+# `required-features` are needed here — `MockAudioBackend` is always-on.
 
 [lints]
 workspace = true

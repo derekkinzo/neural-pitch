@@ -83,11 +83,18 @@ pub fn frequency_to_note(f_hz: f32, a4_hz: f32) -> NoteReading {
             cents: 0.0,
         };
     }
-    let semitones = 12.0 * (f_hz / a4_hz).log2();
-    let midi_f = semitones + MIDI_A4 as f32;
+    // Compute in f64 to avoid single-precision rounding kicking the cents
+    // value just outside the half-semitone band (e.g. f32 rounding can produce
+    // cents = -50.000237 for inputs whose true cents value is exactly the
+    // boundary; the contract is `(-50.0, 50.0]`).
+    let f_hz_64 = f64::from(f_hz);
+    let a4_hz_64 = f64::from(a4_hz);
+    let semitones = 12.0 * (f_hz_64 / a4_hz_64).log2();
+    let midi_f = semitones + f64::from(MIDI_A4);
     let midi = midi_f.round() as i32;
-    let expected_hz = midi_to_hz(midi, a4_hz);
-    let cents = 1200.0 * (f_hz / expected_hz).log2();
+    let expected_hz_64 = a4_hz_64 * ((f64::from(midi - MIDI_A4)) / 12.0).exp2();
+    let expected_hz = expected_hz_64 as f32;
+    let cents = (1200.0 * (f_hz_64 / expected_hz_64).log2()) as f32;
     NoteReading {
         midi,
         expected_hz,
