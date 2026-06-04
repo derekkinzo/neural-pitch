@@ -44,21 +44,45 @@ export function Drawer({ open, onOpenChange, title, children }: DrawerProps): Re
     lastActiveBeforeOpen.current = (document.activeElement as HTMLElement | null) ?? null;
     const panel = panelRef.current;
 
-    // Make the rest of the page inert so AT virtual cursors (VoiceOver,
-    // NVDA browse-mode) cannot navigate to the content behind the modal
-    // dialog (WAI-ARIA APG modal-dialog pattern). Prefer the `inert`
-    // attribute (broadly supported in 2026) and fall back to
-    // `aria-hidden="true"` on engines that ignore it.
+    // Make EVERY top-level sibling of the drawer-root inert so AT virtual
+    // cursors (VoiceOver, NVDA browse-mode) cannot navigate to anything
+    // outside the modal dialog (WAI-ARIA APG modal-dialog pattern). We
+    // walk the body's children rather than only `<main>` because the
+    // application mounts other top-level surfaces (PermissionNotice,
+    // DeviceDisconnectToast) as siblings of `<main>`, and a disconnect
+    // event firing while the drawer is open MUST NOT yield a focusable
+    // Reconnect button outside the focus trap.
     type InertElement = HTMLElement & { inert?: boolean };
-    const root = document.querySelector<HTMLElement>("main");
-    let restoreAriaHidden: string | null = null;
-    let restoreInert: boolean | undefined;
-    if (root !== null) {
-      const inertCapable = root as InertElement;
-      restoreInert = inertCapable.inert;
-      inertCapable.inert = true;
-      restoreAriaHidden = root.getAttribute("aria-hidden");
-      root.setAttribute("aria-hidden", "true");
+    // The drawer-root is the backdrop div with `data-testid="drawer-root"`;
+    // it wraps the panel. We walk every ancestor of the drawer-root and
+    // inert every sibling of that ancestor up to (but not including)
+    // `<body>`. That covers all top-level mounts under React's `<div id="root">`
+    // (PermissionNotice, DeviceDisconnectToast, the main content, and any
+    // future portal targets) without inerting the drawer's own subtree.
+    interface InertedNode {
+      readonly el: HTMLElement;
+      readonly priorInert: boolean | undefined;
+      readonly priorAriaHidden: string | null;
+    }
+    const inerted: InertedNode[] = [];
+    const drawerRoot = panel?.closest('[data-testid="drawer-root"]') ?? null;
+    let cursor: HTMLElement | null = drawerRoot as HTMLElement | null;
+    while (cursor !== null && cursor.parentElement !== null && cursor !== document.body) {
+      const parent = cursor.parentElement;
+      for (const sibling of Array.from(parent.children)) {
+        if (!(sibling instanceof HTMLElement)) continue;
+        if (sibling === cursor) continue;
+        const inertCapable = sibling as InertElement;
+        inerted.push({
+          el: sibling,
+          priorInert: inertCapable.inert,
+          priorAriaHidden: sibling.getAttribute("aria-hidden"),
+        });
+        inertCapable.inert = true;
+        sibling.setAttribute("aria-hidden", "true");
+      }
+      cursor = parent;
+      if (parent === document.body) break;
     }
 
     // Defer focus until the panel is in the DOM.
@@ -96,14 +120,14 @@ export function Drawer({ open, onOpenChange, title, children }: DrawerProps): Re
     return () => {
       window.clearTimeout(id);
       document.removeEventListener("keydown", onKey);
-      if (root !== null) {
-        const inertCapable = root as InertElement;
-        // Restore prior inert state. `false` is the resting value so we
-        // can default to that when the original was `undefined` (browsers
-        // without `inert` reflect the undefined as no-op).
-        inertCapable.inert = restoreInert ?? false;
-        if (restoreAriaHidden === null) root.removeAttribute("aria-hidden");
-        else root.setAttribute("aria-hidden", restoreAriaHidden);
+      // Restore each previously-inerted sibling. `false` is the resting
+      // value so we default to that when the original was `undefined`
+      // (browsers without `inert` reflect the undefined as no-op).
+      for (const { el, priorInert, priorAriaHidden } of inerted) {
+        const inertCapable = el as InertElement;
+        inertCapable.inert = priorInert ?? false;
+        if (priorAriaHidden === null) el.removeAttribute("aria-hidden");
+        else el.setAttribute("aria-hidden", priorAriaHidden);
       }
       lastActiveBeforeOpen.current?.focus?.();
     };

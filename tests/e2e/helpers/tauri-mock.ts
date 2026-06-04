@@ -215,6 +215,38 @@ export async function pushPitchUpdate(page: Page, update: MockPitchUpdate): Prom
 }
 
 /**
+ * Wire-format AudioBackendEvent variants the Tier-5 specs synthesise.
+ * Mirrors the Phase-1.3 contract documented in DESIGN.md §9.3.
+ */
+export type MockAudioBackendEvent =
+  | { type: "PriorNarrowed"; rangeHz: readonly [number, number] }
+  | { type: "Disconnected" }
+  | { type: "Connected"; rateHz?: number; channels?: number }
+  | { type: "FormatChanged"; rateHz: number; channels: number };
+
+/**
+ * Push a synthetic `audio:backend` event through the test bridge. The
+ * page-side `useDeviceEvents` hook registers a listener on
+ * `__neuralPitchTestHooks.listeners.get("audio:backend")` and routes the
+ * payload into `tunerStore` — exactly what the Rust shell does in
+ * production.
+ */
+export async function pushDeviceEvent(page: Page, event: MockAudioBackendEvent): Promise<void> {
+  await page.evaluate((payload) => {
+    type WindowWithHooks = Window & {
+      __neuralPitchTestHooks?: {
+        listeners: Map<string, Array<(payload: unknown) => void>>;
+      };
+    };
+    const w = window as WindowWithHooks;
+    const listeners = w.__neuralPitchTestHooks?.listeners.get("audio:backend") ?? [];
+    for (const fn of listeners) {
+      fn(payload);
+    }
+  }, event);
+}
+
+/**
  * Helper to construct a self-consistent `MockPitchUpdate` from a frequency
  * and a cents deviation. Tests describe the world in musical terms
  * (`A4 + 0¢`) and the helper computes `target_midi`, `target_hz`, etc.

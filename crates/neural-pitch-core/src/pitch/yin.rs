@@ -108,11 +108,30 @@ pub struct YinMpmEstimator {
     /// `window_size / 2`.
     tau_max: usize,
 
+    /// Constructor-time minimum lag floor (in samples). `process_with_range`
+    /// MUST never widen `tau_min` below this value. The constructor floor
+    /// is set to 2 so parabolic interpolation has a left neighbour at
+    /// index `tau - 1 >= 1`.
+    tau_min_floor: usize,
+    /// Constructor-time maximum lag ceiling (in samples). `process_with_range`
+    /// MUST never widen `tau_max` above this — the scratch buffers were
+    /// sized for exactly this lag, satisfying DESIGN.md §5.6 invariant 3.
+    tau_max_ceiling: usize,
+
     /// Scratch buffer holding either `d(tau)` (YIN) or `m(tau)` (MPM) for
-    /// `tau in 0..=tau_max`. Length is `tau_max + 1`.
+    /// `tau in 0..=tau_max`. Length is `tau_max_ceiling + 1`.
     scratch: Vec<f32>,
-    /// Scratch buffer holding `d'(tau)` (YIN only). Length is `tau_max + 1`.
+    /// Scratch buffer holding `d'(tau)` (YIN only). Length is
+    /// `tau_max_ceiling + 1`.
     cmnd: Vec<f32>,
+    /// Scratch buffer of MPM local-maximum lag indices, owned by the
+    /// estimator so [`Self::pick_mpm_tau`] is allocation-free on the hot
+    /// path. Pre-sized to `tau_max_ceiling + 1`; `clear()` preserves the
+    /// allocated capacity at the top of every call.
+    mpm_maxima_idx: Vec<usize>,
+    /// Parallel scratch buffer of MPM local-maximum NSDF values. Same
+    /// invariant as [`Self::mpm_maxima_idx`].
+    mpm_maxima_val: Vec<f32>,
 
     /// Monotonic timestamp counter, in samples since the last
     /// [`PitchEstimator::reset`]. Advances by `hop_size` on each `process`
@@ -179,6 +198,11 @@ impl YinMpmEstimator {
         let scratch_len = tau_max + 1;
         let scratch = vec![0.0_f32; scratch_len];
         let cmnd = vec![0.0_f32; scratch_len];
+        // MPM local-maxima scratch: at most one maximum per lag, so
+        // `scratch_len` is a safe upper bound. Reserved here so the
+        // hot-path `clear()` in `pick_mpm_tau` cannot reallocate.
+        let mpm_maxima_idx = Vec::with_capacity(scratch_len);
+        let mpm_maxima_val = Vec::with_capacity(scratch_len);
 
         tracing::trace!(
             target: "neural_pitch_core::pitch::yin",
@@ -196,10 +220,44 @@ impl YinMpmEstimator {
             algorithm,
             tau_min,
             tau_max,
+            tau_min_floor: tau_min,
+            tau_max_ceiling: tau_max,
             scratch,
             cmnd,
+            mpm_maxima_idx,
+            mpm_maxima_val,
             timestamp_samples: 0,
         })
+    }
+
+    /// Recompute `tau_min`/`tau_max` from a caller-supplied search range,
+    /// clamped to the constructor-time `[tau_min_floor, tau_max_ceiling]`
+    /// budget so the pre-allocated scratch buffers always cover the
+    /// resulting lag range. Returns `false` when the requested range is
+    /// degenerate (non-finite, non-positive, or empty after clamping); in
+    /// that case the caller's lag bounds are left unchanged and the
+    /// estimator falls back to its constructor-time range.
+    fn apply_range(&mut self, fmin_hz: f32, fmax_hz: f32) -> bool {
+        if !(fmin_hz.is_finite() && fmax_hz.is_finite()) || fmin_hz <= 0.0 || fmax_hz <= fmin_hz {
+            return false;
+        }
+        let sr = self.cfg.sample_rate_hz as f32;
+        let tau_min_f = (sr / fmax_hz).floor();
+        let tau_max_f = (sr / fmin_hz).ceil();
+        let mut tau_min = tau_min_f as usize;
+        if tau_min < self.tau_min_floor {
+            tau_min = self.tau_min_floor;
+        }
+        let mut tau_max = tau_max_f as usize;
+        if tau_max > self.tau_max_ceiling {
+            tau_max = self.tau_max_ceiling;
+        }
+        if tau_max <= tau_min {
+            return false;
+        }
+        self.tau_min = tau_min;
+        self.tau_max = tau_max;
+        true
     }
 
     /// Returns the active algorithm.
@@ -300,7 +358,13 @@ impl YinMpmEstimator {
 
     /// Run the MPM peak-picking rule on `self.scratch`. Returns the integer
     /// lag of the chosen local maximum, or `None`.
-    fn pick_mpm_tau(&self) -> Option<usize> {
+    ///
+    /// Takes `&mut self` because the local-maxima scratch buffers
+    /// ([`Self::mpm_maxima_idx`] / [`Self::mpm_maxima_val`]) are owned by
+    /// the struct and reused across calls; `clear()` preserves their
+    /// allocated capacity so this method is allocation-free on the hot path
+    /// (mod-doc lines 47-50).
+    fn pick_mpm_tau(&mut self) -> Option<usize> {
         // Step 1: walk until first positive zero crossing — i.e. find the
         // first index >= tau_min where m(tau) becomes >= 0 after having been
         // negative. Per McLeod & Wyvill, m(0) = 1 so we skip past the initial
@@ -330,28 +394,36 @@ impl YinMpmEstimator {
             start = neg;
         }
 
-        // Collect local maxima after `start`.
-        let mut maxima: Vec<(usize, f32)> = Vec::new();
+        // Reuse owned scratch buffers; `clear()` preserves capacity so no
+        // allocation happens on this hot path.
+        self.mpm_maxima_idx.clear();
+        self.mpm_maxima_val.clear();
         let mut tau = start.max(self.tau_min + 1);
         while tau < tau_hi {
             let v = self.scratch[tau];
             let l = self.scratch[tau - 1];
             let r = self.scratch[tau + 1];
             if v > 0.0 && v >= l && v >= r {
-                maxima.push((tau, v));
+                self.mpm_maxima_idx.push(tau);
+                self.mpm_maxima_val.push(v);
             }
             tau += 1;
         }
-        if maxima.is_empty() {
+        if self.mpm_maxima_idx.is_empty() {
             return None;
         }
 
         // global_max is the largest local-maximum value (NOT the global max
         // of the whole NSDF, which is 1.0 at lag 0). McLeod & Wyvill: pick
         // the first peak whose value is above k * highest_peak_value.
-        let global_max = maxima.iter().map(|&(_, v)| v).fold(0.0_f32, f32::max);
+        let global_max = self.mpm_maxima_val.iter().copied().fold(0.0_f32, f32::max);
         let threshold = MPM_K * global_max;
-        for &(idx, v) in &maxima {
+        for (idx, &v) in self
+            .mpm_maxima_idx
+            .iter()
+            .copied()
+            .zip(self.mpm_maxima_val.iter())
+        {
             if v >= threshold {
                 return Some(idx);
             }
@@ -454,7 +526,12 @@ impl PitchEstimator for YinMpmEstimator {
             }
             YinAlgorithm::Mpm => {
                 self.fill_mpm_nsdf(samples);
-                (self.pick_mpm_tau(), self.scratch.as_slice())
+                // `pick_mpm_tau` takes `&mut self` because it writes to the
+                // owned local-maxima scratch slices, but it does not mutate
+                // `self.scratch` itself. Drop the mut borrow before re-
+                // borrowing `self.scratch` immutably for `picker_buf`.
+                let tau_int_opt = self.pick_mpm_tau();
+                (tau_int_opt, self.scratch.as_slice())
             }
         };
 
@@ -496,6 +573,27 @@ impl PitchEstimator for YinMpmEstimator {
         Ok(Some(frame))
     }
 
+    fn process_with_range(
+        &mut self,
+        samples: &[f32],
+        fmin_hz: f32,
+        fmax_hz: f32,
+    ) -> Result<Option<F0Frame>, EstimatorError> {
+        // Narrow tau bounds in place. On a degenerate request (non-finite,
+        // non-positive, or empty intersection with the constructor budget)
+        // restore the constructor-time bounds so the trait contract at
+        // `pitch/mod.rs:170-178` ("degrade cleanly to their constructor-time
+        // range") holds — without this restore, a single bad frame would
+        // sticky-pin the lag bounds at the most-recent-good range. The
+        // restore stays inside the constructor allocation so no heap work
+        // can occur on this hot path.
+        if !self.apply_range(fmin_hz, fmax_hz) {
+            self.tau_min = self.tau_min_floor;
+            self.tau_max = self.tau_max_ceiling;
+        }
+        self.process(samples)
+    }
+
     fn reset(&mut self) {
         for v in &mut self.scratch {
             *v = 0.0;
@@ -504,6 +602,11 @@ impl PitchEstimator for YinMpmEstimator {
             *v = 0.0;
         }
         self.timestamp_samples = 0;
+        // Restore the lag range to the constructor-time budget so
+        // `process` after `reset` behaves as a freshly-constructed
+        // estimator, per the trait contract.
+        self.tau_min = self.tau_min_floor;
+        self.tau_max = self.tau_max_ceiling;
     }
 }
 

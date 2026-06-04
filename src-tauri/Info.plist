@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- TCC microphone usage description: shown in the macOS permission
+         prompt the first time `cpal::Device::build_input_stream` triggers
+         the OS-level entitlement check. Keep this string user-facing —
+         macOS displays it verbatim in System Settings → Privacy & Security
+         → Microphone. -->
+    <key>NSMicrophoneUsageDescription</key>
+    <string>NeuralPitch listens to your microphone to detect notes you sing or play. Audio is processed locally and never sent over the network.</string>
+</dict>
+</plist>

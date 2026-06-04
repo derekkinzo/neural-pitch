@@ -6,16 +6,18 @@
 //! [`rtrb::Producer<f32>`]; the worker drains them on a dedicated `std::thread`
 //! (ADR-0014).
 //!
-//! Out-of-band device events ([`AudioBackendEvent`]) will flow through a
-//! `std::sync::mpsc::Sender<AudioBackendEvent>` wired in by the Phase 1.2
-//! Tauri shell. Phase 1.1 only defines the data shape — the trait surface
-//! does not yet thread an event sender, and concrete backends do not emit
-//! events. When the wiring lands, events MUST NOT be funnelled through the
-//! sample producer (P3, DESIGN §2.4); the producer is real-time-safe and
-//! must not carry structured data.
+//! Out-of-band device events ([`AudioBackendEvent`]) flow through an
+//! [`AudioEventEmitter`] supplied by the Tauri shell at construction time.
+//! Phase 1.3 wires the emitter as a `Arc<dyn Fn(AudioBackendEvent) + Send + Sync>`
+//! so the core crate keeps zero `tauri::*` imports (P2). The shell wraps a
+//! `tauri::ipc::Channel<AudioBackendEvent>` in a matching closure. Events
+//! MUST NOT be funnelled through the sample producer (P3, DESIGN §2.4); the
+//! producer is real-time-safe and must not carry structured data.
 
 use std::io;
+use std::sync::Arc;
 
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 /// Audio capture configuration negotiated between the backend and the DSP
@@ -26,7 +28,7 @@ use thiserror::Error;
 /// window length. The DSP worker uses these to size its sliding-window buffer
 /// and to compute the ring-buffer capacity (`next_pow2(3 * window)` per
 /// DESIGN §6.4).
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AudioBackendConfig {
     /// Sample rate of incoming audio, in Hertz.
     pub sample_rate: u32,
@@ -65,13 +67,18 @@ impl AudioBackendConfig {
 
 /// Out-of-band events emitted by an audio backend.
 ///
-/// These flow through a `std::sync::mpsc::Sender<AudioBackendEvent>` that
-/// will be wired in Phase 1.2 (Tauri shell). Phase 1.1 only defines the
-/// data shape — the trait surface does not yet thread an event sender, so
-/// concrete backends do not currently emit events. Events are intentionally
-/// out-of-band: they MUST NOT be funnelled through the sample producer,
-/// which is real-time-safe and must not carry structured data.
-#[derive(Clone, Debug, PartialEq, Eq)]
+/// These flow through an [`AudioEventEmitter`] supplied by the Tauri shell at
+/// backend construction time. The shell wraps a
+/// `tauri::ipc::Channel<AudioBackendEvent>` in a matching closure so the core
+/// crate keeps zero `tauri::*` imports (P2, ADR-0002). Events are intentionally
+/// out-of-band: they MUST NOT be funnelled through the sample producer, which
+/// is real-time-safe and must not carry structured data.
+///
+/// The variants are tagged with `#[serde(tag = "kind")]` so the front-end can
+/// branch on a stable string discriminator instead of regex-matching free-form
+/// strings.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
 #[non_exhaustive]
 pub enum AudioBackendEvent {
     /// The capture device disappeared (USB unplug, hot-swap, OS audio reset).
@@ -91,11 +98,29 @@ pub enum AudioBackendEvent {
     },
 }
 
+/// Type alias for the out-of-band event-emitter closure passed to backends.
+///
+/// The Tauri shell wraps a `tauri::ipc::Channel<AudioBackendEvent>` in a
+/// closure satisfying this signature; the core crate stays free of any
+/// `tauri::*` imports (P2). Calls to the emitter are non-blocking: the cpal
+/// `err_fn` runs on the platform audio thread, and the closure MUST NOT
+/// allocate or block per ADR-0014. `tauri::ipc::Channel::send` does perform
+/// JSON serialisation on the calling thread, but only on the rare device-
+/// event path (not the per-sample hot path), so the cost is acceptable.
+pub type AudioEventEmitter = Arc<dyn Fn(AudioBackendEvent) + Send + Sync>;
+
 /// Errors raised by [`AudioBackend::start`] and related lifecycle calls.
 ///
-/// Variants are intentionally coarse-grained for Phase 1.1; the cpal-specific
+/// Variants are intentionally coarse-grained for Phase 1.1; most cpal-specific
 /// branches surface as [`AudioBackendError::BuildStream`] with the underlying
 /// error message preserved.
+///
+/// [`AudioBackendError::PermissionDenied`] is the dedicated typed channel for
+/// the macOS TCC microphone-denial case (and any future platform-equivalent
+/// permission rejection): consumers branch on the *variant*, not on a
+/// stringified message, so that locale-dependent backend-specific text
+/// changes cannot regress the user-facing recovery flow. ADR-0017 requires
+/// no telemetry on this path.
 #[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum AudioBackendError {
@@ -111,6 +136,14 @@ pub enum AudioBackendError {
     /// the platform error message verbatim.
     #[error("failed to build audio stream: {0}")]
     BuildStream(String),
+
+    /// The OS denied the microphone capture permission (macOS TCC denial,
+    /// Windows mic-privacy off, Linux PipeWire / Pulse policy block). The
+    /// wrapped string preserves the platform-specific message for logs;
+    /// consumers should pattern-match on the variant for the user-facing
+    /// recovery flow rather than the message body.
+    #[error("microphone permission denied: {0}")]
+    PermissionDenied(String),
 
     /// `start()` was called twice without an intervening `stop()`. This is a
     /// state-machine violation rather than a stream-construction failure.

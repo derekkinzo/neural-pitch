@@ -12,6 +12,11 @@
 //!   patch calls cannot lose each other's deltas. The persist step runs
 //!   *after* the guard is dropped because `parking_lot` guards are `!Send`
 //!   and cannot cross `.await` (see `commands::persist_settings`).
+//! - `events` — slot holding the most-recently-handed-out
+//!   `tauri::ipc::Channel<AudioBackendEvent>`. Phase 1.3 wiring: the JS
+//!   side constructs the channel once on mount and passes it into
+//!   `start_capture`; the cpal backend's `err_fn` forwards
+//!   `Disconnected` / `Underrun` / `FormatChanged` over that channel.
 //!
 //! `parking_lot::Mutex` is non-poisoning (ADR-0014). The atomic
 //! "build_controller succeeds before the cache and disk are mutated" rule
@@ -20,11 +25,12 @@
 use std::sync::Arc;
 use std::thread::JoinHandle;
 
-use neural_pitch_core::audio::AudioBackend;
+use neural_pitch_core::audio::{AudioBackend, AudioBackendEvent};
 use neural_pitch_core::pipeline::DspError;
 use neural_pitch_core::settings::TunerSettings;
 use parking_lot::{Mutex, RwLock};
 use tauri::Wry;
+use tauri::ipc::Channel;
 use tauri_plugin_store::Store;
 use tokio_util::sync::CancellationToken;
 
@@ -72,6 +78,14 @@ pub struct AppState {
     /// truth on disk; this cache keeps `get_settings` lock-free in the
     /// common (read) case.
     pub(crate) settings: RwLock<TunerSettings>,
+
+    /// The most-recently-handed-out audio-event channel. The JS side
+    /// constructs one [`Channel<AudioBackendEvent>`] on mount and passes it
+    /// into `start_capture`. The cpal backend's `err_fn` forwards device
+    /// events through it. Stored in an `Option` so a duplicate mount on
+    /// the JS side replaces the prior channel without orphaning the
+    /// previous handle (Tauri's `Channel` is reference-counted internally).
+    pub(crate) events: Mutex<Option<Channel<AudioBackendEvent>>>,
 }
 
 impl AppState {
@@ -82,6 +96,7 @@ impl AppState {
             dsp: Mutex::new(None),
             store,
             settings: RwLock::new(settings),
+            events: Mutex::new(None),
         }
     }
 

@@ -18,11 +18,13 @@ pub mod mock_backend;
 #[cfg(feature = "cpal")]
 pub mod cpal_backend;
 
-pub use backend::{AudioBackend, AudioBackendConfig, AudioBackendError, AudioBackendEvent};
+pub use backend::{
+    AudioBackend, AudioBackendConfig, AudioBackendError, AudioBackendEvent, AudioEventEmitter,
+};
 pub use mock_backend::{MockAudioBackend, Pacing, SampleSource};
 
 #[cfg(feature = "cpal")]
-pub use cpal_backend::CpalAudioBackend;
+pub use cpal_backend::{CpalAudioBackend, pick_buffer_size};
 
 /// One block of contiguous PCM audio samples, interleaved if multi-channel.
 ///

@@ -2084,6 +2084,7 @@ version = "0.1.0"
 dependencies = [
  "approx",
  "cpal",
+ "parking_lot",
  "proptest",
  "rtrb",
  "serde",

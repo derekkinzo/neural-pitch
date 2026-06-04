@@ -1,0 +1,118 @@
+// useDeviceEvents — single-subscription hook for the `audio:backend` Tauri
+// event channel. Mirrors the Rust-side `AudioBackendEvent` enum into the
+// slow Zustand store at <=1 Hz.
+//
+// Phase 1.3 wires four event variants:
+//   - PriorNarrowed { rangeHz: [number, number] } -> setPriorRange
+//   - Disconnected                                -> setDeviceStatus("disconnected")
+//   - Connected                                   -> clearDeviceError +
+//                                                    optional negotiated format
+//   - FormatChanged { rateHz, channels }          -> setNegotiatedFormat +
+//                                                    deviceStatus = "format_changed"
+//
+// Test surface: when running under the Tier-5 mock the helper exposes
+// `window.__neuralPitchTestHooks.listeners` keyed by `"audio:backend"`,
+// which a spec drives via `pushDeviceEvent(page, event)`.
+//
+// Cross-references:
+//   docs/design/DESIGN.md §9.3 (audio backend events)
+//   tests/e2e/helpers/tauri-mock.ts (synthetic event delivery)
+
+import { useEffect } from "react";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { useTunerStore } from "@/stores/tunerStore";
+
+/** Wire-format AudioBackendEvent. Field names mirror the Rust `serde`
+ *  output (snake_case for nested data, but `type` + camelCase for the
+ *  variant tag we control on the TS test harness side). */
+export type AudioBackendEvent =
+  | { type: "PriorNarrowed"; rangeHz: readonly [number, number] }
+  | { type: "Disconnected" }
+  | { type: "Connected"; rateHz?: number; channels?: number }
+  | { type: "FormatChanged"; rateHz: number; channels: number };
+
+const CHANNEL = "audio:backend";
+
+function applyEvent(event: AudioBackendEvent): void {
+  const store = useTunerStore.getState();
+  switch (event.type) {
+    case "PriorNarrowed":
+      store.setPriorRange(event.rangeHz);
+      return;
+    case "Disconnected":
+      store.setDeviceStatus("disconnected");
+      return;
+    case "Connected":
+      if (typeof event.rateHz === "number" && typeof event.channels === "number") {
+        store.setNegotiatedFormat({ rateHz: event.rateHz, channels: event.channels });
+      }
+      store.clearDeviceError();
+      return;
+    case "FormatChanged":
+      store.setNegotiatedFormat({ rateHz: event.rateHz, channels: event.channels });
+      store.setDeviceStatus("format_changed");
+      return;
+  }
+}
+
+/**
+ * Subscribe to the `audio:backend` Tauri event for the lifetime of the
+ * mounting component. Idempotent: only one subscription is active at a
+ * time, even under React StrictMode double-invoke.
+ */
+export function useDeviceEvents(): void {
+  useEffect(() => {
+    let unlisten: UnlistenFn | null = null;
+    let cancelled = false;
+
+    // Prefer the Tauri `listen` API for production. Under the Tier-5 mock
+    // the page-side helper does not implement `plugin:event|listen`, so we
+    // ALSO register through `__neuralPitchTestHooks.listeners` so specs
+    // can drive synthetic events without needing the real listen wiring.
+    type Listener = (payload: unknown) => void;
+    type WindowWithHooks = Window & {
+      __neuralPitchTestHooks?: {
+        listeners: Map<string, Listener[]>;
+      };
+    };
+    const w = window as WindowWithHooks;
+    const hooks = w.__neuralPitchTestHooks;
+    let unregisterTestListener: (() => void) | null = null;
+    if (hooks !== undefined) {
+      const fn: Listener = (payload) => {
+        applyEvent(payload as AudioBackendEvent);
+      };
+      const list = hooks.listeners.get(CHANNEL) ?? [];
+      list.push(fn);
+      hooks.listeners.set(CHANNEL, list);
+      unregisterTestListener = () => {
+        const cur = hooks.listeners.get(CHANNEL) ?? [];
+        hooks.listeners.set(
+          CHANNEL,
+          cur.filter((f) => f !== fn),
+        );
+      };
+    } else {
+      void listen<AudioBackendEvent>(CHANNEL, (event) => {
+        applyEvent(event.payload);
+      })
+        .then((u) => {
+          if (cancelled) {
+            u();
+            return;
+          }
+          unlisten = u;
+        })
+        .catch(() => {
+          /* swallow: production code should not crash on a missing
+             event channel; the UI degrades to no auto-prior badge update. */
+        });
+    }
+
+    return () => {
+      cancelled = true;
+      unregisterTestListener?.();
+      if (unlisten !== null) unlisten();
+    };
+  }, []);
+}

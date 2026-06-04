@@ -21,7 +21,8 @@ use tokio_util::sync::CancellationToken;
 use crate::audio::backend::AudioBackendConfig;
 use crate::music::frequency_to_note;
 use crate::pipeline::sink::{FrameSink, FrameSinkError, PitchUpdate};
-use crate::pitch::{EstimatorError, PitchEstimator};
+use crate::pitch::auto_prior::AutoPrior;
+use crate::pitch::{EstimatorError, InstrumentHint, PitchEstimator};
 use crate::smoothing::ContourSmoother;
 use crate::voicing::VoiceActivityGate;
 
@@ -73,6 +74,11 @@ pub struct DspWorker {
     samples_seen: u64,
     /// Reference pitch for cents math, default `440.0`.
     a4_hz: f32,
+    /// Running F0-median + hint-aware search-range estimator. Read at the
+    /// top of every iteration, updated after the [`FrameSink`] receives the
+    /// emitted [`PitchUpdate`] (so the prior is built from strictly older
+    /// audio than the frame it informs).
+    auto_prior: AutoPrior,
 }
 
 impl core::fmt::Debug for DspWorker {
@@ -113,6 +119,7 @@ impl DspWorker {
             window_filled: 0,
             samples_seen: 0,
             a4_hz: DEFAULT_A4_HZ,
+            auto_prior: AutoPrior::default(),
         }
     }
 
@@ -125,6 +132,34 @@ impl DspWorker {
             self.a4_hz = a4_hz;
         }
         self
+    }
+
+    /// Configure the worker's [`AutoPrior`] with a caller-supplied
+    /// instrument hint.
+    ///
+    /// - `Some(hint)` where `hint != InstrumentHint::Generic` pins the
+    ///   auto-prior to that instrument's canonical range every iteration.
+    ///   The ring still records voiced samples so toggling back to
+    ///   `Generic` (auto-mode) warms up instantly.
+    /// - `Some(InstrumentHint::Generic)` and `None` both leave the
+    ///   auto-prior in auto-mode — the running median drives the search
+    ///   range with no soft clamp.
+    #[must_use]
+    pub fn with_instrument_hint(mut self, hint: Option<InstrumentHint>) -> Self {
+        match hint {
+            Some(h) => self.auto_prior.set_hint(h),
+            None => self.auto_prior.clear_hint(),
+        }
+        self
+    }
+
+    /// Borrow the worker's [`AutoPrior`] for diagnostics — Tauri / UI
+    /// surfaces SHOULD instead read the dedicated status channel that
+    /// will be added in Phase 1.3 step (5). This accessor exists for
+    /// integration tests.
+    #[must_use]
+    pub fn auto_prior(&self) -> &AutoPrior {
+        &self.auto_prior
     }
 
     /// Number of samples drained from the consumer since `new()`.
@@ -230,23 +265,34 @@ impl DspWorker {
                 }
             }
 
-            // 4) Run the estimator on the full window.
-            let Some(frame) = self.estimator.process(&self.window)? else {
+            // 4) Read the current auto-prior range for this iteration. The
+            //    range reflects audio strictly older than the frame we are
+            //    about to compute — `auto_prior.update` runs only after the
+            //    sink has accepted this iteration's update.
+            let (fmin, fmax) = self.auto_prior.current_range();
+
+            // 5) Run the estimator on the full window with the per-call
+            //    range override. Backends that have not implemented
+            //    `process_with_range` fall back to their constructor-time
+            //    range via the trait default.
+            let Some(frame) = self
+                .estimator
+                .process_with_range(&self.window, fmin, fmax)?
+            else {
                 continue;
             };
 
-            // 5) Apply caller-side VAD over the freshest hop. The hop
+            // 6) Apply caller-side VAD over the freshest hop. The hop
             //    represents the most recent slice of audio.
             let hop_slice = &self.window[window - hop..window];
             let vad_voiced = self.vad.is_voiced(hop_slice);
             let voiced = frame.voiced && vad_voiced;
+            let gated_frame = crate::pitch::F0Frame { voiced, ..frame };
 
-            // 6) Smooth.
-            let smoothed = self
-                .smoother
-                .push(crate::pitch::F0Frame { voiced, ..frame });
+            // 7) Smooth.
+            let smoothed = self.smoother.push(gated_frame);
 
-            // 7) Compute musical cents/MIDI/target. When unvoiced or f0 is
+            // 8) Compute musical cents/MIDI/target. When unvoiced or f0 is
             //    not finite/positive, fall back to a zero-cents zero-MIDI
             //    reading; consumers must gate on `voiced` anyway.
             let f0 = smoothed.f0_hz;
@@ -267,8 +313,15 @@ impl DspWorker {
                 target_hz,
             };
 
-            // 8) Deliver. Disconnected sink is a terminal condition.
+            // 9) Deliver. Disconnected sink is a terminal condition.
             self.sink.send(update)?;
+
+            // 10) Post-emit: feed the gated frame (NOT the smoothed one,
+            //     which can lag by hundreds of ms) back into the auto-prior.
+            //     Doing this *after* the sink call guarantees the next
+            //     iteration's `current_range()` reads from a ring built
+            //     from strictly older audio than the frame we just emitted.
+            self.auto_prior.update(gated_frame);
         }
     }
 

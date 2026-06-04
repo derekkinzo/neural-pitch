@@ -22,6 +22,26 @@ export const INSTRUMENT_HINTS: ReadonlyArray<InstrumentHint> = [
   "Violin",
 ];
 
+/** Static Phase-1 prior ranges per InstrumentHint, sourced from
+ *  ADR-0007 §"Staged Phase-1 ranges". Used by the StatusPill explicit-prior
+ *  badge so the user can see the active search window without waiting for
+ *  the first PriorNarrowed event from the engine. The "Generic" entry is the
+ *  *fallback* shown before the auto-prior narrows; once a real range arrives
+ *  via the `audio:backend` channel the StatusPill prefers `priorRange`.
+ *
+ *  Ranges are inclusive `[lowHz, highHz]`. */
+export const INSTRUMENT_RANGE_TABLE: Readonly<Record<InstrumentHint, readonly [number, number]>> = {
+  Generic: [80, 620],
+  Voice: [70, 500],
+  Guitar: [80, 1300],
+  Bass: [40, 400],
+  Piano: [27, 4200],
+  Violin: [195, 3500],
+};
+
+/** Fallback range used by the auto-prior badge before `priorRange` is set. */
+export const FALLBACK_GENERIC: readonly [number, number] = INSTRUMENT_RANGE_TABLE.Generic;
+
 /** A4 reference presets in Hz. 440 is the default per ADR-0005. */
 export const A4_PRESETS: ReadonlyArray<number> = [415, 430, 435, 440, 442, 443, 466];
 

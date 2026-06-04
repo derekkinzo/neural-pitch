@@ -26,6 +26,8 @@ test.describe("smoke — Phase 1.2 tuner shell", () => {
     const pill = page.getByTestId("status-pill");
     await expect(pill).toHaveAttribute("data-state", "live");
     await expect(page.getByTestId("status-device")).toHaveText("Mock Microphone");
-    await expect(page.getByTestId("status-rate")).toHaveText("48.0 kHz");
+    // Phase-1.3 status-rate cell appends the channel count to the kHz
+    // value; integer multiples of 1000 drop the ".0" suffix.
+    await expect(page.getByTestId("status-rate")).toHaveText("48 kHz · mono");
   });
 });

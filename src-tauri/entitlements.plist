@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- TCC microphone entitlement: required so the first
+         `cpal::Device::build_input_stream` call can prompt and, after grant,
+         actually open the input device. Pairs with the
+         `NSMicrophoneUsageDescription` string in `tauri.conf.json`'s
+         `bundle.macOS.infoPlist`. -->
+    <key>com.apple.security.device.audio-input</key>
+    <true/>
+    <!-- Hardened runtime + JIT permission. The Tauri front-end runs inside
+         WKWebView; without this entitlement modern V8 paths inside WebKit's
+         JS engine fail under hardened runtime. Documented by Tauri 2's
+         macOS bundling guide. -->
+    <key>com.apple.security.cs.allow-jit</key>
+    <true/>
+</dict>
+</plist>

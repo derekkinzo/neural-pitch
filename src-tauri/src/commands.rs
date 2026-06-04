@@ -5,12 +5,14 @@
 //! `anyhow`-style chain. Validation failures do not mutate state.
 
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Duration;
 
 use cpal::SampleFormat;
 use cpal::traits::{DeviceTrait, HostTrait};
 use neural_pitch_core::audio::backend::{AudioBackend, AudioBackendConfig, AudioBackendError};
 use neural_pitch_core::audio::cpal_backend::CpalAudioBackend;
+use neural_pitch_core::audio::{AudioBackendEvent, AudioEventEmitter};
 use neural_pitch_core::pipeline::{DspError, DspWorker, PitchUpdate};
 use neural_pitch_core::pitch::factory::{Backend, make_estimator};
 use neural_pitch_core::pitch::{EstimatorConfig, EstimatorError, InstrumentHint};
@@ -33,16 +35,25 @@ pub(crate) const SETTINGS_STORE_KEY: &str = "settings";
 const DSP_JOIN_BUDGET: Duration = Duration::from_millis(500);
 
 /// Begin capture with the supplied settings, streaming [`PitchUpdate`]
-/// frames through `channel`.
+/// frames through `channel` and out-of-band [`AudioBackendEvent`]s through
+/// `events`.
 ///
 /// Failure semantics — strictly atomic with respect to disk + in-memory
 /// state. The settings cache and the on-disk store are mutated only after
 /// `build_controller` succeeds; any earlier validation, "already capturing",
 /// or backend-construction failure leaves the caller's prior settings
 /// intact.
+///
+/// macOS: TCC microphone permission is granted via the bundle's
+/// `entitlements.plist` + `Info.plist` `NSMicrophoneUsageDescription`. The
+/// first `cpal::Device::build_input_stream` call triggers the OS prompt;
+/// on denial cpal returns `BuildStreamError::BackendSpecific`, which the
+/// shell maps to a user-facing string telling the operator to enable the
+/// permission in System Settings → Privacy & Security → Microphone.
+/// ADR-0017 forbids any telemetry on permission denial.
 #[tauri::command]
 #[tracing::instrument(
-    skip(state, channel),
+    skip(state, channel, events),
     fields(
         sample_rate_hz = settings.sample_rate_hz,
         window_size = settings.window_size,
@@ -54,6 +65,7 @@ const DSP_JOIN_BUDGET: Duration = Duration::from_millis(500);
 pub async fn start_capture(
     state: State<'_, AppState>,
     channel: Channel<PitchUpdate>,
+    events: Channel<AudioBackendEvent>,
     settings: TunerSettings,
 ) -> Result<(), String> {
     settings
@@ -70,8 +82,32 @@ pub async fn start_capture(
         }
     }
 
-    let controller = build_controller(&settings, channel)
-        .map_err(|e| format!("failed to start capture: {e:#}"))?;
+    // Stash the event channel so the JS side can keep its handle around
+    // across stop/start round-trips, and wrap a clone in the
+    // `AudioEventEmitter` closure handed to the cpal backend. We clone
+    // before moving into the closure because `Channel` is reference-counted.
+    {
+        let mut g = state.events.lock();
+        *g = Some(events.clone());
+    }
+    let emitter: AudioEventEmitter = Arc::new(move |ev: AudioBackendEvent| {
+        // RT-safety note: this `Channel::send` is acceptable here because
+        // the cpal `err_fn` is documented to run OFF the RT data path on
+        // every supported backend (CoreAudio HAL listener thread on macOS,
+        // WASAPI event thread on Windows, ALSA poll thread on Linux).
+        // `Channel::send` synchronously serialises JSON on the calling
+        // thread — see `crate::sink` for the underlying analysis. Do NOT
+        // reuse this emitter shape inside an `InputDataCallback`; per-sample
+        // hot paths are explicitly forbidden from allocating or logging.
+        // The error branch is benign: a dropped front-end channel just
+        // means there is no consumer.
+        if let Err(e) = events.send(ev) {
+            tracing::debug!(target: "neural_pitch::commands", error = %e, "audio event channel send failed");
+        }
+    });
+
+    let controller =
+        build_controller(&settings, channel, Some(emitter)).map_err(translate_build_error)?;
 
     // Commit the new baseline to the settings cache + persist. The cache
     // write and disk write are not strictly transactional (parking_lot
@@ -90,8 +126,35 @@ pub async fn start_capture(
     let mut guard = state.dsp.lock();
     if guard.is_some() {
         // A concurrent start_capture won the race after our pre-check. We
-        // already created a second backend; tear it down before bailing so
-        // we don't leak a cpal stream.
+        // already created a second backend; explicitly tear it down before
+        // bailing so we do not leak a cpal stream and do not leave an
+        // orphan DSP worker spinning on a dropped consumer for several
+        // hop intervals (~10 ms at hop=512/48 kHz). `Drop` on the
+        // controller alone would close the cpal handle but would not
+        // signal the worker to exit promptly.
+        let mut losing = controller;
+        losing.cancel.cancel();
+        losing.backend.stop();
+        // Release the AppState lock while we wait for the worker join so
+        // a parallel stop_capture can still acquire `state.dsp` if needed.
+        drop(guard);
+        if let Some(handle) = losing.worker_join.take() {
+            let deadline = std::time::Instant::now() + DSP_JOIN_BUDGET;
+            let mut joined = false;
+            while std::time::Instant::now() < deadline {
+                if handle.is_finished() {
+                    let _ = handle.join();
+                    joined = true;
+                    break;
+                }
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            if !joined {
+                tracing::warn!(
+                    "dsp worker did not exit within budget on concurrent-start teardown"
+                );
+            }
+        }
         return Err("already capturing".into());
     }
     *guard = Some(controller);
@@ -335,11 +398,39 @@ where
     ser.serialize_str(&value.to_string())
 }
 
+/// Translate a [`BuildError`] into the user-facing string surfaced to the
+/// front-end. `AudioBackend` permission denials are detected on the typed
+/// [`AudioBackendError::PermissionDenied`] variant; other variants pass
+/// through as a structured `format!` chain. ADR-0017 forbids any telemetry
+/// on the permission-denial path.
+///
+/// Takes `BuildError` by value so it composes cleanly with
+/// `Result::map_err(translate_build_error)` at the call site.
+#[allow(clippy::needless_pass_by_value)]
+fn translate_build_error(e: BuildError) -> String {
+    if let BuildError::AudioBackend(AudioBackendError::PermissionDenied(_)) = &e {
+        // Match on the typed variant rather than substring-scanning the
+        // backend message: the CpalAudioBackend layer is responsible for
+        // mapping locale-dependent BackendSpecific text into the typed
+        // PermissionDenied variant. This keeps the user-facing copy stable
+        // even if cpal / CoreAudio message text changes.
+        return "microphone permission denied — open System Settings → Privacy & Security → Microphone to grant access".to_string();
+    }
+    format!("failed to start capture: {e:#}")
+}
+
+/// Default audio-callback buffer size in frames. Used as the WASAPI
+/// `BufferSize::Fixed` request; clamped into the device's
+/// `SupportedBufferSize::Range` by `pick_buffer_size` at stream-build time.
+/// 256 frames at 48 kHz ≈ 5.3 ms — well under the DESIGN §6.3 latency budget.
+const DEFAULT_BUFFER_FRAMES: u32 = 256;
+
 /// Wire up the live capture pipeline end-to-end and return the controller
 /// that the lifecycle owner stores in `AppState`.
 fn build_controller(
     settings: &TunerSettings,
     channel: Channel<PitchUpdate>,
+    emitter: Option<AudioEventEmitter>,
 ) -> Result<DspController, BuildError> {
     // 1) Discover the default input device. We do not currently allow
     //    explicit device selection from the front-end; that is Phase 1.3
@@ -406,12 +497,19 @@ fn build_controller(
     //    fails, drop the worker side (cancel + join) and bubble the error
     //    verbatim. The Phase 1.1 backend semantics already satisfy the
     //    "no poison" rule.
-    let mut backend: Box<dyn AudioBackend> = Box::new(CpalAudioBackend::new(
-        backend_cfg,
-        device,
-        stream_config,
-        sample_format,
-    ));
+    //
+    //    Phase 1.3: request a `Fixed(256)` buffer size for WASAPI; the
+    //    backend clamps to the device's supported range via
+    //    `pick_buffer_size` and falls back to `BufferSize::Default` when
+    //    the range is `Unknown`. The optional `emitter` forwards
+    //    `AudioBackendEvent::{Disconnected, Underrun, FormatChanged}` over
+    //    the JS-side `Channel<AudioBackendEvent>`.
+    let mut cpal_backend = CpalAudioBackend::new(backend_cfg, device, stream_config, sample_format)
+        .with_buffer_frames(DEFAULT_BUFFER_FRAMES);
+    if let Some(em) = emitter {
+        cpal_backend = cpal_backend.with_emitter(em);
+    }
+    let mut backend: Box<dyn AudioBackend> = Box::new(cpal_backend);
     if let Err(e) = backend.start(producer) {
         cancel.cancel();
         // The worker observes the dropped producer + cancellation flag and

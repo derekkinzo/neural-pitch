@@ -29,6 +29,7 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+pub mod auto_prior;
 pub mod factory;
 pub mod yin;
 
@@ -153,6 +154,28 @@ pub trait PitchEstimator: Send {
     /// [`F0Frame`]. Implementations that buffer internally MAY return `None`
     /// while still warming up.
     fn process(&mut self, samples: &[f32]) -> Result<Option<F0Frame>, EstimatorError>;
+
+    /// Process one chunk with a per-call search range override.
+    ///
+    /// The default implementation ignores `fmin_hz`/`fmax_hz` and forwards
+    /// to [`PitchEstimator::process`]. Backends MAY override this to
+    /// recompute lag bounds without rebuilding their scratch buffers — the
+    /// override MUST stay within the constructor-time allocated budget so
+    /// no allocation occurs on the hot path.
+    ///
+    /// Callers (in particular [`crate::pipeline::DspWorker`] driving an
+    /// [`crate::pitch::auto_prior::AutoPrior`]) pass the running auto-prior
+    /// range every iteration. Backends that have not yet implemented
+    /// per-call narrowing degrade cleanly to their constructor-time range.
+    fn process_with_range(
+        &mut self,
+        samples: &[f32],
+        fmin_hz: f32,
+        fmax_hz: f32,
+    ) -> Result<Option<F0Frame>, EstimatorError> {
+        let _ = (fmin_hz, fmax_hz);
+        self.process(samples)
+    }
 
     /// Drop all internal state (buffers, Viterbi paths, timestamp counter).
     /// After `reset`, the next [`PitchEstimator::process`] call behaves as if

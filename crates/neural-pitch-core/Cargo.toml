@@ -28,8 +28,9 @@ tokio-util  = { version = "0.7", default-features = false }
 cpal        = { version = "0.17", optional = true }
 
 [dev-dependencies]
-proptest  = "1"
-approx    = "0.5"
+proptest    = "1"
+approx      = "0.5"
+parking_lot = { workspace = true }
 
 # Cancellation, sample-pacing, and DSP-worker tests need the integration tests
 # to compile against the same default feature set as the binary. No extra
