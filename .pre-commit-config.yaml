@@ -18,14 +18,19 @@ repos:
       - id: fmt
       - id: clippy
         args: ["--workspace", "--all-targets", "--all-features", "--", "-D", "warnings"]
-  - repo: https://github.com/pre-commit/mirrors-prettier
-    rev: v3.1.0
-    hooks:
-      - id: prettier
-        types_or: [javascript, jsx, ts, tsx, json, yaml, markdown, css]
-        exclude: "docs/research/.*\\.md"
   - repo: local
     hooks:
+      # Run prettier from our pinned npm devDependency rather than the
+      # mirrors-prettier image so the hook always matches CI's `npm run
+      # format -- --check`. The mirror lagged behind our prettier version
+      # in Phase 1.2 and produced a different formatting decision on
+      # generic-constrained interfaces.
+      - id: prettier
+        name: prettier
+        language: system
+        entry: npx prettier --write
+        types_or: [javascript, jsx, ts, tsx, json, yaml, markdown, css]
+        exclude: "docs/research/.*\\.md"
       - id: eslint
         name: eslint
         language: system

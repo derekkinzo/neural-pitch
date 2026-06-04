@@ -18,8 +18,10 @@ import {
   type SelectHTMLAttributes,
 } from "react";
 
-export interface SelectProps<T extends string | number>
-  extends Omit<SelectHTMLAttributes<HTMLSelectElement>, "onChange" | "value"> {
+export interface SelectProps<T extends string | number> extends Omit<
+  SelectHTMLAttributes<HTMLSelectElement>,
+  "onChange" | "value"
+> {
   value: T;
   onValueChange: (value: T) => void;
   children: ReactNode;

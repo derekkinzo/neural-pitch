@@ -10,8 +10,10 @@
 
 import { forwardRef, type ChangeEvent, type InputHTMLAttributes } from "react";
 
-export interface SliderProps
-  extends Omit<InputHTMLAttributes<HTMLInputElement>, "onChange" | "value" | "type"> {
+export interface SliderProps extends Omit<
+  InputHTMLAttributes<HTMLInputElement>,
+  "onChange" | "value" | "type"
+> {
   value: number;
   min: number;
   max: number;
