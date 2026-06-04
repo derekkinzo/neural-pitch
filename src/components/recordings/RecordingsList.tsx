@@ -27,7 +27,9 @@
 import { useEffect, useMemo, useRef, type KeyboardEvent, type ReactNode } from "react";
 import { Drawer } from "@/components/ui/Drawer";
 import { PlaybackPanel } from "@/components/recordings/PlaybackPanel";
+import { RecordingDetail } from "@/components/recordings/RecordingDetail";
 import { formatDurationShort, formatRelative } from "@/lib/duration-format";
+import { useAnalysisProgress } from "@/hooks/useAnalysisProgress";
 import { useRecordingsStore } from "@/stores/recordingsStore";
 import type { Recording } from "@/types/recording";
 
@@ -41,6 +43,11 @@ export function RecordingsList({ open, onOpenChange }: RecordingsListProps): Rea
   const refresh = useRecordingsStore((s) => s.refresh);
   const select = useRecordingsStore((s) => s.select);
   const currentRecordingId = useRecordingsStore((s) => s.currentRecordingId);
+
+  // Subscribe to the `analysis-progress` event channel for the lifetime of
+  // the drawer mount so the AnalysisSummary card's progress bar reflects
+  // the live percent driven by the Rust analyzer.
+  useAnalysisProgress();
 
   // Refresh on open so the list reflects any rows persisted while the
   // drawer was closed. Fire-and-forget; the action handles its own errors.
@@ -124,6 +131,7 @@ export function RecordingsList({ open, onOpenChange }: RecordingsListProps): Rea
           </div>
         ) : null}
 
+        <RecordingDetail />
         <PlaybackPanel />
       </div>
     </Drawer>

@@ -10,11 +10,14 @@ repository.workspace   = true
 readme.workspace       = true
 
 [features]
-default = ["cpal", "flac"]
+default = ["cpal", "flac", "pyin"]
 cpal              = ["dep:cpal"]
 decoder-symphonia = []  # Phase 2 — Symphonia-backed file decoders
 neural            = []  # Phase 2 brings in ort + Viterbi + PESTO/CREPE backends
-pyin              = []  # Phase 2 — pYIN backend
+# Phase 2.1 — pYIN offline backend (Sytronik/pyin = "1.2"). Pulls in the
+# pure-Rust pyin crate plus claxon for the FLAC decode path used by
+# `analysis::contour::analyze_contour`.
+pyin              = ["dep:pyin", "dep:claxon"]
 dataset           = []  # Phase 2/Tier-3 dataset-gated tests
 debug-overlay     = []  # Phase 1+ — diagnostic overlays for desktop shell
 # Phase 2.0 — pure-Rust FLAC encoder for the recording pipeline.
@@ -47,6 +50,21 @@ directories = "5"
 # panic in another thread. Also surfaces consistently with `src-tauri/`'s
 # pattern.
 parking_lot = { workspace = true }
+# Phase 2.1 — `postcard` is the on-the-wire serialiser for the
+# `analysis_cache.result_blob` column. Pure-Rust, ~5-10× smaller than
+# `serde_json` for the dense `Vec<F0Frame>` payload.
+postcard    = { workspace = true }
+# Phase 2.1 — Sytronik/pyin v1.2.0. Pure-Rust pYIN (Mauch & Dixon 2014)
+# implementation matching librosa 0.9.1. MIT licensed. Gated behind
+# `feature = "pyin"`. The crate is offline-only (global Viterbi); the live
+# DspWorker never touches it.
+pyin        = { version = "1.2", optional = true }
+# Phase 2.1 — Pure-Rust FLAC decoder used by the `analyze_contour` FLAC
+# path. Promoted from `dev-dependencies` to an optional dep behind
+# `feature = "pyin"` so `analysis::contour` can decode recordings stored
+# by Phase 2.0's flac sink. Still available to dev tests via the dev-dep
+# alias below.
+claxon      = { version = "0.4", optional = true }
 
 [dev-dependencies]
 proptest    = "1"
@@ -57,7 +75,9 @@ approx      = "0.5"
 # we do not need for one-shot CLI usage in `examples/build_voice_fixtures`.
 flacenc     = { version = "0.5", default-features = false }
 # Pure-Rust FLAC decoder used by `acceptance_voice.rs` to round-trip the
-# Tier-2 fixtures back into PCM at test time.
+# Tier-2 fixtures back into PCM at test time. The `pyin` feature also
+# pulls claxon as an optional dep above; the dev-dep alias keeps it
+# available to tests that do not set the feature flag.
 claxon      = "0.4"
 # Parses `tests/fixtures/voice/MANIFEST.toml` at test time so the Tier-2
 # acceptance harness can iterate every fixture with its expected MIDI binding.

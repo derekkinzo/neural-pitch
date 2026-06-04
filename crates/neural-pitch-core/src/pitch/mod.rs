@@ -31,6 +31,7 @@ use thiserror::Error;
 
 pub mod auto_prior;
 pub mod factory;
+pub mod pyin;
 pub mod yin;
 
 /// One frame of fundamental-frequency analysis.
@@ -38,13 +39,29 @@ pub mod yin;
 /// `F0Frame` does **not** derive `PartialEq` or `Eq` because `f32` fields can
 /// be `NaN` and exact equality is rarely the right comparison. Tests should
 /// use cents-based or absolute-tolerance helpers instead.
-#[derive(Clone, Copy, Debug)]
+///
+/// `Serialize` / `Deserialize` are emitted unconditionally so the offline
+/// pYIN analysis cache (Phase 2.1) can postcard-encode `Vec<F0Frame>`
+/// without re-deriving them per build configuration. Live-path code never
+/// serialises an `F0Frame` directly.
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct F0Frame {
     /// Estimated fundamental in Hertz. Always greater than zero when
     /// [`F0Frame::voiced`] is `true`.
     pub f0_hz: f32,
 
     /// Estimator-reported confidence, normalised to `[0.0, 1.0]`.
+    ///
+    /// Per-backend semantics — consumers that compare confidence across
+    /// backends MUST be aware that the underlying probability is not the
+    /// same:
+    ///   * **YIN/MPM**: clarity score (1 - normalised CMNDF minimum).
+    ///   * **pYIN** (Phase 2.1): per-frame voicing posterior probability
+    ///     returned by the `pyin` crate, clamped to `[0, 1]`. Reflects
+    ///     "how confident is the HMM that this frame is voiced", not "how
+    ///     confident is the bin-posterior in the chosen f0".
+    ///   * **PESTO** (Phase 2.2): TBD; see the PESTO estimator's struct
+    ///     doc when it lands.
     pub confidence: f32,
 
     /// Conjunction of the estimator's internal voicing decision and any
@@ -192,6 +209,16 @@ pub trait PitchEstimator: Send {
     /// [`crate::pitch::auto_prior::AutoPrior`]) pass the running auto-prior
     /// range every iteration. Backends that have not yet implemented
     /// per-call narrowing degrade cleanly to their constructor-time range.
+    ///
+    /// Out-of-budget behaviour: if the requested `(fmin_hz, fmax_hz)`
+    /// straddles the constructor-time budget, backends MAY silently clamp
+    /// the requested range to the budget's intersection. If the
+    /// intersection collapses (clamped `fmax_hz <= fmin_hz`), backends
+    /// SHOULD return `Ok(None)` for that chunk rather than an error so
+    /// the live auto-prior keeps streaming; consumers that need a hard
+    /// signal (e.g. unit tests asserting the request was honoured) MUST
+    /// inspect the returned frame's `f0_hz` against the requested band
+    /// rather than assuming the override was applied verbatim.
     fn process_with_range(
         &mut self,
         samples: &[f32],

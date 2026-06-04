@@ -278,6 +278,45 @@ impl RecordingsLibrary {
         analysis::get(&conn, id, name, version)
     }
 
+    /// Fetch metadata for a previously cached analysis row, if present.
+    /// Returns `(computed_at_unix_ms, result_format_version)`.
+    pub fn get_analysis_meta(
+        &self,
+        id: RecordingId,
+        name: &str,
+        version: &str,
+    ) -> Result<Option<(i64, i64)>, StoreError> {
+        let conn = self.lock_conn();
+        analysis::get_meta(&conn, id, name, version)
+    }
+
+    /// Enumerate every cached analysis row for one recording.
+    ///
+    /// Returns `(analyzer_name, analyzer_version, computed_at_unix_ms,
+    /// result_format_version)` for every row keyed on the supplied
+    /// `recording_id`. Empty `Vec` if the row exists but has no analyses,
+    /// or if the row does not exist (lookup is a left-join in spirit).
+    pub fn list_analyses(
+        &self,
+        id: RecordingId,
+    ) -> Result<Vec<(String, String, i64, i64)>, StoreError> {
+        let conn = self.lock_conn();
+        analysis::list(&conn, id)
+    }
+
+    /// Drop one cached analysis row keyed on
+    /// `(recording_id, analyzer_name, analyzer_version)`. Idempotent — if
+    /// no row matches, returns `Ok(())` rather than `NotFound`.
+    pub fn delete_analysis(
+        &self,
+        id: RecordingId,
+        name: &str,
+        version: &str,
+    ) -> Result<(), StoreError> {
+        let conn = self.lock_conn();
+        analysis::delete(&conn, id, name, version)
+    }
+
     /// Lock the inner connection mutex.
     ///
     /// `parking_lot::Mutex::lock` does not return a `Result` — the mutex is

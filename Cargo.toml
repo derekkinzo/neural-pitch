@@ -41,6 +41,12 @@ module_name_repetitions  = "allow"
 # enforcing it would require backticking every product/type name in every
 # doc comment. Not worth the friction.
 doc_markdown             = "allow"
+# `smoothed` / `smoother` (and friends) are routine in DSP code; the
+# pedantic `similar_names` lint flags every push-through-smoother loop.
+# The risk of typos confusing the two names is minimal because the IDE
+# colours them differently and the surrounding context makes the binding
+# obvious.
+similar_names            = "allow"
 
 [workspace.dependencies]
 thiserror    = "2"
@@ -50,6 +56,10 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 serde        = { version = "1", features = ["derive"] }
 serde_json   = "1"
 parking_lot  = "0.12"
+# Phase 2.1 — `postcard` is the on-the-wire serialiser for the
+# `analysis_cache.result_blob` column. Pure-Rust, MIT/Apache-2.0,
+# 5–10× smaller than `serde_json` for the dense `Vec<F0Frame>` payload.
+postcard     = { version = "1", features = ["use-std"] }
 
 [profile.release]
 lto           = "thin"

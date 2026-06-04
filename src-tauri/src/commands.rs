@@ -533,6 +533,219 @@ pub async fn delete_recording(
     Ok(())
 }
 
+// -- Phase 2.1 analysis surface ---------------------------------------------
+
+/// Default analyzer name handed to the cache layer. Phase 2.1 ships a
+/// single backend; later phases will broaden this.
+const DEFAULT_ANALYZER_NAME: &str = "pyin";
+/// Default analyzer version. Bump in lock-step with on-the-wire shape
+/// changes to invalidate cached blobs.
+///
+/// Contributor invariant — bump on ANY of:
+///   * a field set / wire ordering change to
+///     `analysis::contour::ContourResult` (or a nested type, e.g.
+///     `crate::pitch::F0Frame`),
+///   * an analyzer parameter change that materially shifts the f0
+///     contour (defaults for fmin/fmax, hop_size, window_size,
+///     smoothing window, voicing threshold),
+///   * a postcard format-version bump.
+///
+/// Failure to bump leads to silent stale-cache hits where an old blob
+/// decodes against the new shape and surfaces wrong values to the UI —
+/// the SQL key compares plain strings (no semver normalisation, see
+/// `store::analysis`), so the cache layer cannot detect the divergence
+/// on its own.
+///
+/// `v2` (current): `ContourResult` carries `hop_size` / `window_size`,
+/// and `AnalysisSummary` carries `median_midi`.
+const DEFAULT_ANALYZER_VERSION: &str = "2";
+
+/// Adapter that lets `analyze_recording_blocking` emit progress through a
+/// `tauri::ipc::Channel<AnalysisProgress>` without dragging Tauri types
+/// into `neural-pitch-core` (P2 / ADR-0002).
+///
+/// `Channel::send` synchronously serialises JSON on the calling thread.
+/// The blocking analyzer runs inside `spawn_blocking`, so the send happens
+/// off the tokio runtime thread — RT-safety properties are identical to
+/// `start_recording`'s progress channel.
+struct ChannelProgressSink {
+    channel: Channel<neural_pitch_core::store::AnalysisProgress>,
+}
+
+impl neural_pitch_core::store::ProgressSink for ChannelProgressSink {
+    fn emit(&self, progress: neural_pitch_core::store::AnalysisProgress) {
+        if let Err(e) = self.channel.send(progress) {
+            tracing::debug!(error = %e, "analysis-progress channel send failed");
+        }
+    }
+}
+
+/// Run a full analysis on a previously-recorded file and persist the
+/// result to the `analysis_cache` table.
+///
+/// Cache hit + `!force_refresh`: deserialise the postcard blob, emit one
+/// `AnalysisProgress { percent: 1.0, was_cached: true, .. }`, return
+/// `AnalysisSummary { was_cached: true, .. }`.
+///
+/// Cache miss / `force_refresh`: decode the source FLAC, run the
+/// analyzer on a `spawn_blocking` worker, persist via
+/// `library.upsert_analysis(...)`, and return `was_cached: false`.
+///
+/// `progress` mirrors `start_recording`: the JS side constructs the
+/// channel once on mount and passes it through every invocation. Headless
+/// callers bypass the Tauri command and call
+/// [`neural_pitch_core::store::analyze_recording_blocking`] directly with
+/// `progress = None`.
+#[tauri::command]
+#[tracing::instrument(skip(state, progress), fields(force_refresh = force_refresh))]
+pub async fn analyze_recording(
+    state: State<'_, crate::state::AppState>,
+    recording_id: String,
+    force_refresh: bool,
+    progress: Channel<neural_pitch_core::store::AnalysisProgress>,
+) -> Result<neural_pitch_core::store::AnalysisSummary, String> {
+    let parsed: neural_pitch_core::store::RecordingId = recording_id
+        .parse()
+        .map_err(|e| format!("invalid recording id: {e}"))?;
+
+    // Mint a cancel token and register it. Drop the entry on every exit
+    // path (success / error / cancel) so the registry stays bounded by
+    // the number of concurrent in-flight runs.
+    let cancel = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    {
+        let mut g = state.analyses.lock();
+        // If a previous run for the same recording is still registered
+        // (e.g. front-end double-clicked Analyse), cancel it first so
+        // the new request takes over the slot.
+        if let Some(prev) = g.insert(parsed, Arc::clone(&cancel)) {
+            prev.store(true, std::sync::atomic::Ordering::Relaxed);
+        }
+    }
+
+    let library = Arc::clone(&state.library);
+    let cancel_for_blocking = Arc::clone(&cancel);
+    let sink_owned = ChannelProgressSink { channel: progress };
+    let result = tokio::task::spawn_blocking(move || {
+        let sink_ref: &dyn neural_pitch_core::store::ProgressSink = &sink_owned;
+        neural_pitch_core::store::analyze_recording_blocking(
+            &library,
+            parsed,
+            DEFAULT_ANALYZER_NAME,
+            DEFAULT_ANALYZER_VERSION,
+            force_refresh,
+            Some(sink_ref),
+            Some(cancel_for_blocking.as_ref()),
+        )
+    })
+    .await
+    .map_err(|e| {
+        let mut g = state.analyses.lock();
+        g.remove(&parsed);
+        format!("analyze_recording task panicked: {e}")
+    })?;
+
+    {
+        let mut g = state.analyses.lock();
+        // Only remove our entry if it is still the active one — a
+        // racing reanalyse may have replaced it.
+        if let Some(existing) = g.get(&parsed) {
+            if Arc::ptr_eq(existing, &cancel) {
+                g.remove(&parsed);
+            }
+        }
+    }
+
+    result.map_err(|e| format!("analyze: {e:#}"))
+}
+
+/// Fetch a previously cached contour for `(recording_id, analyzer_name,
+/// analyzer_version)`. Returns `Err("not found")` if no row matches.
+#[tauri::command]
+#[tracing::instrument(skip(state))]
+pub async fn get_contour(
+    state: State<'_, crate::state::AppState>,
+    recording_id: String,
+    analyzer_name: String,
+    analyzer_version: String,
+) -> Result<neural_pitch_core::store::ContourResult, String> {
+    let parsed: neural_pitch_core::store::RecordingId = recording_id
+        .parse()
+        .map_err(|e| format!("invalid recording id: {e}"))?;
+    let library = Arc::clone(&state.library);
+    let name = analyzer_name;
+    let version = analyzer_version;
+    let res = tokio::task::spawn_blocking(move || {
+        neural_pitch_core::store::get_contour_blocking(&library, parsed, &name, &version)
+    })
+    .await
+    .map_err(|e| format!("get_contour task panicked: {e}"))?
+    .map_err(|e| format!("get_contour: {e:#}"))?;
+    res.ok_or_else(|| "not found".to_string())
+}
+
+/// Enumerate every cached analysis row for one recording.
+#[tauri::command]
+#[tracing::instrument(skip(state))]
+pub async fn list_analyses(
+    state: State<'_, crate::state::AppState>,
+    recording_id: String,
+) -> Result<Vec<neural_pitch_core::store::AnalysisRow>, String> {
+    let parsed: neural_pitch_core::store::RecordingId = recording_id
+        .parse()
+        .map_err(|e| format!("invalid recording id: {e}"))?;
+    let library = Arc::clone(&state.library);
+    tokio::task::spawn_blocking(move || {
+        neural_pitch_core::store::list_analyses_blocking(&library, parsed)
+    })
+    .await
+    .map_err(|e| format!("list_analyses task panicked: {e}"))?
+    .map_err(|e| format!("list_analyses: {e:#}"))
+}
+
+/// Drop one cached analysis row.
+#[tauri::command]
+#[tracing::instrument(skip(state))]
+pub async fn delete_analysis(
+    state: State<'_, crate::state::AppState>,
+    recording_id: String,
+    analyzer_name: String,
+    analyzer_version: String,
+) -> Result<(), String> {
+    let parsed: neural_pitch_core::store::RecordingId = recording_id
+        .parse()
+        .map_err(|e| format!("invalid recording id: {e}"))?;
+    let library = Arc::clone(&state.library);
+    let name = analyzer_name;
+    let version = analyzer_version;
+    tokio::task::spawn_blocking(move || {
+        neural_pitch_core::store::delete_analysis_blocking(&library, parsed, &name, &version)
+    })
+    .await
+    .map_err(|e| format!("delete_analysis task panicked: {e}"))?
+    .map_err(|e| format!("delete_analysis: {e:#}"))
+}
+
+/// Cancel an in-flight analysis. Idempotent: returns `Ok(())` if no
+/// analysis is currently registered for the supplied `recording_id`.
+#[tauri::command]
+#[tracing::instrument(skip(state))]
+pub async fn cancel_analysis(
+    state: State<'_, crate::state::AppState>,
+    recording_id: String,
+) -> Result<(), String> {
+    let parsed: neural_pitch_core::store::RecordingId = recording_id
+        .parse()
+        .map_err(|e| format!("invalid recording id: {e}"))?;
+    let token = {
+        let g = state.analyses.lock();
+        g.get(&parsed).map(Arc::clone)
+    };
+    if let Some(t) = token {
+        t.store(true, std::sync::atomic::Ordering::Relaxed);
+    }
+    Ok(())
+}
+
 /// Rename a recording's user-supplied label. Empty / whitespace-only
 /// strings clear the label.
 #[tauri::command]

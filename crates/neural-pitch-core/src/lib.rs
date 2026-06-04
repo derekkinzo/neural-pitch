@@ -5,6 +5,7 @@
 //! Pure-Rust core for NeuralPitch: pitch detection traits, music theory math,
 //! audio I/O abstractions, contour smoothing, and voice-activity gating.
 
+pub mod analysis;
 pub mod audio;
 pub mod error;
 pub mod music;

@@ -77,3 +77,70 @@ pub(super) fn get(
         .optional()?;
     Ok(blob)
 }
+
+/// Fetch the metadata `(computed_at_unix_ms, result_format_version)` of
+/// one analyzer row, if present. Used by the cached-path of
+/// `analyze_recording_blocking` so it can avoid materialising the full
+/// blob just to recompute the wire summary.
+pub(super) fn get_meta(
+    conn: &Connection,
+    id: RecordingId,
+    name: &str,
+    version: &str,
+) -> Result<Option<(i64, i64)>, StoreError> {
+    let row: Option<(i64, i64)> = conn
+        .query_row(
+            "SELECT computed_at_unix_ms, result_format_version FROM analysis_cache
+             WHERE recording_id = ?1 AND analyzer_name = ?2 AND analyzer_version = ?3",
+            params![&id.0[..], name, version],
+            |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?)),
+        )
+        .optional()?;
+    Ok(row)
+}
+
+/// Enumerate every cached analysis row for one recording. Result rows
+/// carry `(analyzer_name, analyzer_version, computed_at_unix_ms,
+/// result_format_version)`. Ordered by `computed_at_unix_ms DESC` so the
+/// recording-list UI's "available analyses" picker shows the most recent
+/// row first.
+pub(super) fn list(
+    conn: &Connection,
+    id: RecordingId,
+) -> Result<Vec<(String, String, i64, i64)>, StoreError> {
+    let mut stmt = conn.prepare(
+        "SELECT analyzer_name, analyzer_version,
+                computed_at_unix_ms, result_format_version
+         FROM analysis_cache
+         WHERE recording_id = ?1
+         ORDER BY computed_at_unix_ms DESC",
+    )?;
+    let rows = stmt
+        .query_map(params![&id.0[..]], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, i64>(2)?,
+                row.get::<_, i64>(3)?,
+            ))
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(rows)
+}
+
+/// Drop one analyzer-result row. Idempotent: deleting a non-existent
+/// row is `Ok(())`. Mirrors `soft_delete`'s "missing row is not an
+/// error" stance for the cache layer.
+pub(super) fn delete(
+    conn: &Connection,
+    id: RecordingId,
+    name: &str,
+    version: &str,
+) -> Result<(), StoreError> {
+    conn.execute(
+        "DELETE FROM analysis_cache
+         WHERE recording_id = ?1 AND analyzer_name = ?2 AND analyzer_version = ?3",
+        params![&id.0[..], name, version],
+    )?;
+    Ok(())
+}

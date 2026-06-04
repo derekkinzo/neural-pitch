@@ -27,11 +27,28 @@ impl ContourSmoother {
     /// Construct a new smoother with the given window length in milliseconds
     /// and the sample rate of the underlying audio. The capacity is computed
     /// once at construction; later `push` calls do not reallocate.
+    ///
+    /// # Capacity caveat (known bug — tracked for Phase 2.4)
+    ///
+    /// Today `capacity == window_ms.max(1.0).ceil() as usize`, i.e. one frame
+    /// per millisecond. That is correct only when the analyzer's frame rate
+    /// is exactly 1000 Hz. For the production live path (hop=512 @ 48 kHz =>
+    /// ~93.75 Hz frame rate) and the offline pYIN path (hop=256 @ 48 kHz =>
+    /// ~187.5 Hz) the *effective* smoothing window in real time is several
+    /// times longer than `window_ms` would suggest. Both paths have been
+    /// calibrated against the existing behaviour, so a literal fix here
+    /// would shift all live + offline acceptance numbers; the corrected
+    /// formula `(window_ms * frame_rate_hz / 1000.0).ceil()` will land in
+    /// Phase 2.4 alongside a re-tuning of `SMOOTHER_WINDOW_MS` and the live
+    /// `smoothing_window_ms` defaults. Until then, treat `window_ms` as a
+    /// *frame budget* (in milliseconds-of-frames) rather than a wall-clock
+    /// window.
     pub fn new(window_ms: f32, sample_rate_hz: u32) -> Self {
         // Capacity in *frames* — assume one frame per millisecond as a
         // conservative upper bound. This is intentionally generous so the
         // ring never reallocates on the hot path even for high-rate
-        // estimators (e.g. PESTO at ~100 Hz frame rate).
+        // estimators (e.g. PESTO at ~100 Hz frame rate). See the doc above
+        // for the unit-of-measure caveat.
         let capacity = window_ms.max(1.0).ceil() as usize;
         Self {
             window_ms,

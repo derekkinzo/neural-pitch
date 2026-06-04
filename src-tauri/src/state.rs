@@ -29,14 +29,16 @@
 //! "build_controller succeeds before the cache and disk are mutated" rule
 //! lives in `commands::start_capture` — see that function for details.
 
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use std::thread::JoinHandle;
 
 use neural_pitch_core::audio::{AudioBackend, AudioBackendEvent};
 use neural_pitch_core::pipeline::{DspError, RecordingHandle};
 use neural_pitch_core::settings::TunerSettings;
-use neural_pitch_core::store::RecordingsLibrary;
+use neural_pitch_core::store::{RecordingId, RecordingsLibrary};
 use parking_lot::{Mutex, RwLock};
 use tauri::Wry;
 use tauri::ipc::Channel;
@@ -138,6 +140,16 @@ pub struct AppState {
     /// the JS side replaces the prior channel without orphaning the
     /// previous handle (Tauri's `Channel` is reference-counted internally).
     pub(crate) events: Mutex<Option<Channel<AudioBackendEvent>>>,
+
+    /// In-flight analysis cancel tokens keyed by `RecordingId`.
+    ///
+    /// `analyze_recording` mints an `AtomicBool` here before
+    /// `spawn_blocking`-ing the PYIN run; `cancel_analysis` flips the
+    /// flag, and the analyzer polls it between hops returning
+    /// `AnalysisError::Cancelled`. The map entry is cleaned up by
+    /// `analyze_recording` on success / failure / cancel so the registry
+    /// surface stays bounded by the number of concurrent runs.
+    pub(crate) analyses: Mutex<HashMap<RecordingId, Arc<AtomicBool>>>,
 }
 
 impl AppState {
@@ -157,6 +169,7 @@ impl AppState {
             store,
             settings: RwLock::new(settings),
             events: Mutex::new(None),
+            analyses: Mutex::new(HashMap::new()),
         }
     }
 

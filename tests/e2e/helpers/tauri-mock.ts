@@ -63,6 +63,42 @@ export const defaultResponses: TauriMockResponses = {
     window_samples: 2048,
     hop_samples: 512,
   }),
+  // Phase 2.0: PlaybackPanel resolves the on-disk path when a row is
+  // selected. Specs that exercise the detail panel (Phase 2.1) inherit a
+  // benign placeholder so the panel can mount without each spec re-seeding.
+  get_recording_path: (args: Record<string, unknown>) => {
+    const id = typeof args["id"] === "string" ? (args["id"] as string) : "rec";
+    return `/tmp/${id}.flac`;
+  },
+  // Phase 2.1: baseline analyze + contour responders so specs that only
+  // exercise the recordings list (not the detail panel) inherit non-throwing
+  // defaults. Per-spec installAnalysisMock(...) overrides this baseline with
+  // seeded summaries / contours.
+  analyze_recording: (args: Record<string, unknown>) => {
+    const recordingId =
+      typeof args["recordingId"] === "string" ? (args["recordingId"] as string) : "rec";
+    const force = Boolean(args["forceRefresh"]);
+    return {
+      recordingId,
+      medianMidi: 69,
+      medianCents: 0,
+      voicedRatio: 0,
+      wasCached: !force,
+      analyzerVersion: "pyin-0.1.0",
+    };
+  },
+  get_contour: (args: Record<string, unknown>) => {
+    const recordingId =
+      typeof args["recordingId"] === "string" ? (args["recordingId"] as string) : "rec";
+    return {
+      recordingId,
+      analyzerVersion: "pyin-0.1.0",
+      medianMidi: 69,
+      medianCents: 0,
+      voicedRatio: 0,
+      frames: [],
+    };
+  },
 };
 
 function serialise(responses: TauriMockResponses): Record<string, SerialisedEntry> {
@@ -441,6 +477,164 @@ export async function pushRecordingProgress(
     };
     const w = window as WindowWithHooks;
     const listeners = w.__neuralPitchTestHooks?.listeners.get("recording-progress") ?? [];
+    for (const fn of listeners) {
+      fn(frame);
+    }
+  }, progress);
+}
+
+/**
+ * Phase-2.1 analysis — wire-format mirrors `src/types/analysis.ts` (planned).
+ *
+ * Field names are camelCase on the TS side; the IPC boundary maps from
+ * snake_case Rust per the existing `recording.ts` convention. Specs
+ * describe the world in camelCase; the page-side `installAnalysisMock`
+ * handlers also return camelCase so React components can consume the
+ * payload without re-mapping.
+ *
+ * `wasCached` is the only field that varies across the cache spec's two
+ * branches (cached read vs. forced re-analyze). The mock derives it from
+ * the inbound `forceRefresh` flag rather than from a seed entry, so both
+ * branches share a single seed shape.
+ */
+export interface MockAnalysisSummary {
+  recordingId: string;
+  medianMidi: number; // e.g. 69 for A4
+  medianCents: number; // signed, 1 decimal precision in display
+  voicedRatio: number; // 0..1
+  wasCached: boolean;
+  analyzerVersion: string;
+}
+
+/** A single voiced/unvoiced frame in the contour timeline. */
+export interface MockContourFrame {
+  tMs: number;
+  centsFromMedian: number;
+  voiced: boolean;
+}
+
+export interface MockContourResult {
+  recordingId: string;
+  analyzerVersion: string;
+  frames: MockContourFrame[];
+  medianMidi: number;
+  medianCents: number;
+  voicedRatio: number;
+}
+
+/**
+ * In-flight progress payload — emitted at ~10 Hz over the
+ * `analysis-progress` Tauri channel while pYIN/PESTO is running. The
+ * page-side `analysisStore` registers a listener on
+ * `__neuralPitchTestHooks.listeners.get("analysis-progress")` and
+ * pushes the percent into the `<progress role="progressbar">` rendered
+ * by AnalysisSummary while the recording id is in `inProgress`.
+ */
+export interface MockAnalysisProgress {
+  recordingId: string;
+  percent: number; // 0..100
+  status?: "running" | "finalizing" | "failed";
+  error?: string;
+}
+
+/**
+ * Install mock responses for the Phase-2.1 analysis IPC surface.
+ *
+ * Following the same source-serialisation pattern as `installRecordingsMock`:
+ * closures do not survive `Function.prototype.toString()`, so each handler
+ * embeds a JSON-encoded literal for the seed maps and self-initialises the
+ * shared `__neuralPitchTestHooks.analysis` slot on first call.
+ *
+ * Phase-2.1 contract (see DESIGN.md §7.5 / §8.3):
+ *   - `analyze_recording({ recordingId, forceRefresh })`
+ *       → MockAnalysisSummary (with `wasCached = !forceRefresh`)
+ *   - `get_contour({ recordingId })`
+ *       → MockContourResult (frames + median + voiced ratio)
+ *
+ * @param byRecordingId  Map of `recordingId → MockAnalysisSummary` for the
+ *                       seeded summary card.
+ * @param contoursByKey  Map of `${recordingId}:${analyzerVersion}` →
+ *                       MockContourResult. The composite key matches the
+ *                       `contoursByKey` Map in `analysisStore`.
+ */
+export function installAnalysisMock(
+  byRecordingId: Record<string, MockAnalysisSummary>,
+  contoursByKey: Record<string, MockContourResult>,
+): TauriMockResponses {
+  const summaryJson = JSON.stringify(byRecordingId);
+  const contourJson = JSON.stringify(contoursByKey);
+
+  const seedHydrate = `
+    var w = window;
+    var hooks = w.__neuralPitchTestHooks || {};
+    if (!hooks.analysis) {
+      hooks.analysis = {
+        summaries: JSON.parse(${JSON.stringify(summaryJson)}),
+        contours: JSON.parse(${JSON.stringify(contourJson)})
+      };
+    }
+    w.__neuralPitchTestHooks = hooks;
+  `;
+
+  // eslint-disable-next-line @typescript-eslint/no-implied-eval, no-new-func
+  const analyzeHandler = new Function(
+    "args",
+    `${seedHydrate}
+     var id = String((args && args.recordingId) || "");
+     var force = Boolean(args && args.forceRefresh);
+     var seed = window.__neuralPitchTestHooks.analysis.summaries[id];
+     if (!seed) {
+       throw new Error("unmocked analysis summary for recordingId: " + id);
+     }
+     var copy = Object.assign({}, seed);
+     copy.wasCached = !force;
+     return copy;`,
+  ) as (args: Record<string, unknown>) => unknown;
+
+  // eslint-disable-next-line @typescript-eslint/no-implied-eval, no-new-func
+  const contourHandler = new Function(
+    "args",
+    `${seedHydrate}
+     var id = String((args && args.recordingId) || "");
+     var contours = window.__neuralPitchTestHooks.analysis.contours;
+     // Find first contour entry whose composite key starts with "id:".
+     var prefix = id + ":";
+     var keys = Object.keys(contours);
+     for (var i = 0; i < keys.length; i++) {
+       if (keys[i].indexOf(prefix) === 0) {
+         return contours[keys[i]];
+       }
+     }
+     throw new Error("unmocked contour for recordingId: " + id);`,
+  ) as (args: Record<string, unknown>) => unknown;
+
+  return {
+    analyze_recording: analyzeHandler,
+    get_contour: contourHandler,
+  };
+}
+
+/**
+ * Push a synthetic `analysis-progress` event. Mirrors `pushRecordingProgress`:
+ * the page-side `analysisStore` registers a listener on
+ * `__neuralPitchTestHooks.listeners.get("analysis-progress")` and tests
+ * drive percent ticks through this helper. When `percent === 100` the
+ * spec is expected to resolve the in-flight `analyze_recording()` promise
+ * via the IPC mock (which is already synchronous here), so the bar
+ * disappears in the same tick.
+ */
+export async function pushAnalysisProgress(
+  page: Page,
+  progress: MockAnalysisProgress,
+): Promise<void> {
+  await page.evaluate((frame) => {
+    type WindowWithHooks = Window & {
+      __neuralPitchTestHooks?: {
+        listeners: Map<string, Array<(payload: unknown) => void>>;
+      };
+    };
+    const w = window as WindowWithHooks;
+    const listeners = w.__neuralPitchTestHooks?.listeners.get("analysis-progress") ?? [];
     for (const fn of listeners) {
       fn(frame);
     }

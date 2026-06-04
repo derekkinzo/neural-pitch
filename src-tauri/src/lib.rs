@@ -91,6 +91,11 @@ pub fn run() {
             commands::list_recordings,
             commands::delete_recording,
             commands::rename_recording,
+            commands::analyze_recording,
+            commands::get_contour,
+            commands::list_analyses,
+            commands::delete_analysis,
+            commands::cancel_analysis,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

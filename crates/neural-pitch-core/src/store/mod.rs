@@ -15,11 +15,17 @@
 //! WAL + `synchronous = NORMAL`, append-only migrations).
 
 mod analysis;
+mod analysis_runtime;
 mod error;
 mod library;
 mod migrations;
 mod model;
 
+pub use analysis_runtime::{
+    AnalysisError, AnalysisProgress, AnalysisProgressState, AnalysisRow, AnalysisSummary,
+    ContourResult, ProgressSink, analyze_recording_blocking, delete_analysis_blocking,
+    get_contour_blocking, list_analyses_blocking,
+};
 pub use error::StoreError;
 pub use library::RecordingsLibrary;
 pub use model::{ListFilter, NewRecording, Recording, RecordingId};

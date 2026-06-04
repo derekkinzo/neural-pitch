@@ -945,38 +945,51 @@ All paths are resolved via the `directories` crate so that platform conventions 
 
 ### 8.3 Recordings DB schema (Phase 2)
 
-The schema is owned by `refinery` migrations under `src-tauri/migrations/`. The first migration is `V0001__init.sql` (refinery's required `V{n}__{desc}.sql` form). It creates the schema and writes an initial `schema_version` row.
+The schema is owned by `refinery` migrations under `crates/neural-pitch-core/src/store/migrations/`. The first migration is `V0001__init.sql` (refinery's required `V{n}__{desc}.sql` form). It creates the schema and writes an initial `schema_version` row.
+
+The actual shipped schema diverges from the early-Phase-2 sketch above and is documented here verbatim — primary keys are 16-byte UUIDv7 BLOBs (not TEXT), tables are STRICT, and `analysis_cache` stores a postcard `BLOB` rather than `payload_json TEXT` (≈5–10× smaller for dense `Vec<F0Frame>`; see §13.3 wire-format note). The `recordings` row carries a soft-delete tombstone column plus two indexes (the second filters tombstones for the active-only fast path).
 
 ```sql
--- migrations/V0001__init.sql
-CREATE TABLE recordings (
-    id              TEXT PRIMARY KEY,        -- UUIDv7
-    filename        TEXT NOT NULL,
-    sample_rate_hz  INTEGER NOT NULL,
-    bit_depth       INTEGER NOT NULL,
-    channels        INTEGER NOT NULL,
-    duration_ms     INTEGER NOT NULL,
-    a4_hz           REAL NOT NULL,
-    captured_at     TEXT NOT NULL,           -- ISO-8601
-    note            TEXT
-);
-
-CREATE TABLE analysis_cache (
-    recording_id      TEXT NOT NULL REFERENCES recordings(id) ON DELETE CASCADE,
-    analyzer_name     TEXT NOT NULL,
-    analyzer_version  TEXT NOT NULL,
-    payload_json      TEXT NOT NULL,
-    PRIMARY KEY (recording_id, analyzer_name, analyzer_version)
-);
-
+-- crates/neural-pitch-core/src/store/migrations/V0001__init.sql
 CREATE TABLE schema_version (
-    id INTEGER PRIMARY KEY CHECK (id = 1),
-    version INTEGER NOT NULL
+  id          INTEGER PRIMARY KEY CHECK (id = 1),
+  version     INTEGER NOT NULL
 );
 INSERT INTO schema_version (id, version) VALUES (1, 1);
 
-PRAGMA journal_mode = WAL;
+CREATE TABLE recordings (
+  id                    BLOB PRIMARY KEY,           -- UUIDv7, 16 bytes
+  filename              TEXT    NOT NULL,
+  created_at_unix_ms    INTEGER NOT NULL,
+  duration_ms           INTEGER NOT NULL,
+  sample_rate_hz        INTEGER NOT NULL,
+  channels              INTEGER NOT NULL,
+  bit_depth             INTEGER NOT NULL,
+  format                TEXT    NOT NULL,           -- "flac" today
+  a4_hz                 REAL    NOT NULL,
+  instrument_profile    TEXT    NOT NULL,
+  user_label            TEXT,
+  deleted_at_unix_ms    INTEGER                     -- soft-delete tombstone
+) STRICT;
+
+CREATE INDEX idx_recordings_created_desc
+  ON recordings(created_at_unix_ms DESC);
+CREATE INDEX idx_recordings_live
+  ON recordings(created_at_unix_ms DESC)
+  WHERE deleted_at_unix_ms IS NULL;
+
+CREATE TABLE analysis_cache (
+  recording_id           BLOB    NOT NULL REFERENCES recordings(id) ON DELETE CASCADE,
+  analyzer_name          TEXT    NOT NULL,
+  analyzer_version       TEXT    NOT NULL,
+  computed_at_unix_ms    INTEGER NOT NULL,
+  result_format_version  INTEGER NOT NULL,
+  result_blob            BLOB    NOT NULL,           -- postcard ContourResult
+  PRIMARY KEY (recording_id, analyzer_name, analyzer_version)
+) STRICT;
 ```
+
+`PRAGMA journal_mode = WAL` is database-level and persists; it is set on every fresh connection (rather than in V0001) so existing DBs converge to WAL on next open. Connection-level pragmas (`synchronous = NORMAL`, `foreign_keys = ON`) are likewise issued by `RecordingsLibrary::new`.
 
 `PRAGMA journal_mode = WAL` is database-level and persists. `PRAGMA synchronous = NORMAL` and `PRAGMA foreign_keys = ON` are connection-level and are issued by `open_library()` on every new connection rather than in the migration:
 
@@ -1220,6 +1233,8 @@ ADR-0009 locks phase ordering: ear-training (Phase 4) precedes stem separation (
 ### 13.3 Phase 2 — Recording, neural backend, vocal range
 
 **Deliverables.** `RecorderPipeline` with `flacenc-rs` FLAC encoder (default) and `hound` WAV encoder (advanced opt-in); `rusqlite` + `refinery` recordings library + analysis cache; `models.toml` resolver with `reqwest`/rustls + `fs2` flock + janitor; PESTO `OnnxPesto` backend behind `feature = "neural"`; `PYinEstimator` behind `feature = "pyin"`; YAMNet auto-prior wrapper; vocal-range view; vibrato detector.
+
+**Wire format.** `analysis_cache.result_blob` is a [`postcard`] 1.x byte stream of `analysis::contour::ContourResult` (≈5–10× smaller than `serde_json` for dense `Vec<F0Frame>`; the type is `serde::Serialize + Deserialize` regardless of build config so the cache survives feature flips). The blob's wire shape is keyed by `(recording_id, analyzer_name, analyzer_version)` — _any_ change to `ContourResult`'s field set or to a materially-impacting analyzer parameter (fmin/fmax defaults, hop/window, smoothing window, voicing threshold) MUST bump `analyzer_version` to invalidate prior rows. See `analysis::contour::PYIN_ANALYZER_VERSION` and `commands::DEFAULT_ANALYZER_VERSION` for the contributor invariant.
 
 **Acceptance.** PESTO live tuner octave-correctness ≥ 97% with Viterbi decoding on the curated Philharmonia voice subset (the published PESTO MIR-1K reference is ~95–98% — 97% is the floor we hold ourselves to on a curated subset); recording → playback round-trip with no audible loss on FLAC; analysis cache hit on second open; no telemetry traffic except user-initiated model downloads.
 

@@ -70,7 +70,7 @@ export function PlaybackPanel(): ReactNode {
           <track kind="captions" />
         </audio>
       ) : (
-        <div className="text-xs text-slate-500">Loading…</div>
+        <div className="text-xs text-slate-300">Loading…</div>
       )}
     </section>
   );
