@@ -1215,6 +1215,8 @@ ADR-0009 locks phase ordering: ear-training (Phase 4) precedes stem separation (
 
 **Acceptance.** Octave-correctness ≥ 95% on Philharmonia voice fixtures with no manual instrument selection; mic-to-screen latency p50 ≤ 45 ms and p99 ≤ 70 ms on the Tier-1 hardware rig (§10.3); no audio dropouts at default buffer size on the rig; no through-monitoring.
 
+**Status.** complete — closed 2026-06-03, commit `25b4b9c5b3612cb806316fe3d53b339c280343dd` (filled by the release script that runs `scripts/run-acceptance.sh`). See [`PHASE-1-CLOSEOUT.md`](./PHASE-1-CLOSEOUT.md).
+
 ### 13.3 Phase 2 — Recording, neural backend, vocal range
 
 **Deliverables.** `RecorderPipeline` with `flacenc-rs` FLAC encoder (default) and `hound` WAV encoder (advanced opt-in); `rusqlite` + `refinery` recordings library + analysis cache; `models.toml` resolver with `reqwest`/rustls + `fs2` flock + janitor; PESTO `OnnxPesto` backend behind `feature = "neural"`; `PYinEstimator` behind `feature = "pyin"`; YAMNet auto-prior wrapper; vocal-range view; vibrato detector.

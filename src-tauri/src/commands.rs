@@ -15,7 +15,9 @@ use neural_pitch_core::audio::cpal_backend::CpalAudioBackend;
 use neural_pitch_core::audio::{AudioBackendEvent, AudioEventEmitter};
 use neural_pitch_core::pipeline::{DspError, DspWorker, PitchUpdate};
 use neural_pitch_core::pitch::factory::{Backend, make_estimator};
-use neural_pitch_core::pitch::{EstimatorConfig, EstimatorError, InstrumentHint};
+use neural_pitch_core::pitch::{
+    EstimatorConfig, EstimatorError, InstrumentHint, live_search_range_for_hint,
+};
 use neural_pitch_core::settings::TunerSettings;
 use neural_pitch_core::smoothing::ContourSmoother;
 use neural_pitch_core::voicing::VoiceActivityGate;
@@ -325,18 +327,16 @@ async fn persist_settings(
     .map_err(|e| format!("persist task panicked: {e}"))?
 }
 
-/// Map [`InstrumentHint`] to a default search range. Phase 1.3 will replace
-/// this with a richer auto-prior; for now the bounds are conservative
-/// supersets of the relevant fundamental ranges.
+/// Map [`InstrumentHint`] to the live-tuner search range.
+///
+/// Thin wrapper around [`live_search_range_for_hint`]: kept here so the call
+/// site reads cleanly and so the unit tests in this module continue to
+/// exercise the helper through the same surface the live build uses.
+/// Acceptance harnesses MUST go through `live_search_range_for_hint`
+/// directly so test coverage and live behaviour stay bound to the same
+/// table.
 fn search_range(hint: InstrumentHint) -> (f32, f32) {
-    match hint {
-        InstrumentHint::Voice => (60.0, 1100.0),
-        InstrumentHint::Guitar => (70.0, 1400.0),
-        InstrumentHint::Bass => (30.0, 600.0),
-        InstrumentHint::Piano => (25.0, 4500.0),
-        InstrumentHint::Violin => (180.0, 3600.0),
-        InstrumentHint::Generic => (50.0, 1500.0),
-    }
+    live_search_range_for_hint(hint)
 }
 
 /// Typed error surface for `build_controller`. Variants preserve the

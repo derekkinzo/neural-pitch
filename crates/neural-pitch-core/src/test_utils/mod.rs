@@ -7,3 +7,4 @@
 //! so production binaries do not pull in the helpers.
 
 pub mod signals;
+pub mod voice;

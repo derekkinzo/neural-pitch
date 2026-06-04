@@ -103,6 +103,31 @@ pub enum InstrumentHint {
     Generic,
 }
 
+/// Live-tuner default `(fmin_hz, fmax_hz)` search range for a given hint.
+///
+/// This is the *live tuner* range — the same one `src-tauri/commands.rs`
+/// passes into [`EstimatorConfig`] when constructing a [`crate::pipeline::DspWorker`].
+/// It is intentionally tighter than [`crate::pitch::auto_prior::range_for_hint`]
+/// (which serves the auto-prior cold-start fallback) because the live tuner
+/// uses these bounds to size the YIN/MPM lag-search window before the
+/// auto-prior has any data.
+///
+/// Acceptance harnesses that exercise the live DSP path SHOULD construct
+/// their `EstimatorConfig` from this helper rather than hard-coding a
+/// different `(fmin, fmax)`. If the values here ever drift apart from
+/// `commands.rs::search_range`, the harness contract is broken.
+#[must_use]
+pub fn live_search_range_for_hint(hint: InstrumentHint) -> (f32, f32) {
+    match hint {
+        InstrumentHint::Voice => (60.0, 1100.0),
+        InstrumentHint::Guitar => (70.0, 1400.0),
+        InstrumentHint::Bass => (30.0, 600.0),
+        InstrumentHint::Piano => (25.0, 4500.0),
+        InstrumentHint::Violin => (180.0, 3600.0),
+        InstrumentHint::Generic => (50.0, 1500.0),
+    }
+}
+
 /// Errors returned by [`PitchEstimator::process`] and the factory.
 #[derive(Debug, Error)]
 pub enum EstimatorError {

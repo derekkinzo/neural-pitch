@@ -31,10 +31,29 @@ cpal        = { version = "0.17", optional = true }
 proptest    = "1"
 approx      = "0.5"
 parking_lot = { workspace = true }
+# Phase 1.4 Tier-2 voice-fixture builder. Pure-Rust FLAC encoder; pulled in
+# only as a dev-dependency so production binaries do not see it.
+# `default-features = false` drops the `par`, `log`, and `serde` features
+# we do not need for one-shot CLI usage in `examples/build_voice_fixtures`.
+flacenc     = { version = "0.5", default-features = false }
+# Pure-Rust FLAC decoder used by `acceptance_voice.rs` to round-trip the
+# Tier-2 fixtures back into PCM at test time.
+claxon      = "0.4"
+# Parses `tests/fixtures/voice/MANIFEST.toml` at test time so the Tier-2
+# acceptance harness can iterate every fixture with its expected MIDI binding.
+toml        = { version = "0.8", default-features = false, features = ["parse"] }
 
 # Cancellation, sample-pacing, and DSP-worker tests need the integration tests
 # to compile against the same default feature set as the binary. No extra
 # `required-features` are needed here — `MockAudioBackend` is always-on.
+
+[[example]]
+name = "build_voice_fixtures"
+path = "examples/build_voice_fixtures.rs"
+
+[[example]]
+name = "verify_voice_roundtrip"
+path = "examples/verify_voice_roundtrip.rs"
 
 [lints]
 workspace = true

@@ -47,6 +47,9 @@ Thumbs.db
 /blob-report/
 /tests/e2e/.auth
 
+# Acceptance harness regenerated artifact (timestamp + cents change per run)
+/docs/reports/*.json
+
 # Local env
 .env
 .env.local
