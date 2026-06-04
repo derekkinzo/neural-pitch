@@ -11,6 +11,7 @@ pub mod music;
 pub mod pipeline;
 pub mod pitch;
 pub mod prelude;
+pub mod settings;
 pub mod smoothing;
 pub mod test_utils;
 pub mod voicing;

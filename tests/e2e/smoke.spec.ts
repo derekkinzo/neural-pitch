@@ -1,29 +1,31 @@
-// Smoke tests for the Phase-0 placeholder UI.
+// Smoke tests for the Phase 1.2 live tuner surface.
 //
 // Confirms:
-//   1. The React root mounts and renders the locked Phase-0 strings.
-//   2. The mock-Tauri bridge intercepts `invoke('greet', ...)` and the page
-//      re-renders with the mocked response.
+//   1. The React root mounts and renders the tuner shell.
+//   2. The mock-Tauri bridge is wired and `start_capture` resolves through
+//      the default mock response (StatusPill → "live").
 //
 // Cross-references:
 //   docs/design/TEST-PLAN.md §6.2 (user flows category)
-//   docs/design/DESIGN.md §13.1 (Phase-0 acceptance — no Tauri UI required)
+//   docs/design/DESIGN.md §13.2 (Phase-1 acceptance — live tuner)
 
 import { test, expect } from "./fixtures";
 
-test.describe("smoke — Phase-0 placeholder", () => {
-  test("renders Phase 0 placeholder", async ({ page, mockTauri }) => {
+test.describe("smoke — Phase 1.2 tuner shell", () => {
+  test("renders tuner shell and meter", async ({ page, mockTauri }) => {
     await mockTauri.install();
     await page.goto("/");
-    await expect(page.getByRole("heading", { name: "NeuralPitch" })).toBeVisible();
-    await expect(page.getByText("Phase 0 — skeleton")).toBeVisible();
+    await expect(page.getByTestId("note-display")).toBeVisible();
+    await expect(page.getByRole("meter", { name: /Pitch deviation in cents/i })).toBeVisible();
+    await expect(page.getByTestId("settings-trigger")).toBeVisible();
   });
 
-  test("greet command resolves through mock", async ({ page, mockTauri }) => {
-    await mockTauri.install({
-      greet: "Hello, mock! NeuralPitch core says hi.",
-    });
+  test("start_capture wires through to status pill", async ({ page, mockTauri }) => {
+    await mockTauri.install();
     await page.goto("/");
-    await expect(page.locator("pre")).toHaveText("Hello, mock! NeuralPitch core says hi.");
+    const pill = page.getByTestId("status-pill");
+    await expect(pill).toHaveAttribute("data-state", "live");
+    await expect(page.getByTestId("status-device")).toHaveText("Mock Microphone");
+    await expect(page.getByTestId("status-rate")).toHaveText("48.0 kHz");
   });
 });

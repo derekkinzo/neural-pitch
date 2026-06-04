@@ -12,9 +12,11 @@
 // plus the callback-registry fields — but does it before any application
 // script runs, so the very first `invoke()` call sees the mock.
 //
-// Phase-1 will swap this for the bundled `mocks` module when the surface
-// includes events / channels / windows that need the full upstream
-// implementation.
+// Phase 1.2 extends the bridge with:
+//   - default responses for `start_capture`, `stop_capture`, `configure`
+//   - a synthetic Channel<PitchUpdate> path: the page-side `usePitchStream`
+//     hook registers itself on `__neuralPitchTestHooks.listeners` and tests
+//     drive frames via `pushPitchUpdate(page, snapshot)`.
 
 import type { Page } from "@playwright/test";
 
@@ -40,7 +42,7 @@ interface SerialisedEntry {
 }
 
 /**
- * Phase-0 default responses. Adding entries here is how new Tauri commands
+ * Phase-1.2 default responses. Adding entries here is how new Tauri commands
  * acquire a mock baseline that all specs share.
  */
 export const defaultResponses: TauriMockResponses = {
@@ -48,6 +50,19 @@ export const defaultResponses: TauriMockResponses = {
     const name = typeof args["name"] === "string" ? (args["name"] as string) : "world";
     return `Hello, ${name}! NeuralPitch core says hi.`;
   },
+  start_capture: () => ({
+    device_name: "Mock Microphone",
+    sample_rate_hz: 48000,
+    window_samples: 2048,
+    hop_samples: 512,
+  }),
+  stop_capture: null,
+  configure: null,
+  get_audio_params: () => ({
+    sample_rate_hz: 48000,
+    window_samples: 2048,
+    hop_samples: 512,
+  }),
 };
 
 function serialise(responses: TauriMockResponses): Record<string, SerialisedEntry> {
@@ -71,6 +86,8 @@ function serialise(responses: TauriMockResponses): Record<string, SerialisedEntr
  *      `pushPitchUpdate` (below) and per-spec overrides can mutate it.
  *   3. Synchronously installs `window.__TAURI_INTERNALS__.invoke` to route
  *      every `invoke()` call through the response map.
+ *   4. Tracks invoke call counts on `__neuralPitchTestHooks.invokeCalls` so
+ *      specs can assert e.g. exactly-one `configure` per A4 change.
  */
 export async function installTauriMock(
   page: Page,
@@ -98,6 +115,7 @@ export async function installTauriMock(
       __neuralPitchTestHooks?: {
         handlers: Map<string, Handler | unknown>;
         listeners: Map<string, Array<(payload: unknown) => void>>;
+        invokeCalls: Array<{ cmd: string; args: Record<string, unknown> }>;
       };
     };
     const w = window as WindowWithHooks;
@@ -117,6 +135,7 @@ export async function installTauriMock(
     w.__neuralPitchTestHooks = {
       handlers,
       listeners: new Map(),
+      invokeCalls: [],
     };
 
     const internals: Internals = w.__TAURI_INTERNALS__ ?? {};
@@ -138,12 +157,14 @@ export async function installTauriMock(
       if (fn) fn(data);
     };
     internals.invoke = async (cmd, args) => {
+      const a = args ?? {};
+      w.__neuralPitchTestHooks?.invokeCalls.push({ cmd, args: a });
       const handler = handlers.get(cmd);
       if (handler === undefined) {
         throw new Error(`unmocked Tauri command: ${cmd}`);
       }
       if (typeof handler === "function") {
-        return await (handler as Handler)(args ?? {});
+        return await (handler as Handler)(a);
       }
       return handler;
     };
@@ -156,15 +177,29 @@ export async function installTauriMock(
 }
 
 /**
- * Push a simulated PitchUpdate frame to the page. Phase-1 will replace this
- * with a real Channel<PitchUpdate> shim; Phase-0 records the call onto
- * `window.__neuralPitchTestHooks.listeners.get('pitch-update')` so that a
- * future hook can subscribe.
+ * Snake_case PitchUpdate as serialised by the Rust pipeline.
+ * Mirrors `crates/neural-pitch-core/src/pipeline/sink.rs::PitchUpdate`.
  */
-export async function pushPitchUpdate(
-  page: Page,
-  update: { f0Hz: number; cents: number; confidence: number; voiced: boolean },
-): Promise<void> {
+export interface MockPitchUpdate {
+  timestamp_samples: number;
+  f0_hz: number;
+  confidence: number;
+  voiced: boolean;
+  smoothed_cents: number;
+  target_midi: number;
+  target_hz: number;
+}
+
+/**
+ * Push a simulated PitchUpdate frame through the synthetic Channel.
+ *
+ * The page-side `usePitchStream` hook registers itself on
+ * `window.__neuralPitchTestHooks.listeners` for the `"pitch-update"` event;
+ * this helper walks that list and delivers the payload to each listener,
+ * which forwards into the same code path as a real `runCallback` from the
+ * Rust shell.
+ */
+export async function pushPitchUpdate(page: Page, update: MockPitchUpdate): Promise<void> {
   await page.evaluate((frame) => {
     type WindowWithHooks = Window & {
       __neuralPitchTestHooks?: {
@@ -177,4 +212,51 @@ export async function pushPitchUpdate(
       fn(frame);
     }
   }, update);
+}
+
+/**
+ * Helper to construct a self-consistent `MockPitchUpdate` from a frequency
+ * and a cents deviation. Tests describe the world in musical terms
+ * (`A4 + 0¢`) and the helper computes `target_midi`, `target_hz`, etc.
+ */
+export function makePitchUpdate(opts: {
+  f0Hz: number;
+  cents?: number;
+  voiced?: boolean;
+  confidence?: number;
+  a4Hz?: number;
+}): MockPitchUpdate {
+  const a4 = opts.a4Hz ?? 440;
+  const voiced = opts.voiced ?? true;
+  const cents = opts.cents ?? 0;
+  const midiFloat = 69 + 12 * Math.log2(opts.f0Hz / a4);
+  const targetMidi = Math.round(midiFloat);
+  const targetHz = a4 * Math.pow(2, (targetMidi - 69) / 12);
+  return {
+    timestamp_samples: 0,
+    f0_hz: opts.f0Hz,
+    confidence: opts.confidence ?? 0.95,
+    voiced,
+    smoothed_cents: cents,
+    target_midi: targetMidi,
+    target_hz: targetHz,
+  };
+}
+
+/** Recorded invoke calls for assertion. */
+export async function getInvokeCalls(
+  page: Page,
+  cmd?: string,
+): Promise<Array<{ cmd: string; args: Record<string, unknown> }>> {
+  return await page.evaluate((filterCmd) => {
+    type WindowWithHooks = Window & {
+      __neuralPitchTestHooks?: {
+        invokeCalls: Array<{ cmd: string; args: Record<string, unknown> }>;
+      };
+    };
+    const w = window as WindowWithHooks;
+    const all = w.__neuralPitchTestHooks?.invokeCalls ?? [];
+    if (typeof filterCmd === "string") return all.filter((c) => c.cmd === filterCmd);
+    return all;
+  }, cmd ?? null);
 }

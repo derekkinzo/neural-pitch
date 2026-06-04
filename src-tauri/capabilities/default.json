@@ -3,5 +3,5 @@
   "identifier": "default",
   "description": "Capabilities for the main window.",
   "windows": ["main"],
-  "permissions": ["core:default", "log:default"]
+  "permissions": ["core:default", "log:default", "store:default"]
 }

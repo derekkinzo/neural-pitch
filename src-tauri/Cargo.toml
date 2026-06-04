@@ -19,13 +19,20 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 tauri          = { version = "2", features = [] }
-tauri-plugin-log = "2"
+tauri-plugin-log   = "2"
+tauri-plugin-store = "2"
 neural-pitch-core = { path = "../crates/neural-pitch-core", version = "0.1" }
 anyhow         = { workspace = true }
+thiserror      = { workspace = true }
 tracing        = { workspace = true }
 tracing-subscriber = { workspace = true }
 serde          = { workspace = true }
 serde_json     = { workspace = true }
+parking_lot    = { workspace = true }
+cpal           = "0.17"
+rtrb           = "0.3"
+tokio          = { version = "1", features = ["rt", "time", "macros"] }
+tokio-util     = { version = "0.7", default-features = false }
 
 [features]
 default        = ["custom-protocol"]

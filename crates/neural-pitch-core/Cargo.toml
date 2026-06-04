@@ -22,6 +22,7 @@ debug-overlay     = []  # Phase 1+ — diagnostic overlays for desktop shell
 thiserror   = { workspace = true }
 tracing     = { workspace = true }
 serde       = { workspace = true }
+serde_json  = { workspace = true }
 rtrb        = "0.3"
 tokio-util  = { version = "0.7", default-features = false }
 cpal        = { version = "0.17", optional = true }

@@ -26,6 +26,7 @@
 
 use std::path::PathBuf;
 
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 pub mod factory;
@@ -85,7 +86,7 @@ pub struct EstimatorConfig {
 ///
 /// Backends are not required to implement instrument-specific logic; the hint
 /// is advisory. `Generic` is the safe default when no information is known.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum InstrumentHint {
     /// Singing or speaking voice.
     Voice,

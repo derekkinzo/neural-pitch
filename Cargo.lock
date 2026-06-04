@@ -2061,12 +2061,19 @@ name = "neural-pitch"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "cpal",
  "neural-pitch-core",
+ "parking_lot",
+ "rtrb",
  "serde",
  "serde_json",
  "tauri",
  "tauri-build",
  "tauri-plugin-log",
+ "tauri-plugin-store",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-util",
  "tracing",
  "tracing-subscriber",
 ]
@@ -2080,6 +2087,7 @@ dependencies = [
  "proptest",
  "rtrb",
  "serde",
+ "serde_json",
  "thiserror 2.0.18",
  "tokio-util",
  "tracing",
@@ -3729,6 +3737,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "tauri-plugin-store"
+version = "2.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6c72dda16786eb4a3f903e43a17b64d8d78dc0f00fe2aa4b757c28f617a8630b"
+dependencies = [
+ "dunce",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-plugin",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "tauri-runtime"
 version = "2.11.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3969,7 +3993,19 @@ dependencies = [
  "mio",
  "pin-project-lite",
  "socket2",
+ "tokio-macros",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "tokio-macros"
+version = "2.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "385a6cb71ab9ab790c5fe8d67f1645e6c450a7ce006a33de03daa956cf70a496"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
 ]
 
 [[package]]
