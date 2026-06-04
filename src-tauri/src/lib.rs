@@ -12,9 +12,11 @@ pub mod commands;
 pub mod sink;
 pub mod state;
 
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use neural_pitch_core::settings::{TunerSettings, migrate};
+use neural_pitch_core::store::RecordingsLibrary;
 use tauri::Manager;
 use tauri_plugin_store::StoreExt;
 use tracing_subscriber::EnvFilter;
@@ -44,7 +46,36 @@ pub fn run() {
         .setup(|app| {
             let store = app.store("settings.json")?;
             let settings = load_or_init_settings(&store);
-            let state = AppState::new(Arc::clone(&store), settings);
+            // Resolve the per-platform app-data dir for the recordings
+            // SQLite + FLAC files. Tauri's `path::app_data_dir` is the
+            // canonical location (Library/Application Support on macOS,
+            // %APPDATA% on Windows, ~/.local/share on Linux). On
+            // resolution failure we fall back to the current working
+            // directory so the app at least starts; warn so operators
+            // can fix the deployment.
+            let app_data = app.path().app_data_dir().unwrap_or_else(|e| {
+                tracing::warn!(
+                    error = %e,
+                    "could not resolve app_data_dir; falling back to cwd"
+                );
+                PathBuf::from(".")
+            });
+            let recordings_dir = app_data.join("recordings");
+            // Best-effort: ensure the recordings dir exists. The library
+            // open below also creates the parent directory if needed.
+            if let Err(e) = std::fs::create_dir_all(&recordings_dir) {
+                tracing::warn!(
+                    error = %e,
+                    path = %recordings_dir.display(),
+                    "could not create recordings directory at startup",
+                );
+            }
+            let db_path = recordings_dir.join("library.sqlite");
+            let library = Arc::new(
+                RecordingsLibrary::new(&db_path)
+                    .map_err(|e| format!("open recordings library: {e:#}"))?,
+            );
+            let state = AppState::new(Arc::clone(&store), settings, library, recordings_dir);
             app.manage(state);
             Ok(())
         })
@@ -54,6 +85,12 @@ pub fn run() {
             commands::configure,
             commands::get_settings,
             commands::set_setting,
+            commands::start_recording,
+            commands::stop_recording,
+            commands::get_recording_path,
+            commands::list_recordings,
+            commands::delete_recording,
+            commands::rename_recording,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -275,6 +275,178 @@ export function makePitchUpdate(opts: {
   };
 }
 
+/**
+ * Phase-2.0 recordings — wire-format mirrors `src/types/recording.ts` (planned).
+ * Field names are camelCase on the TS side; the Rust IPC boundary maps from
+ * snake_case per the audio-event.ts convention. We keep the test-side type
+ * camelCase so specs read in the same vocabulary as the React components
+ * they exercise.
+ */
+export interface MockRecording {
+  id: string;
+  filename: string;
+  createdAt: number;
+  durationMs: number;
+  sampleRateHz: number;
+  channels: number;
+  bitDepth: number;
+  a4Hz: number;
+  instrumentProfile: string;
+  userLabel?: string;
+}
+
+export interface MockRecordingProgress {
+  recordingId: string;
+  elapsedMs: number;
+  sampleCount: number;
+  droppedWindows: number;
+  status: "active" | "finalizing" | "failed";
+  error?: string;
+}
+
+/**
+ * Install mock responses for the Phase-2.0 recordings IPC surface.
+ *
+ * The handlers mutate a shared list stashed on `window.__neuralPitchTestHooks
+ * .recordings`. The seed array is JSON-encoded into the handler source so
+ * the page-side copy is self-contained — closures do not survive
+ * `Function.prototype.toString()`, so each handler self-initialises the
+ * shared slot from its embedded seed on first call.
+ *
+ * Phase-2.0 contract (see DESIGN.md §7.5):
+ *   - `list_recordings()`                          → MockRecording[]
+ *     (returned descending by createdAt to match the store selector)
+ *   - `start_recording({ instrumentProfile })`     → { recordingId }
+ *   - `stop_recording()`                           → MockRecording
+ *   - `delete_recording({ id })`                   → null
+ *   - `rename_recording({ id, label })`            → null
+ *
+ * Specs combine this with the base mock map:
+ *
+ *     await mockTauri.install({ ...installRecordingsMock(seed) });
+ */
+export function installRecordingsMock(records: MockRecording[]): TauriMockResponses {
+  // JSON-encode once. We inline the literal into each handler source via
+  // template substitution at .toString() time: every handler starts with
+  //   const __seed__ = JSON.parse('<encoded>');
+  // and serialise() captures that literal directly because it lives in the
+  // function body, not in a closure.
+  const seedJson = JSON.stringify(records);
+
+  // Build the handler bodies as strings, then parse via `new Function` so
+  // serialise() picks up genuine Function objects (its `typeof === "function"`
+  // branch). This sidesteps the closure-capture problem: every reference to
+  // the seed is re-emitted as a literal in the function body each time.
+  const seedHydrate = `
+    var w = window;
+    var hooks = w.__neuralPitchTestHooks || {};
+    if (!hooks.recordings) {
+      hooks.recordings = JSON.parse(${JSON.stringify(seedJson)});
+    }
+    w.__neuralPitchTestHooks = hooks;
+  `;
+
+  // Each handler is a Function that takes `args` and returns a value or
+  // promise. We use `new Function` so the body is parseable JS and the
+  // serialise() pipeline picks up the literal source verbatim.
+  // eslint-disable-next-line @typescript-eslint/no-implied-eval, no-new-func
+  const listHandler = new Function(
+    "args",
+    `${seedHydrate}
+     var list = window.__neuralPitchTestHooks.recordings || [];
+     return list.slice().sort(function (a, b) { return b.createdAt - a.createdAt; });`,
+  ) as (args: Record<string, unknown>) => unknown;
+
+  // eslint-disable-next-line @typescript-eslint/no-implied-eval, no-new-func
+  const startHandler = new Function(
+    "args",
+    `${seedHydrate}
+     var id = "rec-" + Date.now() + "-" + Math.floor(Math.random() * 1e6).toString(16);
+     window.__neuralPitchTestHooks.activeRecordingId = id;
+     window.__neuralPitchTestHooks.lastStartArgs = Object.assign({}, args);
+     return { recordingId: id };`,
+  ) as (args: Record<string, unknown>) => unknown;
+
+  // eslint-disable-next-line @typescript-eslint/no-implied-eval, no-new-func
+  const stopHandler = new Function(
+    "args",
+    `${seedHydrate}
+     var id = window.__neuralPitchTestHooks.activeRecordingId || ("rec-" + Date.now());
+     var rec = {
+       id: id,
+       filename: id + ".flac",
+       createdAt: Date.now(),
+       durationMs: 1230,
+       sampleRateHz: 48000,
+       channels: 1,
+       bitDepth: 24,
+       a4Hz: 440,
+       instrumentProfile: "Voice"
+     };
+     window.__neuralPitchTestHooks.recordings = [rec].concat(window.__neuralPitchTestHooks.recordings || []);
+     window.__neuralPitchTestHooks.activeRecordingId = undefined;
+     return rec;`,
+  ) as (args: Record<string, unknown>) => unknown;
+
+  // eslint-disable-next-line @typescript-eslint/no-implied-eval, no-new-func
+  const deleteHandler = new Function(
+    "args",
+    `${seedHydrate}
+     var id = String((args && args.id) || "");
+     window.__neuralPitchTestHooks.recordings = (window.__neuralPitchTestHooks.recordings || [])
+       .filter(function (r) { return r.id !== id; });
+     return null;`,
+  ) as (args: Record<string, unknown>) => unknown;
+
+  // eslint-disable-next-line @typescript-eslint/no-implied-eval, no-new-func
+  const renameHandler = new Function(
+    "args",
+    `${seedHydrate}
+     var id = String((args && args.id) || "");
+     var label = String((args && args.label) || "");
+     window.__neuralPitchTestHooks.recordings = (window.__neuralPitchTestHooks.recordings || [])
+       .map(function (r) {
+         if (r.id !== id) return r;
+         var copy = Object.assign({}, r);
+         copy.userLabel = label;
+         return copy;
+       });
+     return null;`,
+  ) as (args: Record<string, unknown>) => unknown;
+
+  return {
+    list_recordings: listHandler,
+    start_recording: startHandler,
+    stop_recording: stopHandler,
+    delete_recording: deleteHandler,
+    rename_recording: renameHandler,
+  };
+}
+
+/**
+ * Push a synthetic `recording-progress` event. Mirrors `pushPitchUpdate`:
+ * the page-side `recordingsStore` registers a listener on
+ * `__neuralPitchTestHooks.listeners.get("recording-progress")` and tests
+ * drive elapsed-time ticks through this helper.
+ */
+export async function pushRecordingProgress(
+  page: Page,
+  progress: MockRecordingProgress,
+): Promise<void> {
+  await page.evaluate((frame) => {
+    type WindowWithHooks = Window & {
+      __neuralPitchTestHooks?: {
+        listeners: Map<string, Array<(payload: unknown) => void>>;
+      };
+    };
+    const w = window as WindowWithHooks;
+    const listeners = w.__neuralPitchTestHooks?.listeners.get("recording-progress") ?? [];
+    for (const fn of listeners) {
+      fn(frame);
+    }
+  }, progress);
+}
+
 /** Recorded invoke calls for assertion. */
 export async function getInvokeCalls(
   page: Page,

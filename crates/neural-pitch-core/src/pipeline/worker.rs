@@ -12,6 +12,9 @@
 //! `join()` to confirm the worker exits within one packet boundary
 //! (~`hop` samples of wall time).
 
+use std::sync::Arc;
+use std::sync::atomic::AtomicU64;
+use std::sync::mpsc::{SyncSender, TrySendError};
 use std::thread::JoinHandle;
 use std::time::Duration;
 
@@ -79,6 +82,63 @@ pub struct DspWorker {
     /// emitted [`PitchUpdate`] (so the prior is built from strictly older
     /// audio than the frame it informs).
     auto_prior: AutoPrior,
+    /// Optional bounded fan-out to a [`crate::pipeline::RecordingWorker`],
+    /// shared via [`RecordingFanout`] so the Tauri shell can attach /
+    /// detach a recording without recreating the DSP worker.
+    ///
+    /// When the fanout's `tx` is `Some`, every iteration that completes a
+    /// hop slide attempts a `try_send` of the freshest hop's worth of
+    /// samples. On `TrySendError::Full` the slice is dropped and the
+    /// fanout's `dropped` counter is incremented (the production
+    /// backpressure-accounting contract: the producer is the only honest
+    /// observation point for "channel was full" — see
+    /// `pipeline::recording::RecordingWorker::run`).
+    recording_fanout: RecordingFanout,
+}
+
+/// Shared, swappable recording fan-out attached to a [`DspWorker`].
+///
+/// Wraps a `parking_lot::Mutex<Option<(SyncSender<Vec<f32>>,
+/// Arc<AtomicU64>)>>`. Cloning is cheap (Arc-clone of the inner mutex),
+/// so the Tauri shell can keep one [`RecordingFanout`] handle in
+/// `AppState` and let the DSP worker hold a clone — calling `attach` /
+/// `detach` flips the slot live.
+#[derive(Clone, Default)]
+pub struct RecordingFanout {
+    inner: Arc<parking_lot::Mutex<Option<RecordingFanoutEntry>>>,
+}
+
+#[derive(Clone)]
+struct RecordingFanoutEntry {
+    tx: SyncSender<Vec<f32>>,
+    dropped: Arc<AtomicU64>,
+}
+
+impl RecordingFanout {
+    /// Construct an empty fan-out (no recording attached).
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Attach a sender + counter pair. Replaces any prior entry; the
+    /// previous sender is dropped, which the recording worker observes
+    /// as a `Disconnected` recv on its end.
+    pub fn attach(&self, tx: SyncSender<Vec<f32>>, dropped: Arc<AtomicU64>) {
+        let mut g = self.inner.lock();
+        *g = Some(RecordingFanoutEntry { tx, dropped });
+    }
+
+    /// Detach the current sender. Subsequent DSP iterations skip the
+    /// fan-out call.
+    pub fn detach(&self) {
+        let mut g = self.inner.lock();
+        *g = None;
+    }
+
+    /// Snapshot the current entry, or `None` if no recording is active.
+    fn snapshot(&self) -> Option<RecordingFanoutEntry> {
+        self.inner.lock().clone()
+    }
 }
 
 impl core::fmt::Debug for DspWorker {
@@ -120,7 +180,18 @@ impl DspWorker {
             samples_seen: 0,
             a4_hz: DEFAULT_A4_HZ,
             auto_prior: AutoPrior::default(),
+            recording_fanout: RecordingFanout::new(),
         }
+    }
+
+    /// Attach a [`RecordingFanout`] handle so the Tauri shell can
+    /// `attach`/`detach` a bounded recording channel at runtime without
+    /// recreating the DSP worker. Must be called before `spawn()`/`run()`;
+    /// the worker captures the handle by value.
+    #[must_use]
+    pub fn with_recording_fanout(mut self, fanout: RecordingFanout) -> Self {
+        self.recording_fanout = fanout;
+        self
     }
 
     /// Override the reference A4 frequency used to compute
@@ -169,6 +240,7 @@ impl DspWorker {
 
     /// Run the analysis loop until [`CancellationToken::cancel`] is invoked
     /// or the [`FrameSink`] disconnects.
+    #[allow(clippy::too_many_lines)]
     pub fn run(mut self) -> Result<(), DspError> {
         // Clamp `hop` to `[1, window]`. A hop greater than the window
         // would underflow `window - hop` and panic on `copy_within`, so
@@ -263,6 +335,41 @@ impl DspWorker {
                     // the tail; do not run the estimator on a corrupt frame.
                     continue;
                 }
+            }
+
+            // 3b) Recording fan-out — try_send the freshest hop slice to
+            //     the bounded recording channel if one is attached. On
+            //     `TrySendError::Full` the slice is dropped and the
+            //     producer-side dropped-windows counter is incremented;
+            //     the slice is NOT retried (the recording worker's
+            //     backpressure semantics permit drops, and a retry would
+            //     stall the live tuner pipeline).
+            //
+            //     RT-safety: `try_send` on a full bounded channel is
+            //     non-blocking. The cost is one Vec allocation per
+            //     fanned-out hop (sized to `hop`), which at hop=512 /
+            //     48 kHz is ~93 allocations per second on the DSP
+            //     thread. Reviewers: this is a known per-hop allocation,
+            //     the same shape as the existing `Channel::send` JSON-
+            //     serialise path described in `src-tauri/src/sink.rs`;
+            //     the audio callback is two thread hops away.
+            //
+            //     Snapshotting the fanout entry once per iteration takes
+            //     a brief parking_lot lock (uncontended in the
+            //     steady-state — the shell only mutates it on
+            //     start/stop_recording).
+            if let Some(entry) = self.recording_fanout.snapshot() {
+                let hop_slice = &self.window[window - hop..window];
+                let payload: Vec<f32> = hop_slice.to_vec();
+                if let Err(TrySendError::Full(_)) = entry.tx.try_send(payload) {
+                    entry
+                        .dropped
+                        .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                }
+                // `TrySendError::Disconnected` means the recording worker
+                // shut down. We ignore it; the live tuner pipeline keeps
+                // running. The shell's stop_recording path is responsible
+                // for detaching the fanout.
             }
 
             // 4) Read the current auto-prior range for this iteration. The

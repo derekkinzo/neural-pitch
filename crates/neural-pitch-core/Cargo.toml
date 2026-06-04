@@ -10,13 +10,17 @@ repository.workspace   = true
 readme.workspace       = true
 
 [features]
-default = ["cpal"]
+default = ["cpal", "flac"]
 cpal              = ["dep:cpal"]
 decoder-symphonia = []  # Phase 2 — Symphonia-backed file decoders
 neural            = []  # Phase 2 brings in ort + Viterbi + PESTO/CREPE backends
 pyin              = []  # Phase 2 — pYIN backend
 dataset           = []  # Phase 2/Tier-3 dataset-gated tests
 debug-overlay     = []  # Phase 1+ — diagnostic overlays for desktop shell
+# Phase 2.0 — pure-Rust FLAC encoder for the recording pipeline.
+flac              = ["dep:flacenc"]
+# Phase 2.0 — exposes MockRecordingSink to downstream test crates.
+test-utils        = []
 
 [dependencies]
 thiserror   = { workspace = true }
@@ -26,11 +30,27 @@ serde_json  = { workspace = true }
 rtrb        = "0.3"
 tokio-util  = { version = "0.7", default-features = false }
 cpal        = { version = "0.17", optional = true }
+# Phase 2.0 — gated behind the `flac` feature, so production binaries that
+# disable recording (e.g. minimal CI builds) do not pull in the encoder.
+flacenc     = { version = "0.5", default-features = false, optional = true }
+# Phase 2.0 persistence layer (`store::RecordingsLibrary`). `bundled` ships a
+# vendored SQLite so consumers do not need a system libsqlite3. Migrations are
+# managed by `refinery` (file-based, append-only). UUIDv7 row keys come from
+# the `uuid` crate. `directories` resolves the per-platform user-data dir for
+# production paths (tests use `:memory:` and never touch the FS).
+rusqlite    = { version = "0.31", features = ["bundled"] }
+refinery    = { version = "0.8", features = ["rusqlite"] }
+uuid        = { version = "1", features = ["v7"] }
+directories = "5"
+# `parking_lot::Mutex` (non-poisoning, ADR-0014) is used by
+# `store::RecordingsLibrary` so the connection guard cannot be poisoned by a
+# panic in another thread. Also surfaces consistently with `src-tauri/`'s
+# pattern.
+parking_lot = { workspace = true }
 
 [dev-dependencies]
 proptest    = "1"
 approx      = "0.5"
-parking_lot = { workspace = true }
 # Phase 1.4 Tier-2 voice-fixture builder. Pure-Rust FLAC encoder; pulled in
 # only as a dev-dependency so production binaries do not see it.
 # `default-features = false` drops the `par`, `log`, and `serde` features

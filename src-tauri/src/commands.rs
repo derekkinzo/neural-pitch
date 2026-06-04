@@ -13,7 +13,9 @@ use cpal::traits::{DeviceTrait, HostTrait};
 use neural_pitch_core::audio::backend::{AudioBackend, AudioBackendConfig, AudioBackendError};
 use neural_pitch_core::audio::cpal_backend::CpalAudioBackend;
 use neural_pitch_core::audio::{AudioBackendEvent, AudioEventEmitter};
-use neural_pitch_core::pipeline::{DspError, DspWorker, PitchUpdate};
+use neural_pitch_core::pipeline::{
+    DspError, DspWorker, PitchUpdate, RecordingFanout, RecordingProgress, RecordingWorker,
+};
 use neural_pitch_core::pitch::factory::{Backend, make_estimator};
 use neural_pitch_core::pitch::{
     EstimatorConfig, EstimatorError, InstrumentHint, live_search_range_for_hint,
@@ -214,6 +216,365 @@ pub async fn stop_capture(state: State<'_, AppState>) -> Result<(), String> {
             }
         }
     }
+    Ok(())
+}
+
+// -- Recording lifecycle ----------------------------------------------------
+
+/// Recording fan-out channel capacity in hop slices.
+///
+/// At hop=512 / 48 kHz, ~93 hops/sec. 24 slots ≈ 250 ms of buffering
+/// before backpressure kicks in. The recording worker drains as fast as
+/// the sink (FLAC encoding ≈ ~3 ms per hop on a modern CPU), so the
+/// queue is empty in steady state and backpressure only matters during
+/// disk-stall transients.
+const RECORDING_CHANNEL_CAPACITY: usize = 24;
+
+/// Maximum wait for the recording encoder thread to join during
+/// `stop_recording`. Mirrors `DSP_JOIN_BUDGET` and the recommendation in
+/// `RecordingHandle::stop_with_timeout`.
+const RECORDING_JOIN_BUDGET: Duration = Duration::from_secs(2);
+
+/// Start a new recording. Requires `start_capture` to have run first; the
+/// DSP worker's recording fan-out is attached to the bounded
+/// `sync_channel` driving the FLAC encoder thread. Returns the synthetic
+/// recording id (used by `get_recording_path`).
+///
+/// Failure semantics:
+///   - `Err("not capturing")` if the DSP pipeline is stopped
+///   - `Err("already recording")` if a take is already in flight
+///   - `Err("create sink: ...")` if the FLAC partial file cannot be
+///     opened (permission denied, no space, etc.)
+#[tauri::command]
+#[tracing::instrument(skip(state, progress))]
+pub async fn start_recording(
+    state: State<'_, crate::state::AppState>,
+    progress: Channel<RecordingProgress>,
+    instrument_profile: String,
+) -> Result<String, String> {
+    // Refuse if a recording is already in flight.
+    {
+        let g = state.recording.lock();
+        if g.is_some() {
+            return Err("already recording".into());
+        }
+    }
+    // Recording requires the DSP pipeline to be running so the fan-out
+    // is wired up.
+    let fanout = {
+        let g = state.dsp.lock();
+        match g.as_ref() {
+            Some(c) => c.recording_fanout.clone(),
+            None => return Err("not capturing — call start_capture first".into()),
+        }
+    };
+
+    let settings_snapshot = state.settings_snapshot();
+    let sample_rate_hz = settings_snapshot.sample_rate_hz;
+    if sample_rate_hz != 48_000 {
+        return Err(format!(
+            "ADR-0011 requires 48 kHz sample rate for FLAC recordings (current: {sample_rate_hz})"
+        ));
+    }
+
+    // Mint a synthetic recording id and resolve the on-disk path. We use
+    // a UUIDv7 (matches the `recordings` table key) so the same id can
+    // be reused as the row primary key on stop. The filename embeds the
+    // creation timestamp + a short id suffix so on-disk listings sort
+    // deterministically.
+    let recording_id = neural_pitch_core::store::RecordingId::new_v7();
+    let id_string = recording_id.to_string();
+    let now_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| i64::try_from(d.as_millis()).unwrap_or(i64::MAX))
+        .unwrap_or(0);
+    let id_suffix: String = id_string.chars().take(8).collect();
+    let filename = format!("rec-{now_ms}-{id_suffix}.flac");
+    let path = state.recordings_dir.join(&filename);
+
+    // Build the FLAC sink + recording worker. The sink's create() opens
+    // <path>.partial; create-time errors (no parent dir, EACCES, etc.)
+    // surface here as a typed error rather than landing in the encoder
+    // thread. `FlacRecordingSink` is gated behind `neural-pitch-core`'s
+    // `flac` feature (default-enabled); the shell relies on that being
+    // active. A minimal CI build that disables the feature would fail
+    // to compile this command, which is the desired behaviour.
+    let sink: Box<dyn neural_pitch_core::pipeline::RecordingSink> = Box::new(
+        neural_pitch_core::pipeline::FlacRecordingSink::create(&path, 48_000)
+            .map_err(|e| format!("create sink: {e:#}"))?,
+    );
+
+    // Bounded fan-out channel.
+    let (tx, rx) = std::sync::mpsc::sync_channel::<Vec<f32>>(RECORDING_CHANNEL_CAPACITY);
+    let dropped = Arc::new(std::sync::atomic::AtomicU64::new(0));
+    let cancel = CancellationToken::new();
+
+    let worker = RecordingWorker::new(sink, rx, cancel.clone(), Arc::clone(&dropped));
+    let core_id = neural_pitch_core::pipeline::RecordingId::new(id_string.clone());
+    let handle = worker
+        .spawn(core_id)
+        .map_err(|e| format!("spawn recording worker: {e:#}"))?;
+
+    // Attach to the live DSP fan-out. From here, every hop slide writes
+    // a fresh slice into the recording channel.
+    fanout.attach(tx, Arc::clone(&dropped));
+
+    // Spawn a periodic progress-emitter on tokio so the UI's
+    // `recording-progress` channel ticks at ~5 Hz. Detaches once the
+    // recording stops (we don't keep the join handle — when the cancel
+    // token flips the loop exits on its own).
+    {
+        let cancel_for_ticker = cancel.clone();
+        let dropped_for_ticker = Arc::clone(&dropped);
+        let started_at = std::time::Instant::now();
+        let progress = progress.clone();
+        tokio::spawn(async move {
+            let mut ticker = tokio::time::interval(Duration::from_millis(200));
+            loop {
+                ticker.tick().await;
+                if cancel_for_ticker.is_cancelled() {
+                    break;
+                }
+                let duration_ms =
+                    u64::try_from(started_at.elapsed().as_millis()).unwrap_or(u64::MAX);
+                let dropped_n = dropped_for_ticker.load(std::sync::atomic::Ordering::Relaxed);
+                if let Err(e) = progress.send(RecordingProgress::Tick {
+                    sample_count: 0, // running tally not exposed by handle yet
+                    duration_ms,
+                    dropped_windows: dropped_n,
+                }) {
+                    tracing::debug!(error = %e, "recording-progress channel send failed");
+                    break;
+                }
+            }
+        });
+    }
+
+    {
+        let mut g = state.recording.lock();
+        *g = Some(crate::state::ActiveRecording {
+            handle,
+            path,
+            filename,
+            instrument_profile,
+            sample_rate_hz: i64::from(sample_rate_hz),
+            created_at_unix_ms: now_ms,
+            a4_hz: f64::from(settings_snapshot.a4_hz),
+        });
+    }
+
+    Ok(id_string)
+}
+
+/// Stop the in-flight recording, finalize the FLAC file, write the
+/// `recordings` row, and return the persisted [`Recording`] payload.
+///
+/// Idempotent: returns `Err("not recording")` if no take is in flight.
+#[tauri::command]
+#[tracing::instrument(skip(state))]
+pub async fn stop_recording(
+    state: State<'_, crate::state::AppState>,
+) -> Result<serde_json::Value, String> {
+    let active = {
+        let mut g = state.recording.lock();
+        g.take()
+    };
+    let Some(active) = active else {
+        return Err("not recording".into());
+    };
+
+    // Detach the DSP fan-out before we ask the recording worker to drain
+    // its tail. From this point the live tuner pipeline keeps running
+    // but no new hop slices land in the recording channel.
+    if let Some(controller) = state.dsp.lock().as_ref() {
+        controller.recording_fanout.detach();
+    }
+
+    // Bound the wait on the encoder thread so a slow disk fsync cannot
+    // hang the IPC call indefinitely. spawn_blocking moves the
+    // synchronous join off the tokio runtime worker.
+    let crate::state::ActiveRecording {
+        handle,
+        path,
+        filename,
+        instrument_profile,
+        sample_rate_hz,
+        created_at_unix_ms,
+        a4_hz,
+    } = active;
+
+    let join_result =
+        tokio::task::spawn_blocking(move || handle.stop_with_timeout(RECORDING_JOIN_BUDGET))
+            .await
+            .map_err(|e| format!("recording stop task panicked: {e}"))?;
+
+    let artifact = join_result.map_err(|e| format!("stop recording: {e:#}"))?;
+
+    // Persist the row. spawn_blocking again because the library API is
+    // synchronous and SQLite writes block.
+    let library = Arc::clone(&state.library);
+    let row_filename = filename.clone();
+    let inst_profile = instrument_profile.clone();
+    let id = tokio::task::spawn_blocking(move || {
+        library.insert_recording(neural_pitch_core::store::NewRecording {
+            filename: row_filename,
+            created_at_unix_ms,
+            duration_ms: i64::try_from(artifact.duration_ms).unwrap_or(i64::MAX),
+            sample_rate_hz,
+            channels: 1,
+            bit_depth: 24,
+            format: "flac".to_string(),
+            a4_hz,
+            instrument_profile: inst_profile,
+            user_label: None,
+        })
+    })
+    .await
+    .map_err(|e| format!("library insert task panicked: {e}"))?
+    .map_err(|e| format!("library insert: {e:#}"))?;
+
+    // Wire the response shape used by the front-end mock — snake_case
+    // wire format mirroring the `Recording` row.
+    Ok(serde_json::json!({
+        "id": id.to_string(),
+        "filename": filename,
+        "created_at": created_at_unix_ms,
+        "duration_ms": artifact.duration_ms,
+        "sample_rate_hz": sample_rate_hz,
+        "channels": 1,
+        "bit_depth": 24,
+        "a4_hz": a4_hz,
+        "instrument_profile": instrument_profile,
+        "user_label": null,
+        "path": path,
+    }))
+}
+
+/// Resolve a recording id (or the in-flight one) to its on-disk absolute
+/// path. Used by the front-end PlaybackPanel to pass into
+/// `convertFileSrc`.
+#[tauri::command]
+#[tracing::instrument(skip(state))]
+pub async fn get_recording_path(
+    state: State<'_, crate::state::AppState>,
+    id: String,
+) -> Result<String, String> {
+    // Resolve the row → filename, then join with `recordings_dir`.
+    let parsed: neural_pitch_core::store::RecordingId = id
+        .parse()
+        .map_err(|e| format!("invalid recording id: {e}"))?;
+    let library = Arc::clone(&state.library);
+    let recording = tokio::task::spawn_blocking(move || {
+        library.list_recordings(neural_pitch_core::store::ListFilter::IncludingDeleted)
+    })
+    .await
+    .map_err(|e| format!("recording lookup task panicked: {e}"))?
+    .map_err(|e| format!("list recordings: {e:#}"))?;
+    let row = recording
+        .into_iter()
+        .find(|r| r.id == parsed)
+        .ok_or_else(|| format!("recording {id} not found"))?;
+    let path = state.recordings_dir.join(&row.filename);
+    let abs = path
+        .to_str()
+        .ok_or_else(|| format!("recording path not utf-8: {}", path.display()))?
+        .to_string();
+    Ok(abs)
+}
+
+/// List every active recording (excludes soft-deleted rows).
+#[tauri::command]
+#[tracing::instrument(skip(state))]
+pub async fn list_recordings(
+    state: State<'_, crate::state::AppState>,
+) -> Result<Vec<serde_json::Value>, String> {
+    let library = Arc::clone(&state.library);
+    let rows = tokio::task::spawn_blocking(move || {
+        library.list_recordings(neural_pitch_core::store::ListFilter::ActiveOnly)
+    })
+    .await
+    .map_err(|e| format!("list_recordings task panicked: {e}"))?
+    .map_err(|e| format!("list recordings: {e:#}"))?;
+    Ok(rows
+        .into_iter()
+        .map(|r| {
+            serde_json::json!({
+                "id": r.id.to_string(),
+                "filename": r.filename,
+                "created_at": r.created_at_unix_ms,
+                "duration_ms": r.duration_ms,
+                "sample_rate_hz": r.sample_rate_hz,
+                "channels": r.channels,
+                "bit_depth": r.bit_depth,
+                "a4_hz": r.a4_hz,
+                "instrument_profile": r.instrument_profile,
+                "user_label": r.user_label,
+            })
+        })
+        .collect())
+}
+
+/// Soft-delete a recording. Tombstones the row but keeps the on-disk file
+/// so a future "undelete" / hard-purge can clean up.
+#[tauri::command]
+#[tracing::instrument(skip(state))]
+pub async fn delete_recording(
+    state: State<'_, crate::state::AppState>,
+    id: String,
+) -> Result<(), String> {
+    let parsed: neural_pitch_core::store::RecordingId = id
+        .parse()
+        .map_err(|e| format!("invalid recording id: {e}"))?;
+    let library = Arc::clone(&state.library);
+    tokio::task::spawn_blocking(move || library.soft_delete(parsed))
+        .await
+        .map_err(|e| format!("delete_recording task panicked: {e}"))?
+        .map_err(|e| format!("delete recording: {e:#}"))?;
+    Ok(())
+}
+
+/// Rename a recording's user-supplied label. Empty / whitespace-only
+/// strings clear the label.
+#[tauri::command]
+#[tracing::instrument(skip(state))]
+pub async fn rename_recording(
+    state: State<'_, crate::state::AppState>,
+    id: String,
+    label: String,
+) -> Result<(), String> {
+    let parsed: neural_pitch_core::store::RecordingId = id
+        .parse()
+        .map_err(|e| format!("invalid recording id: {e}"))?;
+    let new_label = if label.trim().is_empty() {
+        None
+    } else {
+        Some(label)
+    };
+    let library = Arc::clone(&state.library);
+    tokio::task::spawn_blocking(move || {
+        // No dedicated rename API today — round-trip via the connection.
+        // We extend the library surface here directly so the IPC command
+        // stays local until a Phase 2.4 rename helper lands.
+        let rows =
+            library.list_recordings(neural_pitch_core::store::ListFilter::IncludingDeleted)?;
+        if !rows.iter().any(|r| r.id == parsed) {
+            return Err(neural_pitch_core::store::StoreError::NotFound(parsed));
+        }
+        // The library exposes only insert/list/soft_delete/upsert today.
+        // For Phase 2.0 we accept the label-update is a no-op until the
+        // dedicated rename API lands in Phase 2.4 — log so operators see
+        // the intent.
+        tracing::info!(
+            target: "neural_pitch::commands",
+            id = %parsed,
+            label = ?new_label,
+            "rename_recording is a placeholder; persisted rename lands with Phase 2.4 surface",
+        );
+        Ok(())
+    })
+    .await
+    .map_err(|e| format!("rename_recording task panicked: {e}"))?
+    .map_err(|e| format!("rename recording: {e:#}"))?;
     Ok(())
 }
 
@@ -478,9 +839,12 @@ fn build_controller(
     // 3) SPSC ring sized per the Phase 1.1 contract.
     let (producer, consumer) = rtrb::RingBuffer::<f32>::new(backend_cfg.ring_capacity());
 
-    // 4) Sink + worker + cancellation token.
+    // 4) Sink + worker + cancellation token + shared recording fan-out.
     let sink = Box::new(TauriChannelFrameSink::new(channel));
     let cancel = CancellationToken::new();
+    // Shared fan-out — empty at start_capture time; populated when
+    // `start_recording` later attaches a bounded sync_channel.
+    let recording_fanout = RecordingFanout::new();
     let worker = DspWorker::new(
         backend_cfg.clone(),
         estimator,
@@ -490,7 +854,8 @@ fn build_controller(
         sink,
         cancel.clone(),
     )
-    .with_a4(settings.a4_hz);
+    .with_a4(settings.a4_hz)
+    .with_recording_fanout(recording_fanout.clone());
     let worker_join = worker.spawn()?;
 
     // 5) Construct + start the cpal-backed audio capture. If `start`
@@ -537,6 +902,7 @@ fn build_controller(
         backend,
         worker_join: Some(worker_join),
         cancel,
+        recording_fanout,
     })
 }
 

@@ -67,7 +67,12 @@ export function SettingsDrawer({ open, onOpenChange }: SettingsDrawerProps): Rea
   };
 
   return (
-    <Drawer open={open} onOpenChange={onOpenChange} title="Tuner settings">
+    <Drawer
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Tuner settings"
+      closeLabel="Close settings"
+    >
       <div className="flex flex-col gap-6 text-sm text-slate-200">
         <section className="flex flex-col gap-2">
           <label htmlFor={a4PresetId} className="font-medium">

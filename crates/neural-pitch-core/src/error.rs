@@ -8,6 +8,7 @@ use crate::audio::{AudioBackendError, AudioError};
 use crate::music::MusicError;
 use crate::pipeline::FrameSinkError;
 use crate::pitch::EstimatorError;
+use crate::store::StoreError;
 
 /// Cross-cutting error type for `neural-pitch-core`.
 ///
@@ -35,4 +36,8 @@ pub enum CoreError {
     /// A pipeline frame sink failed to deliver an update.
     #[error(transparent)]
     Sink(#[from] FrameSinkError),
+
+    /// A persistence-layer (`store::RecordingsLibrary`) operation failed.
+    #[error(transparent)]
+    Store(#[from] StoreError),
 }

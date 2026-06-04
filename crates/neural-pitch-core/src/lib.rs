@@ -13,5 +13,6 @@ pub mod pitch;
 pub mod prelude;
 pub mod settings;
 pub mod smoothing;
+pub mod store;
 pub mod test_utils;
 pub mod voicing;

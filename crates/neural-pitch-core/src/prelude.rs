@@ -16,3 +16,6 @@ pub use crate::pipeline::{
 };
 pub use crate::pitch::{EstimatorConfig, EstimatorError, F0Frame, InstrumentHint, PitchEstimator};
 pub use crate::settings::{SETTINGS_SCHEMA_VERSION, SettingsError, TunerSettings, migrate};
+pub use crate::store::{
+    ListFilter, NewRecording, Recording, RecordingId, RecordingsLibrary, StoreError,
+};

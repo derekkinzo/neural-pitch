@@ -9,8 +9,15 @@
 //! - [`FrameSink`] — backend-agnostic delivery surface for updates. The
 //!   default [`ChannelFrameSink`] wraps an `mpsc::Sender<PitchUpdate>`.
 
+pub mod recording;
 pub mod sink;
 pub mod worker;
 
+#[cfg(feature = "flac")]
+pub use recording::FlacRecordingSink;
+pub use recording::{
+    MockRecordingSink, RecordingArtifact, RecordingError, RecordingHandle, RecordingId,
+    RecordingProgress, RecordingSink, RecordingSinkError, RecordingWorker,
+};
 pub use sink::{ChannelFrameSink, FrameSink, FrameSinkError, PitchUpdate};
-pub use worker::{DspError, DspWorker};
+pub use worker::{DspError, DspWorker, RecordingFanout};

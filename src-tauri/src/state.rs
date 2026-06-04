@@ -4,6 +4,13 @@
 //!
 //! - `dsp` — `parking_lot::Mutex<Option<DspController>>` guarding the
 //!   audio backend and DSP worker handle. `None` means "stopped".
+//! - `recording` — `parking_lot::Mutex<Option<RecordingHandle>>` guarding
+//!   the FLAC encoder thread for an in-flight recording. `None` means
+//!   "no take in progress". The DSP worker is spawned with a bounded
+//!   `sync_channel` recording fan-out only when this slot is `Some`.
+//! - `library` — `Arc<RecordingsLibrary>` SQLite-backed catalog. Opened
+//!   at startup; commands borrow it through `spawn_blocking` because
+//!   every method on `RecordingsLibrary` blocks on a connection mutex.
 //! - `store` — `tauri-plugin-store` handle obtained in `setup`, used by the
 //!   settings commands to persist after a successful cache update.
 //! - `settings` — in-memory cache of [`TunerSettings`]. Reads take the
@@ -22,12 +29,14 @@
 //! "build_controller succeeds before the cache and disk are mutated" rule
 //! lives in `commands::start_capture` — see that function for details.
 
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::thread::JoinHandle;
 
 use neural_pitch_core::audio::{AudioBackend, AudioBackendEvent};
-use neural_pitch_core::pipeline::DspError;
+use neural_pitch_core::pipeline::{DspError, RecordingHandle};
 use neural_pitch_core::settings::TunerSettings;
+use neural_pitch_core::store::RecordingsLibrary;
 use parking_lot::{Mutex, RwLock};
 use tauri::Wry;
 use tauri::ipc::Channel;
@@ -55,6 +64,11 @@ pub(crate) struct DspController {
     /// from `stop_capture` causes the worker's loop to return on the next
     /// iteration.
     pub(crate) cancel: CancellationToken,
+
+    /// Recording fan-out shared with the DSP worker so
+    /// `start_recording` / `stop_recording` can attach / detach the
+    /// bounded recording channel without recreating the worker.
+    pub(crate) recording_fanout: neural_pitch_core::pipeline::RecordingFanout,
 }
 
 impl core::fmt::Debug for DspController {
@@ -66,10 +80,48 @@ impl core::fmt::Debug for DspController {
     }
 }
 
+/// In-flight recording metadata kept alongside the [`RecordingHandle`].
+///
+/// `start_recording` populates this so `stop_recording` can write a
+/// `recordings` row with the same on-disk path the encoder is targeting,
+/// and so `get_recording_path` can resolve a recording id to its file
+/// without re-querying the SQLite library.
+pub(crate) struct ActiveRecording {
+    /// Encoder thread join + cancel token + dropped counter.
+    pub(crate) handle: RecordingHandle,
+    /// Final on-disk path the encoder will rename to on `finalize()`.
+    pub(crate) path: PathBuf,
+    /// Filename component of `path` (cached so SQLite stores the same
+    /// string the FLAC sink finalizes to).
+    pub(crate) filename: String,
+    /// Instrument profile slug at the moment recording started.
+    pub(crate) instrument_profile: String,
+    /// Sample rate locked to 48 kHz (ADR-0011) but recorded explicitly
+    /// for forward-compatibility with future variable-rate paths.
+    pub(crate) sample_rate_hz: i64,
+    /// Wall-clock recording-start timestamp. Stamped on the
+    /// `recordings.created_at_unix_ms` column on stop.
+    pub(crate) created_at_unix_ms: i64,
+    /// Reference A4 pitch at recording-start time.
+    pub(crate) a4_hz: f64,
+}
+
 /// The single application-state struct injected via `tauri::Manager::manage`.
 pub struct AppState {
     /// Lifecycle guard for the audio capture pipeline.
     pub(crate) dsp: Mutex<Option<DspController>>,
+
+    /// Lifecycle guard for an in-flight recording. `None` between takes.
+    pub(crate) recording: Mutex<Option<ActiveRecording>>,
+
+    /// SQLite-backed recordings catalog. Opened once at startup.
+    pub(crate) library: Arc<RecordingsLibrary>,
+
+    /// Directory where new recordings are written. Defaults to the
+    /// library's parent directory; mirrors `RecordingsLibrary::root()`
+    /// but kept as a separate field so commands can construct paths
+    /// without taking the library lock.
+    pub(crate) recordings_dir: PathBuf,
 
     /// Persistent settings store handle (`tauri-plugin-store`).
     pub(crate) store: Arc<Store<Wry>>,
@@ -91,9 +143,17 @@ pub struct AppState {
 impl AppState {
     /// Construct a new state with the supplied store handle and initial
     /// (already-validated) settings cache.
-    pub fn new(store: Arc<Store<Wry>>, settings: TunerSettings) -> Self {
+    pub fn new(
+        store: Arc<Store<Wry>>,
+        settings: TunerSettings,
+        library: Arc<RecordingsLibrary>,
+        recordings_dir: PathBuf,
+    ) -> Self {
         Self {
             dsp: Mutex::new(None),
+            recording: Mutex::new(None),
+            library,
+            recordings_dir,
             store,
             settings: RwLock::new(settings),
             events: Mutex::new(None),

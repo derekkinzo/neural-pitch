@@ -24,6 +24,18 @@ export interface DrawerProps {
   /** Required visible label rendered as the heading at the top of the panel
    *  (also referenced by aria-labelledby). */
   title: string;
+  /** Modal vs non-modal behaviour. Modal (default) is the WAI-ARIA APG
+   *  modal-dialog pattern: focus trap, `inert` on every sibling of the
+   *  drawer-root, role="dialog" + aria-modal="true". Non-modal drops the
+   *  focus trap and inert chain so the user can still interact with the
+   *  underlying surface (e.g. the Phase-2.0 Recordings drawer keeps the
+   *  RecordButton in the header reachable while the list is open). The
+   *  Escape-to-close keybinding is preserved either way. */
+  modal?: boolean;
+  /** Override the close-button accessible label. Defaults to
+   *  `Close ${title}` so screen-reader announcements match the drawer
+   *  surface (e.g. "Close Recordings", "Close Settings"). */
+  closeLabel?: string;
   children: ReactNode;
 }
 
@@ -31,7 +43,14 @@ const FOCUSABLE_SELECTORS =
   'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), ' +
   'select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
-export function Drawer({ open, onOpenChange, title, children }: DrawerProps): ReactNode {
+export function Drawer({
+  open,
+  onOpenChange,
+  title,
+  modal = true,
+  closeLabel,
+  children,
+}: DrawerProps): ReactNode {
   const titleId = useId();
   const panelRef = useRef<HTMLDivElement | null>(null);
   const lastActiveBeforeOpen = useRef<HTMLElement | null>(null);
@@ -65,27 +84,37 @@ export function Drawer({ open, onOpenChange, title, children }: DrawerProps): Re
       readonly priorAriaHidden: string | null;
     }
     const inerted: InertedNode[] = [];
-    const drawerRoot = panel?.closest('[data-testid="drawer-root"]') ?? null;
-    let cursor: HTMLElement | null = drawerRoot as HTMLElement | null;
-    while (cursor !== null && cursor.parentElement !== null && cursor !== document.body) {
-      const parent = cursor.parentElement;
-      for (const sibling of Array.from(parent.children)) {
-        if (!(sibling instanceof HTMLElement)) continue;
-        if (sibling === cursor) continue;
-        const inertCapable = sibling as InertElement;
-        inerted.push({
-          el: sibling,
-          priorInert: inertCapable.inert,
-          priorAriaHidden: sibling.getAttribute("aria-hidden"),
-        });
-        inertCapable.inert = true;
-        sibling.setAttribute("aria-hidden", "true");
+    if (modal) {
+      const drawerRoot = panel?.closest('[data-testid="drawer-root"]') ?? null;
+      let cursor: HTMLElement | null = drawerRoot as HTMLElement | null;
+      while (cursor !== null && cursor.parentElement !== null && cursor !== document.body) {
+        const parent = cursor.parentElement;
+        for (const sibling of Array.from(parent.children)) {
+          if (!(sibling instanceof HTMLElement)) continue;
+          if (sibling === cursor) continue;
+          const inertCapable = sibling as InertElement;
+          inerted.push({
+            el: sibling,
+            priorInert: inertCapable.inert,
+            priorAriaHidden: sibling.getAttribute("aria-hidden"),
+          });
+          inertCapable.inert = true;
+          sibling.setAttribute("aria-hidden", "true");
+        }
+        cursor = parent;
+        if (parent === document.body) break;
       }
-      cursor = parent;
-      if (parent === document.body) break;
     }
 
-    // Defer focus until the panel is in the DOM.
+    // Defer focus until the panel is in the DOM. Both modal and non-
+    // modal drawers pull focus into the panel on open so keyboard users
+    // do not have to Tab past the drawer header to reach the contents.
+    // The non-modal path used to leave focus on the trigger, which made
+    // a Tab traverse the entire panel just to reach the first row's
+    // Play button — a real keyboard productivity gap on the recordings
+    // drawer with 50+ takes (WAI-ARIA APG dialog pattern). The Escape
+    // key still closes the drawer either way, and the focus is restored
+    // to the previous element on close (see the cleanup branch).
     const id = window.setTimeout(() => {
       const first = panel?.querySelector<HTMLElement>(FOCUSABLE_SELECTORS);
       first?.focus();
@@ -97,6 +126,7 @@ export function Drawer({ open, onOpenChange, title, children }: DrawerProps): Re
         close();
         return;
       }
+      if (!modal) return;
       if (e.key !== "Tab" || panel === null) return;
       const focusables = Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTORS));
       if (focusables.length === 0) {
@@ -131,24 +161,35 @@ export function Drawer({ open, onOpenChange, title, children }: DrawerProps): Re
       }
       lastActiveBeforeOpen.current?.focus?.();
     };
-  }, [open, close]);
+  }, [open, close, modal]);
 
   if (!open) return null;
+
+  // Non-modal drawers anchor to the right edge as a slim panel without the
+  // dim backdrop — clicking outside the panel must not close it (the user
+  // may be operating header controls). Modal drawers retain the original
+  // backdrop + click-to-close behaviour.
+  const rootClass = modal
+    ? "fixed inset-0 z-50 flex justify-end bg-black/40"
+    : "pointer-events-none fixed inset-y-0 right-0 z-40 flex justify-end";
+  const panelClass = modal
+    ? "flex h-full w-[360px] max-w-full flex-col overflow-y-auto bg-slate-900 p-6 shadow-xl"
+    : "pointer-events-auto flex h-full w-[360px] max-w-full flex-col overflow-y-auto bg-slate-900 p-6 shadow-xl";
 
   return (
     <div
       data-testid="drawer-root"
-      className="fixed inset-0 z-50 flex justify-end bg-black/40"
+      className={rootClass}
       onClick={(e) => {
-        if (e.target === e.currentTarget) close();
+        if (modal && e.target === e.currentTarget) close();
       }}
     >
       <div
         ref={panelRef}
         role="dialog"
-        aria-modal="true"
+        {...(modal ? { "aria-modal": "true" as const } : {})}
         aria-labelledby={titleId}
-        className="flex h-full w-[360px] max-w-full flex-col overflow-y-auto bg-slate-900 p-6 shadow-xl"
+        className={panelClass}
       >
         <div className="mb-4 flex items-center justify-between">
           <h2 id={titleId} className="text-lg font-semibold text-slate-100">
@@ -156,7 +197,7 @@ export function Drawer({ open, onOpenChange, title, children }: DrawerProps): Re
           </h2>
           <button
             type="button"
-            aria-label="Close settings"
+            aria-label={closeLabel ?? `Close ${title}`}
             onClick={close}
             className="rounded p-1 text-slate-400 hover:bg-slate-800 hover:text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
           >
