@@ -1,3 +1,6 @@
+#![allow(missing_docs)]
+#![cfg(feature = "cpal")]
+
 //! Tier-2 tests for the Phase 1.3 audio-backend fallbacks.
 //!
 //! These tests do **not** open a real cpal stream; they exercise the

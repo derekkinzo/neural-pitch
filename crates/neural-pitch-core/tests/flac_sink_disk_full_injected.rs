@@ -76,9 +76,13 @@ fn worker_maps_enospc_to_typed_disk_full() {
     let worker = RecordingWorker::new(sink, rx, cancel.clone(), Arc::clone(&dropped));
     let join = std::thread::spawn(move || worker.run());
 
-    // Push enough windows that the third write fires ENOSPC.
+    // Push enough windows that the third write fires ENOSPC. After the
+    // worker exits on ENOSPC, additional sends will fail because the
+    // receiver was dropped — that is the expected race; ignore those.
     for _ in 0..5 {
-        tx.send(vec![0.0_f32; HOP]).expect("send window");
+        if tx.send(vec![0.0_f32; HOP]).is_err() {
+            break;
+        }
     }
 
     // The worker exits with an error on the ENOSPC write; we don't need
