@@ -225,8 +225,12 @@ test.describe("visual — Phase 2.1 RecordingDetail", () => {
     await expect(page.getByRole("group", { name: /Vibrato analysis/i })).toBeVisible();
     await expect(page.getByTestId("contour-canvas")).toBeVisible();
 
-    await expect(page.getByTestId("recording-detail")).toHaveScreenshot(
-      "recording-detail-with-range-vibrato.png",
-    );
+    // Use a fullPage screenshot rather than the recording-detail element so
+    // the image dimensions are viewport-bounded; element-scoped screenshots
+    // varied between Docker and CI runner heights when readout pills wrapped
+    // differently.
+    await expect(page).toHaveScreenshot("recording-detail-with-range-vibrato.png", {
+      fullPage: true,
+    });
   });
 });
