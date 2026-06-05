@@ -37,6 +37,12 @@ tokio-util     = { version = "0.7", default-features = false }
 [features]
 default        = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]
+# Phase 2.2 / ADR-0020 — pass-through that flips on the `neural` feature
+# of `neural-pitch-core` (PESTO + CREPE-tiny + Viterbi). Off by default
+# so the standard `cargo tauri build` keeps producing a binary with no
+# `ort` / `ndarray` / `rubato` dependency. Power users opt in with
+# `cargo tauri build --features app-neural`.
+app-neural     = ["neural-pitch-core/neural"]
 
 [dev-dependencies]
 # Phase 2.1 — Tier-2 integration tests for the analysis Tauri surface.

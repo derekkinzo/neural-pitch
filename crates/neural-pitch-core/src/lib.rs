@@ -8,6 +8,7 @@
 pub mod analysis;
 pub mod audio;
 pub mod error;
+pub mod models;
 pub mod music;
 pub mod pipeline;
 pub mod pitch;

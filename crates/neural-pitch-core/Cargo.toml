@@ -13,7 +13,18 @@ readme.workspace       = true
 default = ["cpal", "flac", "pyin"]
 cpal              = ["dep:cpal"]
 decoder-symphonia = []  # Phase 2 — Symphonia-backed file decoders
-neural            = []  # Phase 2 brings in ort + Viterbi + PESTO/CREPE backends
+# Phase 2.2 — ORT 2.0 (load-dynamic) + ndarray. The ONNX Runtime shared
+# library is supplied out of band via `ORT_DYLIB_PATH`; we deliberately
+# avoid the `download-binaries` feature because it has no iOS/Android
+# coverage (RESEARCH-REPORT.md §7) and would create a bait-and-switch
+# between desktop dev and the eventual mobile path.
+#
+# `rubato` is referenced by the CrepeTinyEstimator's *future* internal
+# resampler (Phase 2.5). Until that lands we keep the dep declaration
+# below `optional = true` but do NOT include it in this feature set:
+# pulling an unused crate into every `neural` build is a hygiene
+# regression and inflates compile time for zero functional contribution.
+neural            = ["dep:ort", "dep:ndarray"]
 # Phase 2.1 — pYIN offline backend (Sytronik/pyin = "1.2"). Pulls in the
 # pure-Rust pyin crate plus claxon for the FLAC decode path used by
 # `analysis::contour::analyze_contour`.
@@ -65,6 +76,41 @@ pyin        = { version = "1.2", optional = true }
 # by Phase 2.0's flac sink. Still available to dev tests via the dev-dep
 # alias below.
 claxon      = { version = "0.4", optional = true }
+# Phase 2.2 — ORT 2.0 rc.12 (RESEARCH-REPORT.md §7). `load-dynamic` only:
+# the shared library is supplied via `ORT_DYLIB_PATH` at runtime; no binary
+# download. Pinning to a specific rc and budgeting one API migration before
+# stable 2.0 is explicit per the architecture spec.
+# `api-18` is required because `ort`'s `ep/vitis.rs` references the
+# `SessionOptionsAppendExecutionProvider_VitisAI` symbol whenever
+# `load-dynamic` is on, but the symbol itself is `#[cfg(feature = "api-18")]`-
+# gated in `ort-sys`. This is an upstream rc.12 mismatch; we pick the lowest
+# api version that satisfies the symbol so we don't drag in newer api
+# surface unnecessarily. The migration to stable 2.0 is budgeted.
+ort         = { version = "=2.0.0-rc.12", default-features = false, features = ["load-dynamic", "api-18"], optional = true }
+# Phase 2.2 — `ndarray` is the host-side tensor staging buffer for the
+# PESTO state-cache and CREPE input. Pre-allocated in the constructor and
+# re-used across `process` calls so the hot path stays alloc-free.
+ndarray     = { version = "0.16", optional = true }
+# Phase 2.5 (deferred) — `rubato` will resample 48 kHz capture audio to
+# 16 kHz for CREPE-tiny (PESTO is native 48 kHz). The dependency is not
+# declared here today: under Phase 2.2 the CREPE estimator's stub backend
+# operates on the raw 48 kHz buffer (no resample required), and the
+# real-ONNX path is gated behind a "not yet wired" error. Adding an unused
+# optional dep that no source file imports would inflate compile time and
+# trip clippy's `unused-crate-dependencies` heuristic for zero functional
+# contribution. When Phase 2.5 lands the CrepeTinyEstimator's real
+# resample path, re-introduce the dep and add it to the `neural` feature.
+# Phase 2.2 — `toml` parses the workspace `models.toml` manifest used by
+# the model resolver. `parse` only — we never re-serialise the manifest
+# from Rust. Always-on (the resolver itself is not feature-gated; its
+# `NotConfigured` short-circuit is the safe default for builds without
+# the `neural` feature, where neural-backed `make_estimator` arms are
+# disabled but `get_model_status` may still report manifest state).
+toml        = { version = "0.8", default-features = false, features = ["parse"] }
+# Phase 2.2 — `sha2` provides the streaming SHA-256 used by the model
+# resolver to verify on-disk ONNX blobs against the manifest hash. Pure-
+# Rust, MIT/Apache-2.0.
+sha2        = "0.10"
 
 [dev-dependencies]
 proptest    = "1"

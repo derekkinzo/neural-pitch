@@ -590,11 +590,12 @@ crates/neural-pitch-core/
 │  │   │                        # YAMNet wrapper (Phase 2, cfg-feature = "neural")
 │  │   ├─ yin.rs                # YinMpmEstimator — Phase 1, ships day 1
 │  │   ├─ pyin.rs               # PYinEstimator — Phase 2, cfg(feature = "pyin")
-│  │   └─ neural/               # Phase 2+, all under cfg(feature = "neural")
-│  │       ├─ mod.rs
-│  │       ├─ pesto.rs          # PestoEstimator (default neural backend)
-│  │       ├─ crepe_tiny.rs     # CrepeTinyEstimator (MIT fallback)
-│  │       └─ viterbi.rs        # shared Viterbi DP decoder for neural posteriors
+│  │   └─ neural/               # Phase 2.2, all under cfg(feature = "neural") — ADR-0020
+│  │       ├─ mod.rs            # feature-gated re-exports; absent surface when feature off
+│  │       ├─ pesto.rs          # PestoEstimator — default neural backend; ONNX via `ort` + `ndarray`;
+│  │       │                    # weights resolved at runtime by models.toml resolver, NOT bundled
+│  │       ├─ crepe_tiny.rs     # CrepeTinyEstimator — MIT fallback; same runtime-asset contract
+│  │       └─ viterbi.rs        # shared Viterbi DP decoder for neural posteriors (PESTO + CREPE-tiny)
 │  │
 │  └─ pipeline/
 │      ├─ mod.rs                # re-exports
@@ -1237,6 +1238,14 @@ ADR-0009 locks phase ordering: ear-training (Phase 4) precedes stem separation (
 **Wire format.** `analysis_cache.result_blob` is a [`postcard`] 1.x byte stream of `analysis::contour::ContourResult` (≈5–10× smaller than `serde_json` for dense `Vec<F0Frame>`; the type is `serde::Serialize + Deserialize` regardless of build config so the cache survives feature flips). The blob's wire shape is keyed by `(recording_id, analyzer_name, analyzer_version)` — _any_ change to `ContourResult`'s field set or to a materially-impacting analyzer parameter (fmin/fmax defaults, hop/window, smoothing window, voicing threshold) MUST bump `analyzer_version` to invalidate prior rows. See `analysis::contour::PYIN_ANALYZER_VERSION` and `commands::DEFAULT_ANALYZER_VERSION` for the contributor invariant.
 
 **Acceptance.** PESTO live tuner octave-correctness ≥ 97% with Viterbi decoding on the curated Philharmonia voice subset (the published PESTO MIR-1K reference is ~95–98% — 97% is the floor we hold ourselves to on a curated subset); recording → playback round-trip with no audible loss on FLAC; analysis cache hit on second open; no telemetry traffic except user-initiated model downloads.
+
+**Sub-phase status.**
+
+- **2.0 — Recording + FLAC + recordings SQLite library.** complete.
+- **2.1 — Offline pYIN backend + analysis cache schema (postcard `ContourResult` blob).** complete.
+- **2.2 — PESTO + CREPE-tiny estimators + shared Viterbi decoder, all behind `feature = "neural"` (ADR-0020); ONNX weights resolved at runtime, not bundled.** complete.
+- **2.3 — Vocal range + vibrato detection.** pending.
+- **2.4 — Recordings UI + wavesurfer.js + Phase-2 closeout.** pending.
 
 ### 13.4 Phase 3 — File upload, polyphonic transcription, MIDI export
 

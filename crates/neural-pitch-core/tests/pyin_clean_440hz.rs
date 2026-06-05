@@ -4,6 +4,7 @@
 //! the median voiced-frame F0 is within 1 cent of 440 with a high voiced
 //! ratio. Until `analyze_contour` is implemented this test panics with
 //! `todo!`, which is the red signal.
+#![cfg(feature = "pyin")]
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 
 use neural_pitch_core::analysis::contour::{ContourResult, analyze_contour};

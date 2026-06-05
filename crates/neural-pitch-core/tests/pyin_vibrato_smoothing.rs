@@ -4,6 +4,7 @@
 //! the true centre, range < 60 cents. The smoother is what compresses the
 //! ±50 c excursion; until `analyze_contour` is implemented the test panics
 //! with `todo!`.
+#![cfg(feature = "pyin")]
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 
 use neural_pitch_core::analysis::contour::analyze_contour;

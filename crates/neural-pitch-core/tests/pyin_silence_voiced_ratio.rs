@@ -2,6 +2,7 @@
 //!
 //! 1 s of zero samples → `voiced_ratio < 0.05`. Until `analyze_contour` is
 //! implemented the test panics with `todo!`.
+#![cfg(feature = "pyin")]
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 
 use neural_pitch_core::analysis::contour::analyze_contour;

@@ -6,6 +6,7 @@
 //! fixtures land within 5 cents of truth (Tier-2 acceptance gate per
 //! ADR-0016 / spec §8). Until `analyze_contour` is implemented the test
 //! panics with `todo!` on the very first fixture, which is the red signal.
+#![cfg(feature = "pyin")]
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 #![allow(clippy::print_stdout)]
 

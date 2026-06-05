@@ -48,11 +48,12 @@ impl PYinEstimator {
     ///
     /// Returns [`EstimatorError::FeatureDisabled`] when compiled without
     /// `feature = "pyin"`.
+    #[allow(clippy::needless_pass_by_value)]
     pub fn new(cfg: EstimatorConfig) -> Result<Self, EstimatorError> {
         #[cfg(not(feature = "pyin"))]
         {
             let _ = cfg;
-            return Err(EstimatorError::FeatureDisabled("pyin"));
+            Err(EstimatorError::FeatureDisabled("pyin"))
         }
 
         #[cfg(feature = "pyin")]
@@ -105,7 +106,7 @@ impl PYinEstimator {
     pub fn finalize(&mut self) -> Result<Vec<F0Frame>, EstimatorError> {
         #[cfg(not(feature = "pyin"))]
         {
-            return Err(EstimatorError::FeatureDisabled("pyin"));
+            Err(EstimatorError::FeatureDisabled("pyin"))
         }
 
         #[cfg(feature = "pyin")]

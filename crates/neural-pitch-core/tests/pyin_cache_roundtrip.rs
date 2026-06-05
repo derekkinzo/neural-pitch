@@ -7,6 +7,7 @@
 //!
 //! `F0Frame` deliberately does not derive `PartialEq` (NaN), so the
 //! comparison goes through a cents-tolerance helper.
+#![cfg(feature = "pyin")]
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 
 use neural_pitch_core::analysis::contour::{ContourResult, analyze_contour};

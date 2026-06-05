@@ -22,7 +22,9 @@
 //! - P3 / ADR-0015: `Drop` impls never panic; partial files are abandoned on
 //!   drop and never exposed to the library.
 
-use std::path::{Path, PathBuf};
+#[cfg(feature = "flac")]
+use std::path::Path;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 

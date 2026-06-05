@@ -34,6 +34,17 @@ pub mod factory;
 pub mod pyin;
 pub mod yin;
 
+// Phase 2.2 — neural backends. Both modules are `#[cfg(feature = "neural")]`-
+// gated at their own crate-attribute level, so re-declaring the same gate
+// here is required to keep `cargo build --no-default-features` green: with
+// the gate off, the `mod` statement still expects a compilable file, and
+// the inner `#![cfg(feature = "neural")]` would otherwise produce an
+// empty-but-imported module.
+#[cfg(feature = "neural")]
+pub mod crepe;
+#[cfg(feature = "neural")]
+pub mod pesto;
+
 /// One frame of fundamental-frequency analysis.
 ///
 /// `F0Frame` does **not** derive `PartialEq` or `Eq` because `f32` fields can

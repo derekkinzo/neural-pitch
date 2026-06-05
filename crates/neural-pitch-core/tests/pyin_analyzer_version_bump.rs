@@ -16,6 +16,7 @@
 //!
 //! `analyze_contour` is `todo!()` until Phase 2.1 implementation lands; the
 //! first call here panics, which is the red signal.
+#![cfg(feature = "pyin")]
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 
 use std::path::Path;

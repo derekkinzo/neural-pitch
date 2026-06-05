@@ -535,13 +535,15 @@ pub async fn delete_recording(
 
 // -- Phase 2.1 analysis surface ---------------------------------------------
 
-/// Default analyzer name handed to the cache layer. Phase 2.1 ships a
-/// single backend; later phases will broaden this.
-const DEFAULT_ANALYZER_NAME: &str = "pyin";
-/// Default analyzer version. Bump in lock-step with on-the-wire shape
-/// changes to invalidate cached blobs.
+/// Default analyzer name handed to the cache layer. Mirrors
+/// [`neural_pitch_core::analysis::contour::PYIN_ANALYZER_NAME`] so the IPC
+/// surface and the core constant cannot drift.
+const DEFAULT_ANALYZER_NAME: &str = neural_pitch_core::analysis::contour::PYIN_ANALYZER_NAME;
+/// Default analyzer version. Sourced from
+/// [`neural_pitch_core::analysis::contour::PYIN_ANALYZER_VERSION`] so the
+/// cache key on the IPC side is identical to the core canonical key.
 ///
-/// Contributor invariant — bump on ANY of:
+/// Contributor invariant — bump in lock-step with ANY of:
 ///   * a field set / wire ordering change to
 ///     `analysis::contour::ContourResult` (or a nested type, e.g.
 ///     `crate::pitch::F0Frame`),
@@ -555,10 +557,7 @@ const DEFAULT_ANALYZER_NAME: &str = "pyin";
 /// the SQL key compares plain strings (no semver normalisation, see
 /// `store::analysis`), so the cache layer cannot detect the divergence
 /// on its own.
-///
-/// `v2` (current): `ContourResult` carries `hop_size` / `window_size`,
-/// and `AnalysisSummary` carries `median_midi`.
-const DEFAULT_ANALYZER_VERSION: &str = "2";
+const DEFAULT_ANALYZER_VERSION: &str = neural_pitch_core::analysis::contour::PYIN_ANALYZER_VERSION;
 
 /// Adapter that lets `analyze_recording_blocking` emit progress through a
 /// `tauri::ipc::Channel<AnalysisProgress>` without dragging Tauri types
@@ -723,6 +722,265 @@ pub async fn delete_analysis(
     .await
     .map_err(|e| format!("delete_analysis task panicked: {e}"))?
     .map_err(|e| format!("delete_analysis: {e:#}"))
+}
+
+// -- Phase 2.2 backend-aware analysis surface -------------------------------
+
+/// Wire shape for the requested pitch backend.
+///
+/// `tag = "kind"` so the front-end matches exhaustively on the discriminant
+/// rather than the field set; `untagged` would let a typo silently fall
+/// into a different arm. Phase 2.2 ships the four shipping backends; the
+/// neural arms carry the resolved on-disk path so the resolver stays
+/// out of the IPC boundary.
+///
+/// Discriminant naming: each variant carries an explicit `#[serde(rename)]`
+/// so the on-the-wire `kind` matches the value persisted in
+/// `analysis_cache.analyzer_name` (e.g. `"pyin"`, `"crepe-tiny"`). Without
+/// the explicit rename, `rename_all = "snake_case"` would coin `p_yin` /
+/// `crepe_tiny`, splitting the IPC discriminant from the cache key and
+/// burning the front-end engineer who joins the two.
+#[derive(serde::Deserialize, Debug, Clone)]
+#[serde(tag = "kind")]
+pub enum BackendKind {
+    /// Plain YIN (de Cheveigne & Kawahara 2002).
+    #[serde(rename = "yin")]
+    Yin,
+    /// pYIN (Mauch & Dixon 2014). Requires `feature = "pyin"` in core.
+    #[serde(rename = "pyin")]
+    PYin,
+    /// PESTO neural backend. Requires `feature = "neural"` in core.
+    #[serde(rename = "pesto")]
+    Pesto {
+        /// Resolved on-disk path to the PESTO ONNX file.
+        onnx_path: PathBuf,
+    },
+    /// CREPE-tiny neural backend. Requires `feature = "neural"` in core.
+    #[serde(rename = "crepe-tiny")]
+    CrepeTiny {
+        /// Resolved on-disk path to the CREPE-tiny ONNX file.
+        onnx_path: PathBuf,
+    },
+}
+
+impl BackendKind {
+    /// Stable analyzer name persisted in `analysis_cache.analyzer_name`.
+    /// Matches the on-the-wire `kind` discriminant exactly so a single
+    /// string round-trips between IPC and SQLite.
+    fn analyzer_name(&self) -> &'static str {
+        match self {
+            Self::Yin => "yin",
+            Self::PYin => "pyin",
+            Self::Pesto { .. } => "pesto",
+            Self::CrepeTiny { .. } => "crepe-tiny",
+        }
+    }
+
+    /// Stable analyzer version persisted in
+    /// `analysis_cache.analyzer_version`. Bump in lock-step with on-the-wire
+    /// shape changes so cached blobs invalidate cleanly.
+    fn analyzer_version(&self) -> &'static str {
+        match self {
+            Self::Yin | Self::PYin => DEFAULT_ANALYZER_VERSION,
+            // Phase 2.2 baseline.
+            Self::Pesto { .. } | Self::CrepeTiny { .. } => "0.1",
+        }
+    }
+}
+
+/// Run a backend-selected analysis on a previously-recorded file.
+///
+/// Phase 2.2 routing reality: the underlying analyzer plumbing in
+/// [`neural_pitch_core::store::analyze_recording_blocking`] is hard-wired
+/// to pYIN — `run_analyzer_with_progress` constructs a `PYinEstimator`
+/// unconditionally and ignores the supplied `analyzer_name`. To prevent
+/// silent data-mislabelling (pYIN-derived contour bytes persisted under
+/// `analyzer_name = "pesto"`), this command short-circuits every backend
+/// other than [`BackendKind::PYin`] with `Err("backend not yet routed:
+/// <name> — Phase 2.5")` until the dispatcher in core lands. YIN is also
+/// refused for the same reason: the live tuner uses YIN/MPM, but the
+/// offline path here would still execute pYIN under the YIN cache key.
+///
+/// When the dispatcher arrives, this guard lifts and the `BackendKind`
+/// arms route to the appropriate `make_estimator` arm.
+#[tauri::command]
+#[tracing::instrument(
+    skip(state, progress, backend),
+    fields(force_refresh = force_refresh, backend = ?backend),
+)]
+pub async fn analyze_recording_with_backend(
+    state: State<'_, crate::state::AppState>,
+    recording_id: String,
+    backend: BackendKind,
+    force_refresh: bool,
+    progress: Channel<neural_pitch_core::store::AnalysisProgress>,
+) -> Result<neural_pitch_core::store::AnalysisSummary, String> {
+    let parsed: neural_pitch_core::store::RecordingId = recording_id
+        .parse()
+        .map_err(|e| format!("invalid recording id: {e}"))?;
+
+    // Refuse every backend other than pYIN. The cache row would otherwise
+    // be stamped with the requested analyzer_name but the bytes inside
+    // would still be pYIN-derived. See the doc-comment above for the
+    // routing-gap rationale.
+    match &backend {
+        BackendKind::PYin => {}
+        other => {
+            return Err(format!(
+                "backend not yet routed: {} — Phase 2.5",
+                other.analyzer_name()
+            ));
+        }
+    }
+
+    let analyzer_name = backend.analyzer_name();
+    let analyzer_version = backend.analyzer_version();
+
+    let cancel = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    {
+        let mut g = state.analyses.lock();
+        if let Some(prev) = g.insert(parsed, Arc::clone(&cancel)) {
+            prev.store(true, std::sync::atomic::Ordering::Relaxed);
+        }
+    }
+
+    let library = Arc::clone(&state.library);
+    let cancel_for_blocking = Arc::clone(&cancel);
+    let sink_owned = ChannelProgressSink { channel: progress };
+    let result = tokio::task::spawn_blocking(move || {
+        let sink_ref: &dyn neural_pitch_core::store::ProgressSink = &sink_owned;
+        neural_pitch_core::store::analyze_recording_blocking(
+            &library,
+            parsed,
+            analyzer_name,
+            analyzer_version,
+            force_refresh,
+            Some(sink_ref),
+            Some(cancel_for_blocking.as_ref()),
+        )
+    })
+    .await
+    .map_err(|e| {
+        let mut g = state.analyses.lock();
+        g.remove(&parsed);
+        format!("analyze_recording_with_backend task panicked: {e}")
+    })?;
+
+    {
+        let mut g = state.analyses.lock();
+        if let Some(existing) = g.get(&parsed) {
+            if Arc::ptr_eq(existing, &cancel) {
+                g.remove(&parsed);
+            }
+        }
+    }
+
+    result.map_err(|e| format!("analyze: {e:#}"))
+}
+
+/// Read-only snapshot of the build's compiled-in capabilities.
+///
+/// The front-end uses this to light a developer-mode status pill and to
+/// gate the (Phase 2.5/3) backend-picker UI. Mirrors the `cfg!` flags at
+/// the Tauri layer so the front-end never has to guess which backends are
+/// linked in.
+#[derive(Serialize, Debug, Clone)]
+pub struct Capabilities {
+    /// `true` when this binary was built with `--features app-neural`
+    /// (which transitively pulls in `neural-pitch-core/neural`).
+    pub neural_compiled_in: bool,
+    /// `true` when `neural-pitch-core` was built with `feature = "pyin"`.
+    pub pyin_compiled_in: bool,
+}
+
+/// Return the build's compiled-in capability flags.
+#[tauri::command]
+#[tracing::instrument(skip())]
+pub fn get_capabilities() -> Result<Capabilities, String> {
+    Ok(Capabilities {
+        neural_compiled_in: cfg!(feature = "app-neural"),
+        // The `pyin` feature lives on `neural-pitch-core`. The shell does
+        // not gate IPC commands on it — the analyzer surface picks it up
+        // when the dependency is built with `--features pyin`. We mirror
+        // the default-feature shape here: pYIN is on by default in
+        // neural-pitch-core, so unless a downstream consumer explicitly
+        // disables it, it is compiled in. The Tauri shell always builds
+        // against the default feature set (`["cpal", "flac", "pyin"]`).
+        pyin_compiled_in: true,
+    })
+}
+
+/// Status of a model entry in the workspace `models.toml`.
+///
+/// Maps onto the resolver's [`PeekResult`] so the front-end Settings UI
+/// can render a "Download PESTO model" button when
+/// [`ModelStatus::MissingButFetchable`].
+#[derive(Serialize, Debug, Clone)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum ModelStatus {
+    /// The model is shipped in-tree as a synthetic test ONNX. Reserved
+    /// for the test_utils path; the workspace `models.toml` does not
+    /// surface this today.
+    Bundled,
+    /// The model is on disk and verified against the manifest sha256.
+    Cached {
+        /// Resolved absolute path.
+        path: PathBuf,
+    },
+    /// The model is not on disk, but the manifest carries a real URL +
+    /// sha256 — the front-end may offer a download.
+    MissingButFetchable {
+        /// HTTPS URL the resolver will fetch from in Phase 2.5/3.
+        url: String,
+    },
+    /// The manifest entry is still a placeholder (empty URL or all-zeros
+    /// sha256). The front-end SHOULD NOT offer a download.
+    MissingNotConfigured,
+}
+
+/// Inspect the on-disk + manifest state for a single model.
+///
+/// Calls [`neural_pitch_core::models::peek`] (a non-fetching variant of
+/// `ensure_model`) and maps the result onto [`ModelStatus`]. Phase 2.2:
+/// the workspace `models.toml` only carries `pesto-v1` with placeholder
+/// fields, so this command always surfaces
+/// [`ModelStatus::MissingNotConfigured`] until Phase 2.5/3 fills the URL +
+/// sha256 in. The shape is wired up early so Phase 2.5 only has to flip
+/// the manifest, not the IPC.
+#[tauri::command]
+#[tracing::instrument(skip(state), fields(model_name = %name))]
+#[allow(clippy::needless_pass_by_value)]
+pub fn get_model_status(
+    name: String,
+    state: State<'_, crate::state::AppState>,
+) -> Result<ModelStatus, String> {
+    use neural_pitch_core::models::{ResolverError, peek};
+
+    // Resolve the per-platform models directory. We reuse the recordings
+    // dir's parent (the app-data dir) and append `models/` so the cache
+    // sits next to `recordings/` and `library.sqlite`.
+    let models_dir = state
+        .recordings_dir
+        .parent()
+        .map_or_else(|| PathBuf::from("models"), |p| p.join("models"));
+
+    match peek(&name, &models_dir) {
+        Ok(p) => {
+            if p.is_placeholder {
+                Ok(ModelStatus::MissingNotConfigured)
+            } else if p.on_disk_match {
+                Ok(ModelStatus::Cached { path: p.target })
+            } else {
+                Ok(ModelStatus::MissingButFetchable { url: p.entry.url })
+            }
+        }
+        Err(ResolverError::UnknownModel(n)) => Err(format!("unknown model: {n}")),
+        Err(ResolverError::ManifestNotFound(p)) => {
+            Err(format!("manifest not found: {}", p.display()))
+        }
+        Err(ResolverError::ManifestParse(e)) => Err(format!("manifest parse error: {e}")),
+        Err(e) => Err(format!("get_model_status: {e}")),
+    }
 }
 
 /// Cancel an in-flight analysis. Idempotent: returns `Ok(())` if no
@@ -1151,5 +1409,28 @@ mod tests {
         let err = BuildError::NoInputDevice;
         let json = serde_json::to_value(&err).expect("serialize");
         assert_eq!(json["code"], "no_input_device");
+    }
+
+    /// Lock in the on-the-wire `kind` discriminant for every BackendKind
+    /// variant so a future serde rename (e.g. accidentally re-introducing
+    /// `rename_all = "snake_case"`) cannot silently flip `pyin` to
+    /// `p_yin` or `crepe-tiny` to `crepe_tiny`. This is the contract the
+    /// front-end joins to `analysis_cache.analyzer_name` rows.
+    #[test]
+    fn backend_kind_wire_discriminants_match_analyzer_names() {
+        let yin: BackendKind =
+            serde_json::from_str(r#"{"kind":"yin"}"#).expect("yin should deserialize");
+        let pyin: BackendKind =
+            serde_json::from_str(r#"{"kind":"pyin"}"#).expect("pyin should deserialize");
+        let pesto: BackendKind =
+            serde_json::from_str(r#"{"kind":"pesto","onnx_path":"/tmp/p.onnx"}"#)
+                .expect("pesto should deserialize");
+        let crepe: BackendKind =
+            serde_json::from_str(r#"{"kind":"crepe-tiny","onnx_path":"/tmp/c.onnx"}"#)
+                .expect("crepe-tiny should deserialize");
+        assert_eq!(yin.analyzer_name(), "yin");
+        assert_eq!(pyin.analyzer_name(), "pyin");
+        assert_eq!(pesto.analyzer_name(), "pesto");
+        assert_eq!(crepe.analyzer_name(), "crepe-tiny");
     }
 }

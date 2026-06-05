@@ -49,6 +49,33 @@ sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev \
 If you only intend to work on the pure-Rust core (`crates/neural-pitch-core`),
 these are not required — `cargo test -p neural-pitch-core` runs without them.
 
+### Building with neural support
+
+The neural pitch backends — `PestoEstimator`, `CrepeTinyEstimator`, and the
+shared Viterbi decoder — are **off by default** and gated behind the
+`neural` Cargo feature on `crates/neural-pitch-core`. The default build
+ships only the classical YIN/MPM (and optional pYIN) estimators, has zero
+ONNX runtime dependency, and stays purely under `MIT OR Apache-2.0`. See
+[ADR-0020](docs/adr/0020-neural-feature-gate.md) for why the feature gate
+exists and why the ONNX weights are treated as runtime assets rather than
+bundled artifacts.
+
+To opt in:
+
+```sh
+# 1. Build with the neural feature on the core crate.
+cargo build -p neural-pitch-core --features neural
+
+# 2. Fetch the ONNX weights (PESTO and/or CREPE-tiny) into ./models/.
+#    Weights are NOT checked in — they are resolved by models.toml.
+./scripts/fetch-models.sh
+```
+
+PESTO's inference repository is LGPL-3.0 and the redistributable status of
+the weights is contested; opting in moves that question to your build site.
+CREPE-tiny is the MIT-licensed fallback if you want to avoid the LGPL
+question entirely.
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for commit conventions, DCO sign-off,

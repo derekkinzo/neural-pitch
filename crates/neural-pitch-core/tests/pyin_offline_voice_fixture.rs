@@ -3,6 +3,7 @@
 //! Decode `069_A4_synthvoice_clean.flac` via `claxon`, run `analyze_contour`,
 //! and assert the median voiced F0 is within 5 cents of 440 Hz. Until
 //! `analyze_contour` is implemented the test panics with `todo!`.
+#![cfg(feature = "pyin")]
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 
 use std::path::PathBuf;
