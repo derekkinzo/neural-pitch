@@ -1,3 +1,5 @@
+#![cfg(feature = "flac")]
+
 //! Tier-1 disk-full path for [`FlacRecordingSink`] (Phase 2.0).
 //!
 //! Drives a sink whose underlying writer returns `ErrorKind::StorageFull`

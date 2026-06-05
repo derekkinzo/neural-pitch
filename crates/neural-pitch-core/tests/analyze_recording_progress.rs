@@ -1,3 +1,5 @@
+#![cfg(feature = "flac")]
+
 //! Phase 2.1 — `AnalysisProgress` channel emit shape test.
 //!
 //! The plan says:

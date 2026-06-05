@@ -1,3 +1,5 @@
+#![cfg(feature = "flac")]
+
 //! Phase 2.1 — `analyze_recording` cache lifecycle integration test.
 //!
 //! Drives the public `analyze_recording_blocking` surface through its four

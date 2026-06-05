@@ -1,3 +1,5 @@
+#![cfg(feature = "flac")]
+
 //! Tier-1 fidelity test for [`FlacRecordingSink`] (Phase 2.0).
 //!
 //! Generate 1 s of 440 Hz at 48 kHz f32, write through `FlacRecordingSink`,
