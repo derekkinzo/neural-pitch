@@ -1,3 +1,4 @@
+#![allow(missing_docs)]
 #![cfg(feature = "flac")]
 
 //! Tier-1 disk-full path for [`FlacRecordingSink`] (Phase 2.0).

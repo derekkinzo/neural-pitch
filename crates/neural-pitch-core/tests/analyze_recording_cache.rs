@@ -1,3 +1,4 @@
+#![allow(missing_docs)]
 #![cfg(feature = "flac")]
 
 //! Phase 2.1 — `analyze_recording` cache lifecycle integration test.

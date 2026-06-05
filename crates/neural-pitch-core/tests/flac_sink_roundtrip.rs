@@ -1,3 +1,4 @@
+#![allow(missing_docs)]
 #![cfg(feature = "flac")]
 
 //! Tier-1 fidelity test for [`FlacRecordingSink`] (Phase 2.0).
