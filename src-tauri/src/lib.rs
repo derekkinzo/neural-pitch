@@ -96,6 +96,8 @@ pub fn run() {
             commands::get_contour,
             commands::list_analyses,
             commands::delete_analysis,
+            commands::get_range_report,
+            commands::get_vibrato_report,
             commands::cancel_analysis,
             commands::get_capabilities,
             commands::get_model_status,

@@ -368,5 +368,7 @@ fn analysis_summary_wire_shape_matches_ts_normaliser_contract() {
         median_cents_off: None,
         computed_at_unix_ms: 0,
         was_cached: false,
+        range: None,
+        vibrato: None,
     };
 }

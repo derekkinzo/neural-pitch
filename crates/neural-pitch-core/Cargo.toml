@@ -111,6 +111,12 @@ toml        = { version = "0.8", default-features = false, features = ["parse"] 
 # resolver to verify on-disk ONNX blobs against the manifest hash. Pure-
 # Rust, MIT/Apache-2.0.
 sha2        = "0.10"
+# Phase 2.3 — `realfft` powers the residual-FFT vibrato detector
+# (`analysis::vibrato`). Pure-Rust, MIT/Apache-2.0; already pulled in
+# transitively via the `pyin` crate (see workspace lockfile), promoted
+# here to a first-class dep so the analysis module can build under
+# `--no-default-features` (i.e. without the `pyin` feature).
+realfft     = "3.5"
 
 [dev-dependencies]
 proptest    = "1"

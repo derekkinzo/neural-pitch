@@ -35,7 +35,14 @@
 
 import { create } from "zustand";
 import { invoke } from "@tauri-apps/api/core";
-import type { AnalysisProgress, AnalysisSummary, ContourResult } from "@/types/analysis";
+import type {
+  AnalysisProgress,
+  AnalysisSummary,
+  ContourResult,
+  RangeReport,
+  VibratoReport,
+  VibratoWindow,
+} from "@/types/analysis";
 import type { RecordingId } from "@/types/recording";
 
 /** Snake_case wire format mirroring serde Rust output. The TS layer accepts
@@ -49,6 +56,41 @@ import type { RecordingId } from "@/types/recording";
  *  reads either flavour and falls through to `medianHzVoiced + a4Hz`-derived
  *  values when neither MIDI nor cents-off is present.
  */
+interface WireRangeReport {
+  comfortableLowMidi?: number;
+  comfortable_low_midi?: number;
+  comfortableHighMidi?: number;
+  comfortable_high_midi?: number;
+  fullLowMidi?: number;
+  full_low_midi?: number;
+  fullHighMidi?: number;
+  full_high_midi?: number;
+  voicedFrameCount?: number;
+  voiced_frame_count?: number;
+  voiceTypeHints?: readonly string[];
+  voice_type_hints?: readonly string[];
+}
+
+interface WireVibratoWindow {
+  tMs?: number;
+  t_ms?: number;
+  rateHz?: number;
+  rate_hz?: number;
+  extentCents?: number;
+  extent_cents?: number;
+  confidence?: number;
+}
+
+interface WireVibratoReport {
+  medianRateHz?: number;
+  median_rate_hz?: number;
+  medianExtentCents?: number;
+  median_extent_cents?: number;
+  vibratoRatio?: number;
+  vibrato_ratio?: number;
+  windows?: readonly WireVibratoWindow[];
+}
+
 interface WireSummary {
   recordingId?: string;
   recording_id?: string;
@@ -69,6 +111,13 @@ interface WireSummary {
   was_cached?: boolean;
   analyzerVersion?: string;
   analyzer_version?: string;
+  // Phase 2.3 — both casings accepted; either is forwarded into the
+  // already-existing `byRecording` Map entry, so RangeReadout /
+  // VibratoReadout read from the same store entry as the summary card.
+  range?: WireRangeReport | null;
+  range_report?: WireRangeReport | null;
+  vibrato?: WireVibratoReport | null;
+  vibrato_report?: WireVibratoReport | null;
 }
 
 interface WireFrame {
@@ -104,6 +153,43 @@ function firstNumber(...candidates: ReadonlyArray<number | null | undefined>): n
   return undefined;
 }
 
+function normaliseRange(raw: WireRangeReport | null | undefined): RangeReport | undefined {
+  if (raw === null || raw === undefined) return undefined;
+  const comfortableLow = firstNumber(raw.comfortableLowMidi, raw.comfortable_low_midi);
+  const comfortableHigh = firstNumber(raw.comfortableHighMidi, raw.comfortable_high_midi);
+  const fullLow = firstNumber(raw.fullLowMidi, raw.full_low_midi);
+  const fullHigh = firstNumber(raw.fullHighMidi, raw.full_high_midi);
+  const voicedFrames = firstNumber(raw.voicedFrameCount, raw.voiced_frame_count);
+  const hints = raw.voiceTypeHints ?? raw.voice_type_hints ?? [];
+  return {
+    comfortableLowMidi: comfortableLow ?? 0,
+    comfortableHighMidi: comfortableHigh ?? 0,
+    fullLowMidi: fullLow ?? 0,
+    fullHighMidi: fullHigh ?? 0,
+    voicedFrameCount: voicedFrames ?? 0,
+    voiceTypeHints: [...hints],
+  };
+}
+
+function normaliseVibrato(raw: WireVibratoReport | null | undefined): VibratoReport | undefined {
+  if (raw === null || raw === undefined) return undefined;
+  const medianRate = firstNumber(raw.medianRateHz, raw.median_rate_hz);
+  const medianExtent = firstNumber(raw.medianExtentCents, raw.median_extent_cents);
+  const ratio = firstNumber(raw.vibratoRatio, raw.vibrato_ratio);
+  const windows: VibratoWindow[] = (raw.windows ?? []).map((w) => ({
+    tMs: firstNumber(w.tMs, w.t_ms) ?? 0,
+    rateHz: firstNumber(w.rateHz, w.rate_hz) ?? 0,
+    extentCents: firstNumber(w.extentCents, w.extent_cents) ?? 0,
+    confidence: typeof w.confidence === "number" ? w.confidence : 0,
+  }));
+  return {
+    medianRateHz: medianRate ?? 0,
+    medianExtentCents: medianExtent ?? 0,
+    vibratoRatio: ratio ?? 0,
+    windows,
+  };
+}
+
 function normaliseSummary(raw: WireSummary): AnalysisSummary {
   // Prefer an explicit MIDI median (mock or future Rust); fall through to
   // deriving MIDI from `median_hz_voiced` when only Hz is supplied. The
@@ -112,10 +198,14 @@ function normaliseSummary(raw: WireSummary): AnalysisSummary {
   // until older shells are gone.
   const midiExplicit = firstNumber(raw.medianMidi, raw.median_midi);
   const medianHz = firstNumber(raw.medianHzVoiced, raw.median_hz_voiced);
+  // `medianHz > 0` guard is required: `Math.log2(0) === -Infinity`, and a
+  // future shim or mock that emits literal `0` (rather than the documented
+  // `null` sentinel for unvoiced takes) would otherwise propagate
+  // `-Infinity` into `medianMidi` and from there into `formatMidiNote`.
   const medianMidi =
     midiExplicit !== undefined
       ? midiExplicit
-      : medianHz !== undefined
+      : medianHz !== undefined && medianHz > 0
         ? Math.round(69 + 12 * Math.log2(medianHz / 440))
         : 0;
   const medianCents = firstNumber(
@@ -124,6 +214,12 @@ function normaliseSummary(raw: WireSummary): AnalysisSummary {
     raw.medianCentsOff,
     raw.median_cents_off,
   );
+  const range = normaliseRange(raw.range ?? raw.range_report);
+  const vibrato = normaliseVibrato(raw.vibrato ?? raw.vibrato_report);
+  // `exactOptionalPropertyTypes` rejects `range: undefined` literals on a
+  // `range?: RangeReport` field. Emit the keys only when defined so the
+  // resulting AnalysisSummary stays compatible with the readonly optional
+  // shape declared in `src/types/analysis.ts`.
   return {
     recordingId: raw.recordingId ?? raw.recording_id ?? "",
     medianMidi,
@@ -131,6 +227,8 @@ function normaliseSummary(raw: WireSummary): AnalysisSummary {
     voicedRatio: raw.voicedRatio ?? raw.voiced_ratio ?? 0,
     wasCached: raw.wasCached ?? raw.was_cached ?? false,
     analyzerVersion: raw.analyzerVersion ?? raw.analyzer_version ?? "unknown",
+    ...(range !== undefined ? { range } : {}),
+    ...(vibrato !== undefined ? { vibrato } : {}),
   };
 }
 

@@ -724,6 +724,140 @@ pub async fn delete_analysis(
     .map_err(|e| format!("delete_analysis: {e:#}"))
 }
 
+// -- Phase 2.3 range / vibrato accessors ------------------------------------
+//
+// Convenience IPC surface for the recordings UI: shell out to a
+// `spawn_blocking` worker that postcard-decodes the cached `(recording_id,
+// analyzer_name, analyzer_version)` blob and projects the requested
+// sub-field. No separate row, no second cache key — see Phase 2.3 §2 and
+// ADR-0021 for the cache-version bump that backs the projection.
+//
+// Both commands re-use the `a4_hz` stored on the originating recordings
+// row so the projection is consistent with what `analyze_recording`'s
+// `summarize_cached` produced. Looking the row up here keeps the IPC
+// surface symmetric with `get_contour` (the caller passes `recording_id`,
+// the shell resolves the rest).
+
+/// Resolve a recording id to its `a4_hz` reference pitch.
+///
+/// Phase 2.3 range / vibrato projections need the `a4_hz` from the row
+/// (per ADR-0005 — no module-level A4 state). We accept the SQLite hop on
+/// the spawn_blocking worker rather than forcing the caller to supply
+/// `a4_hz` over IPC; the recording row is the source of truth.
+///
+/// Returns `Ok(None)` when the recording id does not resolve, so callers
+/// can map the missing-row case to the same `"not found"` string
+/// `get_contour` uses (see `get_range_report` / `get_vibrato_report`).
+/// `Err(_)` is reserved for SQLite I/O failures.
+fn lookup_a4_hz(
+    library: &neural_pitch_core::store::RecordingsLibrary,
+    recording_id: neural_pitch_core::store::RecordingId,
+) -> Result<Option<f32>, String> {
+    let rows = library
+        .list_recordings(neural_pitch_core::store::ListFilter::IncludingDeleted)
+        .map_err(|e| format!("list recordings: {e:#}"))?;
+    Ok(rows
+        .into_iter()
+        .find(|r| r.id == recording_id)
+        .map(|row| row.a4_hz as f32))
+}
+
+/// Fetch the [`neural_pitch_core::analysis::range::RangeReport`] for
+/// `(recording_id, analyzer_name, analyzer_version)`. Mirrors
+/// `get_contour`'s error semantics:
+///   * `Err("not found")` — no row matches the cache key.
+///   * `Err("not present in cache row")` — the row exists but predates
+///     Phase 2.3 (the cached `ContourResult` blob fails postcard decode
+///     under the live schema and the version is not a recognised legacy);
+///     the front-end should re-run with `force_refresh = true`.
+///
+/// Otherwise the cached blob is decoded, `compute_range` is projected
+/// over the contour, and the result is returned. The same `a4_hz`
+/// reference the originating recording row carries is used (per
+/// ADR-0005).
+#[tauri::command]
+#[tracing::instrument(skip(state))]
+pub async fn get_range_report(
+    state: State<'_, crate::state::AppState>,
+    recording_id: String,
+    analyzer_name: String,
+    analyzer_version: String,
+) -> Result<neural_pitch_core::analysis::range::RangeReport, String> {
+    let parsed: neural_pitch_core::store::RecordingId = recording_id
+        .parse()
+        .map_err(|e| format!("invalid recording id: {e}"))?;
+    let library = Arc::clone(&state.library);
+    let result = tokio::task::spawn_blocking(
+        move || -> Result<Option<neural_pitch_core::analysis::range::RangeReport>, String> {
+            // Missing recording id collapses to `Ok(None)` here so the
+            // outer `result.ok_or_else(|| "not found")` produces the same
+            // `Err("not found")` shape `get_contour` documents.
+            let Some(a4_hz) = lookup_a4_hz(&library, parsed)? else {
+                return Ok(None);
+            };
+            neural_pitch_core::store::get_range_report_blocking(
+                &library,
+                parsed,
+                &analyzer_name,
+                &analyzer_version,
+                a4_hz,
+            )
+            .map_err(|e| match e {
+                neural_pitch_core::store::AnalysisError::CacheCorrupted => {
+                    "not present in cache row".to_string()
+                }
+                other => format!("get_range_report: {other:#}"),
+            })
+        },
+    )
+    .await
+    .map_err(|e| format!("get_range_report task panicked: {e}"))??;
+    result.ok_or_else(|| "not found".to_string())
+}
+
+/// Fetch the [`neural_pitch_core::analysis::vibrato::VibratoReport`] for
+/// `(recording_id, analyzer_name, analyzer_version)`. Same error
+/// semantics as [`get_range_report`].
+#[tauri::command]
+#[tracing::instrument(skip(state))]
+pub async fn get_vibrato_report(
+    state: State<'_, crate::state::AppState>,
+    recording_id: String,
+    analyzer_name: String,
+    analyzer_version: String,
+) -> Result<neural_pitch_core::analysis::vibrato::VibratoReport, String> {
+    let parsed: neural_pitch_core::store::RecordingId = recording_id
+        .parse()
+        .map_err(|e| format!("invalid recording id: {e}"))?;
+    let library = Arc::clone(&state.library);
+    let result = tokio::task::spawn_blocking(
+        move || -> Result<Option<neural_pitch_core::analysis::vibrato::VibratoReport>, String> {
+            // Missing recording id collapses to `Ok(None)` here so the
+            // outer `result.ok_or_else(|| "not found")` produces the same
+            // `Err("not found")` shape `get_contour` documents.
+            let Some(a4_hz) = lookup_a4_hz(&library, parsed)? else {
+                return Ok(None);
+            };
+            neural_pitch_core::store::get_vibrato_report_blocking(
+                &library,
+                parsed,
+                &analyzer_name,
+                &analyzer_version,
+                a4_hz,
+            )
+            .map_err(|e| match e {
+                neural_pitch_core::store::AnalysisError::CacheCorrupted => {
+                    "not present in cache row".to_string()
+                }
+                other => format!("get_vibrato_report: {other:#}"),
+            })
+        },
+    )
+    .await
+    .map_err(|e| format!("get_vibrato_report task panicked: {e}"))??;
+    result.ok_or_else(|| "not found".to_string())
+}
+
 // -- Phase 2.2 backend-aware analysis surface -------------------------------
 
 /// Wire shape for the requested pitch backend.

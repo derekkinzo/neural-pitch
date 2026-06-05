@@ -14,3 +14,10 @@ pub mod contour;
 // lift the gate by adding a feature union if it wants HMM smoothing.
 #[cfg(feature = "neural")]
 pub mod viterbi;
+
+// Phase 2.3 — vocal-range histogram report and vibrato detector. Both ride
+// on top of `analysis::contour::ContourResult` and are pure functions; no
+// feature gate, because they have no neural / pyin dependency themselves
+// (the upstream contour producer is the gated layer).
+pub mod range;
+pub mod vibrato;

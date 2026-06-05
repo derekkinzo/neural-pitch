@@ -28,6 +28,8 @@
 
 import { useEffect, useMemo, type ReactNode } from "react";
 import { ContourLine } from "@/components/recordings/ContourLine";
+import { RangeReadout } from "@/components/recordings/RangeReadout";
+import { VibratoReadout } from "@/components/recordings/VibratoReadout";
 import { formatDurationShort, formatRelative } from "@/lib/duration-format";
 import { formatNoteShort, hzToNote, midiToHz } from "@/lib/note-format";
 import { useAnalysisStore, selectLatestContour } from "@/stores/analysisStore";
@@ -256,6 +258,11 @@ export function RecordingDetail(): ReactNode {
           </button>
         </div>
       </section>
+
+      <div className="grid gap-3 md:grid-cols-2">
+        <RangeReadout summary={summary} a4Hz={recording.a4Hz} />
+        <VibratoReadout summary={summary} />
+      </div>
 
       <ContourLine summary={summary} contour={contour} />
     </section>

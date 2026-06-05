@@ -19,6 +19,8 @@ use thiserror::Error;
 
 use super::library::RecordingsLibrary;
 use super::model::{ListFilter, RecordingId};
+use crate::analysis::range::RangeReport;
+use crate::analysis::vibrato::VibratoReport;
 
 /// Wire summary returned by `analyze_recording`.
 ///
@@ -57,6 +59,17 @@ pub struct AnalysisSummary {
     /// `true` when this summary came from the `analysis_cache` table; the
     /// PYIN run was skipped.
     pub was_cached: bool,
+    /// Phase 2.3 — vocal-range histogram report. `Option<T>` so existing
+    /// 0.1 blobs (no range/vibrato) decode cleanly as `None`, and so
+    /// future analyses that legitimately skip range detection (e.g. an
+    /// instrumental backend) stay honest. The analyzer-version cache
+    /// key is bumped to `"0.2"` in lock-step with the contour-blob
+    /// version, so any 0.1 cache row misses on first re-open and gets
+    /// recomputed without a destructive migration.
+    pub range: Option<RangeReport>,
+    /// Phase 2.3 — vibrato detector report. Same `Option<T>` rationale
+    /// as [`Self::range`].
+    pub vibrato: Option<VibratoReport>,
 }
 
 /// Per-tick progress message emitted on the analysis channel.
@@ -371,21 +384,67 @@ pub fn get_contour_blocking(
         return Ok(None);
     };
     tracing::Span::current().record("blob_bytes", blob.len() as u64);
-    let contour = decode_blob(&blob)?;
+    // Phase 2.3 cache-bump back-compat (ADR-0021): pre-`0.2` blobs use an
+    // older `ContourResult` field set that the current postcard schema can
+    // no longer round-trip. Rather than treating them as hard
+    // [`AnalysisError::CacheCorrupted`] (which would force the front-end
+    // to manually purge the row), surface a structurally-empty
+    // `ContourResult` so the back-compat fetch path (`get_contour(.., "0.1")`)
+    // returns `Ok(Some(_))`. Spec §3: "0.1 rows stay in `analysis_cache`
+    // and remain fetchable via `get_contour(.., "0.1")` for back-compat."
+    //
+    // The placeholder carries the requested analyzer name/version and an
+    // empty per-frame track. Down-stream callers that need real data are
+    // expected to re-run analysis at the live `PYIN_ANALYZER_VERSION`,
+    // which writes a fresh `(id, "pyin", "0.2")` row alongside the legacy
+    // 0.1 row (the cache layer compares plain SQL text).
+    let contour = match postcard::from_bytes::<crate::analysis::contour::ContourResult>(&blob) {
+        Ok(c) => c,
+        Err(e) => {
+            if is_pre_0_2_legacy_version(analyzer_version) {
+                tracing::warn!(
+                    target: "neural_pitch::store",
+                    analyzer = %analyzer_name,
+                    version = %analyzer_version,
+                    blob_len = blob.len(),
+                    error = %e,
+                    "legacy pre-0.2 cache row could not decode under the live schema; \
+                     surfacing back-compat placeholder per ADR-0021",
+                );
+                return Ok(Some(legacy_placeholder_contour(
+                    analyzer_name,
+                    analyzer_version,
+                )));
+            }
+            tracing::warn!(
+                target: "neural_pitch::store",
+                error = %e,
+                blob_len = blob.len(),
+                "postcard decode failed; treating as cache corruption",
+            );
+            return Err(AnalysisError::CacheCorrupted);
+        }
+    };
     tracing::Span::current().record("frames", contour.frames.len() as u64);
-    // Read hop/window from the cached blob itself rather than the
-    // live-tuner default. Older blobs (pre-v0.2) stored a default of zero
-    // for these fields; the cache-key invariant on `analyzer_version`
-    // means any stale row would have already missed and been rebuilt, but
-    // we fall back to the spec ratio defensively for forward-compat with
-    // future analyzers that may legitimately omit one or both fields.
+    // Read hop/window from the cached blob itself. Older blobs (pre-v0.2)
+    // stored a default of zero for these fields; the cache-key invariant
+    // on `analyzer_version` means any stale row would have already missed
+    // and been rebuilt. Fall back to the spec ratio (256 / 1024) ONLY when
+    // the contour actually carries frames — an empty contour (placeholder
+    // or genuinely-empty) keeps zero so a downstream consumer that reads
+    // `(window_size, hop_size)` to draw a timeline does not see plausible-
+    // but-wrong values for a blob with no per-frame data.
     let hop_size: usize = if contour.hop_size > 0 {
         contour.hop_size as usize
+    } else if contour.frames.is_empty() {
+        0
     } else {
         256
     };
     let window_size: usize = if contour.window_size > 0 {
         contour.window_size as usize
+    } else if contour.frames.is_empty() {
+        0
     } else {
         1024
     };
@@ -396,6 +455,135 @@ pub fn get_contour_blocking(
         hop_size,
         window_size,
         &contour,
+    )))
+}
+
+/// Identify analyzer-version strings that predate the Phase 2.3 cache
+/// bump. Today only `"0.1"` qualifies; the helper exists so a future
+/// version-introduction bump (e.g. `"0.1.1"`) can extend the set without
+/// re-touching the decoder.
+fn is_pre_0_2_legacy_version(analyzer_version: &str) -> bool {
+    matches!(analyzer_version, "0.1")
+}
+
+/// Synthesise an empty back-compat `ContourResult` for a legacy cache row
+/// that no longer decodes under the live schema. Carries the requested
+/// `(analyzer_name, analyzer_version)` so the wire shape stays consistent
+/// with a freshly-decoded row.
+///
+/// All numeric fields (`sample_rate_hz`, `hop_size`, `window_size`) are
+/// pinned to `0` and the per-frame vectors are empty. Front-end callers
+/// can detect the placeholder via either `sample_rate_hz == 0` or
+/// `f0_hz.is_empty()` (ADR-0021 documents the latter; the all-zero
+/// numeric invariant is the stronger guard and `get_contour_blocking`'s
+/// fallback path preserves it by skipping the live-tuner default
+/// fallback when `frames.is_empty()`).
+fn legacy_placeholder_contour(analyzer_name: &str, analyzer_version: &str) -> ContourResult {
+    ContourResult {
+        analyzer_name: analyzer_name.to_string(),
+        analyzer_version: analyzer_version.to_string(),
+        sample_rate_hz: 0,
+        hop_size: 0,
+        window_size: 0,
+        f0_hz: Vec::new(),
+        confidence: Vec::new(),
+        voiced: Vec::new(),
+    }
+}
+
+/// Fetch a previously cached `RangeReport` for one recording.
+///
+/// Re-uses the existing `(recording_id, analyzer_name, analyzer_version)`
+/// `analysis_cache` row — there is no separate row, no second cache key.
+/// The cached postcard `ContourResult` is decoded and `compute_range` is
+/// projected over it (the same pure function `summarize_cached` calls), so
+/// cache-hit and direct-fetch paths return the same values.
+///
+/// Error semantics mirror [`get_contour_blocking`]:
+///   * `Ok(report)` — row matches, decode + projection succeeded.
+///   * `Err(AnalysisError::Store(_))` — SQLite I/O failure.
+///   * `Err(AnalysisError::CacheCorrupted)` — row exists but the blob
+///     fails postcard decode (and the version is not a recognised pre-0.2
+///     legacy — those surface a `Some(insufficient)` placeholder per
+///     ADR-0021).
+///
+/// Returns `Ok(None)` when no row matches `(id, name, version)`. The Tauri
+/// command surfaces that as `Err("not found")` to mirror `get_contour`.
+#[tracing::instrument(
+    skip(library),
+    fields(
+        recording_id = %recording_id,
+        analyzer = %analyzer_name,
+        version = %analyzer_version,
+    ),
+)]
+pub fn get_range_report_blocking(
+    library: &RecordingsLibrary,
+    recording_id: RecordingId,
+    analyzer_name: &str,
+    analyzer_version: &str,
+    a4_hz: f32,
+) -> Result<Option<crate::analysis::range::RangeReport>, AnalysisError> {
+    let Some(blob) = library.get_analysis(recording_id, analyzer_name, analyzer_version)? else {
+        return Ok(None);
+    };
+    let contour = match postcard::from_bytes::<crate::analysis::contour::ContourResult>(&blob) {
+        Ok(c) => c,
+        Err(_) if is_pre_0_2_legacy_version(analyzer_version) => {
+            // Legacy 0.1 row predates the range/vibrato fields; surface
+            // the insufficient-data sentinel per ADR-0021. The front-end
+            // can detect this (zero voiced_frame_count + None hint) and
+            // trigger a `force_refresh` analyze.
+            return Ok(Some(crate::analysis::range::RangeReport::insufficient()));
+        }
+        Err(_) => return Err(AnalysisError::CacheCorrupted),
+    };
+    Ok(Some(crate::analysis::range::compute_range(&contour, a4_hz)))
+}
+
+/// Fetch a previously cached `VibratoReport` for one recording.
+///
+/// Same routing rationale as [`get_range_report_blocking`]: re-use the
+/// existing `(recording_id, analyzer_name, analyzer_version)` row, decode
+/// the postcard `ContourResult`, and project `compute_vibrato` over a
+/// vibrato-input contour (raw cents-from-a4 in the `smoothed_cents` slot
+/// — see `vibrato_input_contour` for the rationale).
+#[tracing::instrument(
+    skip(library),
+    fields(
+        recording_id = %recording_id,
+        analyzer = %analyzer_name,
+        version = %analyzer_version,
+    ),
+)]
+pub fn get_vibrato_report_blocking(
+    library: &RecordingsLibrary,
+    recording_id: RecordingId,
+    analyzer_name: &str,
+    analyzer_version: &str,
+    a4_hz: f32,
+) -> Result<Option<crate::analysis::vibrato::VibratoReport>, AnalysisError> {
+    let Some(blob) = library.get_analysis(recording_id, analyzer_name, analyzer_version)? else {
+        return Ok(None);
+    };
+    let contour = match postcard::from_bytes::<crate::analysis::contour::ContourResult>(&blob) {
+        Ok(c) => c,
+        Err(_) if is_pre_0_2_legacy_version(analyzer_version) => {
+            // Legacy 0.1 row predates the report; surface an empty report
+            // (no detected windows, vibrato_ratio = 0) per ADR-0021.
+            return Ok(Some(crate::analysis::vibrato::VibratoReport {
+                per_window: Vec::new(),
+                median_rate_hz: 0.0,
+                median_extent_cents: 0.0,
+                vibrato_ratio: 0.0,
+            }));
+        }
+        Err(_) => return Err(AnalysisError::CacheCorrupted),
+    };
+    let vibrato_input = vibrato_input_contour(&contour, a4_hz);
+    Ok(Some(crate::analysis::vibrato::compute_vibrato(
+        &vibrato_input,
+        a4_hz,
     )))
 }
 
@@ -470,13 +658,11 @@ const PROGRESS_TICK_INTERVAL: std::time::Duration = std::time::Duration::from_mi
 /// Drive the offline pYIN analyzer with periodic progress ticks.
 ///
 /// Mirrors the inner loop of `crate::analysis::contour::analyze_contour`
-/// hop-by-hop so we can stamp an `AtomicU64` frame counter as the
-/// estimator buffers each chunk. A sibling tick thread snapshots the
-/// counter every [`PROGRESS_TICK_INTERVAL`] and emits an
-/// [`AnalysisProgress`] message; the main thread emits a final tick as
-/// it returns. This keeps the live UI's progress bar smooth without
-/// touching the analyzer's hot path.
-#[allow(clippy::too_many_lines, clippy::similar_names)]
+/// hop-by-hop so we can stamp a frame counter as the estimator buffers
+/// each chunk. Mid-run ticks are emitted inline from the analyzer loop
+/// below — see the milestone / [`PROGRESS_TICK_INTERVAL`] handling at the
+/// hop boundary. The terminal `percent: 1.0` tick is emitted by the
+/// caller (`analyze_recording_blocking`) after this function returns.
 fn run_analyzer_with_progress(
     samples: &[f32],
     cfg: &crate::pitch::EstimatorConfig,
@@ -504,32 +690,7 @@ fn run_analyzer_with_progress(
     // upper bound for the progress denominator and clamp the numerator
     // so we never emit `percent > 1.0`.
     let frames_total = samples.len().div_ceil(chunk_size) as u64;
-    let frames_done = Arc::new(AtomicU64::new(0));
     let id_string = recording_id.to_string();
-
-    // Launch a sibling tick thread that snapshots `frames_done` every
-    // 200 ms while the analyzer runs. We use a `crossbeam`-style "stop"
-    // channel via a shared `AtomicBool` flipped on the way out so the
-    // ticker exits promptly even if the analyzer panics mid-run. The
-    // ticker is opt-in — headless callers with `progress = None`
-    // sidestep the spawn entirely.
-    let stop = Arc::new(AtomicBool::new(false));
-    let tick_join: Option<std::thread::JoinHandle<()>> = if progress.is_some() {
-        // SAFETY-of-pattern: we can't pass the trait object across
-        // thread boundaries without the `Send + Sync` bounds the trait
-        // already declares. Wrap the dyn reference in an `Arc<Box<dyn>>`
-        // is overkill; instead the ticker uses a lightweight emit
-        // closure constructed from a raw pointer — but that requires
-        // `unsafe`. Easier: hand the ticker a clone of the counter and
-        // have the main thread emit ticks itself. To still get mid-run
-        // ticks without cross-thread plumbing, we emit a synthetic
-        // mid-run tick every time the analyzer crosses a quarter of
-        // the work — see the loop below. Skip the tick thread.
-        None
-    } else {
-        None
-    };
-    let _ = (stop, tick_join);
 
     // Build the estimator.
     let mut estimator = PYinEstimator::new(cfg.clone())
@@ -561,7 +722,6 @@ fn run_analyzer_with_progress(
             .map_err(|e| AnalysisError::AnalyzerFailed(format!("{e:#}")))?;
         cursor = end;
         frame_idx = frame_idx.saturating_add(1);
-        frames_done.store(frame_idx, Ordering::Relaxed);
 
         // Emit a mid-run tick on either a milestone hop or every
         // PROGRESS_TICK_INTERVAL — whichever fires first. Both routes
@@ -687,6 +847,29 @@ fn summarize_cached(
         reading.midi
     });
     let computed_at_unix_ms = meta.map_or(0, |(ts, _)| ts);
+    // Phase 2.3 — derive range + vibrato reports from the cached contour.
+    // Both are pure functions over the contour, so cache-hit and fresh-run
+    // paths produce structurally identical summaries.
+    //
+    // Range works directly on the per-frame `f0_hz` track and is unaffected
+    // by upstream smoothing. Vibrato reads `smoothed_cents`, which the live
+    // pipeline aggressively low-pass-filters via `ContourSmoother` (an 80-
+    // frame running mean — see `smoothing.rs` "Capacity caveat"). At a
+    // 187.5 fps offline frame rate that smoother attenuates a 5 Hz vibrato
+    // by ~94%, dropping the residual amplitude below the 5-cent floor and
+    // surfacing `vibrato_ratio = 0` even on a clean ±50-cent fixture.
+    //
+    // To keep the vibrato detector honest without touching the upstream
+    // smoother (which is calibrated against the live tuner UX), we
+    // synthesise a vibrato-ready contour whose `smoothed_cents` track is
+    // the *raw* per-frame cents-relative-to-a4 (no temporal smoothing).
+    // The detector's own median-baseline subtraction handles slow drift,
+    // so feeding it the raw cents is the correct input.
+    let range = Some(crate::analysis::range::compute_range(contour, a4_hz as f32));
+    let vibrato = Some(crate::analysis::vibrato::compute_vibrato(
+        &vibrato_input_contour(contour, a4_hz as f32),
+        a4_hz as f32,
+    ));
     AnalysisSummary {
         analyzer_name: analyzer_name.to_string(),
         analyzer_version: analyzer_version.to_string(),
@@ -697,6 +880,8 @@ fn summarize_cached(
         median_cents_off,
         computed_at_unix_ms,
         was_cached: true,
+        range,
+        vibrato,
     }
 }
 
@@ -719,7 +904,7 @@ fn compute_medians(
         return (None, None);
     }
     hz.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
-    let median_hz = hz[hz.len() / 2];
+    let median_hz = median_of_sorted_f64(&hz);
 
     // `median_cents_off` is the cents-off-from-nearest-equal-tempered-note
     // (range `(-50.0, 50.0]`), independent of `a4_hz`. The smoothed_cents
@@ -739,9 +924,74 @@ fn compute_medians(
         None
     } else {
         cents.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
-        Some(cents[cents.len() / 2])
+        Some(median_of_sorted_f64(&cents))
     };
     (Some(median_hz), median_cents)
+}
+
+/// Symmetric median of an already-sorted `f64` slice.
+///
+/// For even-length inputs returns `0.5*(sorted[n/2-1] + sorted[n/2])`
+/// (canonical statistical convention). Mirrors the
+/// `vibrato::median_of_sorted` helper — keeping the two median
+/// implementations in lock-step prevents the off-by-half-a-bin
+/// inconsistency between modules. The two helpers diverge only in
+/// element type (`f32` vs `f64`); they share the parity-aware shape.
+fn median_of_sorted_f64(sorted: &[f64]) -> f64 {
+    if sorted.is_empty() {
+        return 0.0;
+    }
+    let n = sorted.len();
+    if n.is_multiple_of(2) {
+        0.5 * (sorted[n / 2 - 1] + sorted[n / 2])
+    } else {
+        sorted[n / 2]
+    }
+}
+
+/// Build a vibrato-ready core `ContourResult` whose `smoothed_cents` is
+/// the *raw* per-frame cents-relative-to-`a4_hz` track.
+///
+/// `compute_vibrato` reads `smoothed_cents` and `frame_rate_hz`; it does
+/// NOT inspect `frames`. The live + offline pipeline runs the f0 contour
+/// through `ContourSmoother` (80-frame running mean) before populating
+/// `smoothed_cents`, which heavily attenuates 4-7 Hz modulation at the
+/// offline path's 187.5 fps frame rate. The detector's own median-
+/// baseline subtraction is the correct stage for vibrato isolation, so
+/// we hand it a contour with the temporal smoothing undone.
+///
+/// `frames` is left empty rather than cloned: a 30 s take at 187.5 fps
+/// holds ≈5 625 `F0Frame` entries (~90 KB) and `compute_vibrato` never
+/// reads them. Cloning per cache-hit / per IPC round-trip wastes
+/// allocator + memcpy time. If a future detector revision starts reading
+/// `frames`, switch back to a borrow-style signature on `compute_vibrato`
+/// rather than re-introducing the clone here.
+fn vibrato_input_contour(
+    contour: &crate::analysis::contour::ContourResult,
+    a4_hz: f32,
+) -> crate::analysis::contour::ContourResult {
+    let cents: Vec<f32> = contour
+        .frames
+        .iter()
+        .map(|f| {
+            if f.voiced && f.f0_hz.is_finite() && f.f0_hz > 0.0 && a4_hz > 0.0 {
+                1200.0 * (f.f0_hz / a4_hz).log2()
+            } else {
+                f32::NAN
+            }
+        })
+        .collect();
+    crate::analysis::contour::ContourResult {
+        // Intentionally empty — see doc-comment above.
+        frames: Vec::new(),
+        frame_rate_hz: contour.frame_rate_hz,
+        smoothed_cents: cents,
+        voiced_ratio: contour.voiced_ratio,
+        sample_count: contour.sample_count,
+        source_sample_rate_hz: contour.source_sample_rate_hz,
+        hop_size: contour.hop_size,
+        window_size: contour.window_size,
+    }
 }
 
 fn reshape_contour(

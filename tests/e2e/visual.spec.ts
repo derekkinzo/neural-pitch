@@ -16,12 +16,15 @@
 import { test, expect } from "./fixtures";
 import {
   installAnalysisMock,
+  installAnalysisMockWithRange,
   installRecordingsMock,
   makePitchUpdate,
   pushPitchUpdate,
   type MockAnalysisSummary,
   type MockContourResult,
+  type MockRangeReport,
   type MockRecording,
+  type MockVibratoReport,
 } from "./helpers/tauri-mock";
 
 test.describe("visual — Phase 1.2 tuner states", () => {
@@ -159,5 +162,71 @@ test.describe("visual — Phase 2.1 RecordingDetail", () => {
     await expect(page.getByTestId("contour-canvas")).toBeVisible();
 
     await expect(page).toHaveScreenshot("recording-detail-cached.png", { fullPage: true });
+  });
+
+  // Phase 2.3 — RecordingDetail with both new readouts mounted between
+  // the summary card and the contour figure. The seeded summary carries
+  // both `range` and `vibrato` so the 2-column grid is fully populated.
+  test("recording-detail-with-range-vibrato — both readouts steady", async ({
+    page,
+    mockTauri,
+  }) => {
+    const RANGE: Record<string, MockRangeReport> = {
+      "rec-vis-001": {
+        comfortableLowMidi: 60, // C4
+        comfortableHighMidi: 77, // F5
+        fullLowMidi: 57, // A3
+        fullHighMidi: 81, // A5
+        voicedFrameCount: 540,
+        voiceTypeHints: ["Alto", "Mezzo-soprano"],
+      },
+    };
+    const VIBRATO: Record<string, MockVibratoReport> = {
+      "rec-vis-001": {
+        medianRateHz: 5.4,
+        medianExtentCents: 32,
+        vibratoRatio: 0.32,
+        windows: [
+          { tMs: 0, rateHz: 5.2, extentCents: 28, confidence: 0.4 },
+          { tMs: 250, rateHz: 5.5, extentCents: 33, confidence: 0.7 },
+          { tMs: 500, rateHz: 5.6, extentCents: 35, confidence: 0.92 },
+        ],
+      },
+    };
+    // Seed both fields in a single summary by composing the two wrappers
+    // through the base summary map.
+    const summaryWithBoth: Record<
+      string,
+      MockAnalysisSummary & { range: MockRangeReport; vibrato: MockVibratoReport }
+    > = {
+      "rec-vis-001": {
+        ...SUMMARY["rec-vis-001"]!,
+        range: RANGE["rec-vis-001"]!,
+        vibrato: VIBRATO["rec-vis-001"]!,
+      },
+    };
+    await mockTauri.install({
+      ...installRecordingsMock(SEED),
+      ...installAnalysisMockWithRange(
+        summaryWithBoth as Record<string, MockAnalysisSummary>,
+        CONTOUR,
+        RANGE,
+      ),
+    });
+    await page.goto("/");
+    await expect(page.getByTestId("status-pill")).toHaveAttribute("data-state", "live");
+
+    await page.getByTestId("library-trigger").click();
+    await page.getByTestId("recording-row").first().click();
+
+    // Gate on both readout regions being visible before the screenshot
+    // so a transient progress repaint cannot race the snapshot.
+    await expect(page.getByRole("group", { name: /Vocal range report/i })).toBeVisible();
+    await expect(page.getByRole("group", { name: /Vibrato analysis/i })).toBeVisible();
+    await expect(page.getByTestId("contour-canvas")).toBeVisible();
+
+    await expect(page.getByTestId("recording-detail")).toHaveScreenshot(
+      "recording-detail-with-range-vibrato.png",
+    );
   });
 });

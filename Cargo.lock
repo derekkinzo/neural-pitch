@@ -2470,6 +2470,7 @@ dependencies = [
  "postcard",
  "proptest",
  "pyin",
+ "realfft",
  "refinery",
  "rtrb",
  "rusqlite",

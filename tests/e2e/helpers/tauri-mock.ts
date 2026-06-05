@@ -641,6 +641,92 @@ export async function pushAnalysisProgress(
   }, progress);
 }
 
+/**
+ * Phase-2.3 vocal-range — wire-format mirrors `RangeReport` in
+ * `src/types/analysis.ts`. The summary cache extension carries a `range`
+ * field next to the existing pYIN/PESTO numerics; readouts read from the
+ * same `byRecording` Map entry.
+ *
+ * Cross-references:
+ *   docs/design/DESIGN.md §7.5 (Phase 2.3 frontend additions)
+ *   New Grove Dictionary of Music — vocal-range conventions for
+ *   `voiceTypeHints` (e.g. ["Alto", "Mezzo-soprano"]).
+ */
+export interface MockRangeReport {
+  comfortableLowMidi: number;
+  comfortableHighMidi: number;
+  fullLowMidi: number;
+  fullHighMidi: number;
+  voicedFrameCount: number;
+  voiceTypeHints: string[];
+}
+
+/**
+ * Phase-2.3 vibrato — wire-format mirrors `VibratoReport` in
+ * `src/types/analysis.ts`. Per-window dots downstream of the rate bar are
+ * driven by the `windows[]` array; the meter (`role="meter"`) reflects
+ * `medianRateHz` against the 0–10 Hz scale.
+ */
+export interface MockVibratoWindow {
+  tMs: number;
+  rateHz: number;
+  extentCents: number;
+  confidence: number;
+}
+
+export interface MockVibratoReport {
+  medianRateHz: number;
+  medianExtentCents: number;
+  vibratoRatio: number;
+  windows: MockVibratoWindow[];
+}
+
+/**
+ * Convenience wrapper around `installAnalysisMock` that merges a
+ * `RangeReport` into each summary entry before delegating. Specs that
+ * exercise the vocal-range readout call this so the seeded summary
+ * carries `range` directly — no second IPC, no second store entry.
+ *
+ * Per the Phase-2.3 architecture (DESIGN.md §7.5), the `byRecording`
+ * Map already holds `AnalysisSummary`; `RangeReadout` reads
+ * `byRecording.get(id)?.range` from the same entry as the existing
+ * summary card.
+ */
+export function installAnalysisMockWithRange(
+  byRecordingId: Record<string, MockAnalysisSummary>,
+  contoursByKey: Record<string, MockContourResult>,
+  rangeByRecordingId: Record<string, MockRangeReport>,
+): TauriMockResponses {
+  const merged: Record<string, MockAnalysisSummary & { range?: MockRangeReport }> = {};
+  for (const [id, summary] of Object.entries(byRecordingId)) {
+    const range = rangeByRecordingId[id];
+    merged[id] = range !== undefined ? { ...summary, range } : { ...summary };
+  }
+  return installAnalysisMock(merged as Record<string, MockAnalysisSummary>, contoursByKey);
+}
+
+/**
+ * Convenience wrapper around `installAnalysisMock` that merges a
+ * `VibratoReport` into each summary entry. Mirrors
+ * `installAnalysisMockWithRange` for the vibrato readout. Specs that
+ * exercise both readouts compose the wrappers by spreading the second
+ * call's output over the first — both wrappers funnel through
+ * `installAnalysisMock` so the single `analyze_recording` handler
+ * resolves with a summary carrying both fields.
+ */
+export function installAnalysisMockWithVibrato(
+  byRecordingId: Record<string, MockAnalysisSummary>,
+  contoursByKey: Record<string, MockContourResult>,
+  vibratoByRecordingId: Record<string, MockVibratoReport>,
+): TauriMockResponses {
+  const merged: Record<string, MockAnalysisSummary & { vibrato?: MockVibratoReport }> = {};
+  for (const [id, summary] of Object.entries(byRecordingId)) {
+    const vibrato = vibratoByRecordingId[id];
+    merged[id] = vibrato !== undefined ? { ...summary, vibrato } : { ...summary };
+  }
+  return installAnalysisMock(merged as Record<string, MockAnalysisSummary>, contoursByKey);
+}
+
 /** Recorded invoke calls for assertion. */
 export async function getInvokeCalls(
   page: Page,
