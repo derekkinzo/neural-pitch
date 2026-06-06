@@ -2,7 +2,7 @@
 //!
 //! Implements the trait surface, error type, artifact shape, and worker
 //! used to encode captured audio into 24-bit / mono / 48 kHz FLAC files
-//! per ADR-0011. The audio callback never touches this module — the DSP
+//! 48 kHz / 24-bit / mono / FLAC. The audio callback never touches this module — the DSP
 //! worker is wired to fan hop-aligned slices out through a bounded
 //! `std::sync::mpsc::sync_channel` and the [`RecordingWorker`] drains it
 //! onto a [`RecordingSink`].
@@ -16,10 +16,10 @@
 //! shared `dropped_windows` `AtomicU64` on `TrySendError::Full`.
 //!
 //! Design anchors:
-//! - ADR-0011: 48 kHz / 24-bit / mono / FLAC.
-//! - DESIGN.md §6 + §9.1: rtrb is the only legal egress from the audio
+//! - Recording fidelity: 48 kHz / 24-bit / mono / FLAC.
+//! - rtrb is the only legal egress from the audio
 //!   callback; FLAC encoding sits two thread hops away on a worker thread.
-//! - P3 / ADR-0015: `Drop` impls never panic; partial files are abandoned on
+//! - `Drop` impls never panic; partial files are abandoned on
 //!   drop and never exposed to the library.
 
 #[cfg(feature = "flac")]
@@ -61,7 +61,7 @@ pub struct RecordingArtifact {
     pub duration_ms: u64,
     /// Total number of `f32` mono samples written through the sink.
     pub sample_count: u64,
-    /// Sample rate of the recording, in Hertz (locked to 48 000 by ADR-0011).
+    /// Sample rate of the recording, in Hertz (locked to 48 000).
     pub sample_rate_hz: u32,
 }
 
@@ -98,10 +98,9 @@ pub enum RecordingSinkError {
 /// `Drop` without `finalize()`, the partial is best-effort deleted.
 ///
 /// **Memory profile:** the in-memory buffer grows linearly with recording
-/// length — ~12 MB per minute at 48 kHz mono i32. Phase 2.0 tolerates this
-/// for short takes (the original Phase 2.0 contract caps user-visible
-/// takes well under 30 minutes); a future revision may switch to a true
-/// streaming encoder so per-`write()` cost is `O(hop)` instead of `O(N)`.
+/// length — ~12 MB per minute at 48 kHz mono i32. For short takes (well
+/// under 30 minutes) the in-memory buffer is acceptable; longer
+/// recordings are out of scope for the current encoder.
 /// Disk-full now surfaces only at `finalize()` time when the encoded
 /// stream is written + fsynced — there is no per-write probe (the prior
 /// 4-byte probe was net-zero because the partial file was rewritten in
@@ -113,7 +112,7 @@ pub struct FlacRecordingSink {
     path: PathBuf,
     /// `<path>.partial` — where bytes flow until finalize.
     partial_path: PathBuf,
-    /// Recording sample rate (locked to 48 000 by ADR-0011).
+    /// Recording sample rate (locked to 48 000).
     sample_rate_hz: u32,
     /// Running tally of mono samples written through `write()`.
     samples_written: u64,
@@ -127,7 +126,7 @@ pub struct FlacRecordingSink {
 
 #[cfg(feature = "flac")]
 impl FlacRecordingSink {
-    /// Open a new FLAC recording at `path`. Validates ADR-0011 defaults
+    /// Open a new FLAC recording at `path`. Validates the locked recording defaults
     /// (48 kHz, mono, 24-bit) and opens `<path>.partial` for buffered
     /// writes.
     ///
@@ -139,7 +138,7 @@ impl FlacRecordingSink {
     pub fn create(path: impl AsRef<Path>, sample_rate_hz: u32) -> Result<Self, RecordingSinkError> {
         if sample_rate_hz != 48_000 {
             return Err(RecordingSinkError::InvalidConfig(format!(
-                "sample_rate_hz must be 48000 per ADR-0011 (got {sample_rate_hz})"
+                "sample_rate_hz must be 48000 (got {sample_rate_hz})"
             )));
         }
         let path: PathBuf = path.as_ref().to_path_buf();
@@ -192,15 +191,15 @@ impl FlacRecordingSink {
         self.samples_written
     }
 
-    /// Locked recording sample rate (48 000 per ADR-0011).
+    /// Locked recording sample rate (48 000).
     pub fn sample_rate_hz(&self) -> u32 {
         self.sample_rate_hz
     }
 
-    /// Channel count — `1` (mono per ADR-0011).
+    /// Channel count — `1` (mono).
     pub const CHANNELS: u16 = 1;
 
-    /// Bit depth — `24` (per ADR-0011).
+    /// Bit depth — `24`.
     pub const BIT_DEPTH: u8 = 24;
 }
 
@@ -317,7 +316,7 @@ fn encode_flac_bytes(
         .map_err(|e| RecordingSinkError::Encoder(format!("verify config: {e:?}")))?;
     let source = flacenc::source::MemSource::from_samples(
         samples,
-        1, // mono per ADR-0011
+        1, // mono
         bits_per_sample,
         sample_rate_hz as usize,
     );
@@ -334,7 +333,7 @@ fn encode_flac_bytes(
 #[cfg(feature = "flac")]
 impl Drop for FlacRecordingSink {
     fn drop(&mut self) {
-        // Per P3 / ADR-0015: Drop never panics. When the sink is dropped
+        // Drop never panics. When the sink is dropped
         // without `finalize()`, the partial FLAC file is corrupt and must
         // be best-effort deleted so the library never sees it.
         if self.finalized {
@@ -613,7 +612,7 @@ impl RecordingHandle {
 }
 
 impl Drop for RecordingHandle {
-    /// Per ADR-0015, `Drop` never panics. If the handle is dropped without
+    /// `Drop` never panics. If the handle is dropped without
     /// `stop()` (e.g. the shell shuts down while a recording is live), we
     /// MUST still flip the cancellation token so the encoder thread does
     /// not spin a `recv_timeout` loop indefinitely after the producer

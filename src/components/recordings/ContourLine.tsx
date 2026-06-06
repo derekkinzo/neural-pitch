@@ -14,7 +14,7 @@
 //     live tuner uses.
 //   - `prefers-reduced-motion: reduce` paints the static plot snapshot in a
 //     single synchronous call after layout (no fade-in, no progressive
-//     draw — ADR-0006 visual-only-feedback contract).
+//     draw — visual-only-feedback contract).
 //   - Downsampling: cap at ~500 frames per second of recording. Run
 //     downsampling once on data arrival and stash the result in a ref so
 //     the rAF redraw reads from it.
@@ -24,9 +24,6 @@
 // aria-label is composed from the AnalysisSummary numbers — we do NOT
 // stream per-frame data into ARIA.
 //
-// Cross-references:
-//   docs/design/DESIGN.md §7.5 (Phase 2.1 frontend additions)
-//   docs/adr/0006-visual-only-feedback-prefers-reduced-motion.md
 //   src/components/CentsMeter.tsx (canonical canvas + DPR + reduced-motion pattern)
 
 import { useEffect, useMemo, useRef, type ReactNode } from "react";

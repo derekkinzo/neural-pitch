@@ -7,7 +7,7 @@
 //! SQLITE_BUSY is structurally impossible with a single serialized
 //! connection.
 //!
-//! `parking_lot::Mutex` is non-poisoning (ADR-0014), aligned with the rest
+//! `parking_lot::Mutex` is non-poisoning, aligned with the rest
 //! of the project (`src-tauri/src/state.rs`). The previous `std::sync::Mutex`
 //! exposed a `Poisoned` error variant that is no longer reachable.
 //!
@@ -317,7 +317,7 @@ impl RecordingsLibrary {
     /// Lock the inner connection mutex.
     ///
     /// `parking_lot::Mutex::lock` does not return a `Result` — the mutex is
-    /// non-poisoning by design (ADR-0014), so this is infallible.
+    /// non-poisoning by design, so this is infallible.
     fn lock_conn(&self) -> MutexGuard<'_, Connection> {
         self.conn.lock()
     }

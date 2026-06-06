@@ -17,9 +17,6 @@
 //
 // All payloads come from the Phase-2.3 mocks; no real IPC fires.
 //
-// Cross-references:
-//   docs/design/DESIGN.md §7.5 (Phase 2.3 frontend additions)
-//   docs/adr/0006-visual-only-feedback-prefers-reduced-motion.md
 //   tests/e2e/recording_detail.spec.ts (sibling spec; same row → click flow)
 
 import { expect, test } from "./fixtures";

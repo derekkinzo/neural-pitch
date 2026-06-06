@@ -11,7 +11,7 @@
 //! * `migrations.rs` — `refinery::embed_migrations!` runner.
 //! * `migrations/V0001__init.sql` — append-only schema.
 //!
-//! See ADR-0012 for the architectural contract (one `Arc<Mutex<Connection>>`,
+//! Architectural contract: one `Arc<Mutex<Connection>>`,
 //! WAL + `synchronous = NORMAL`, append-only migrations).
 
 mod analysis;

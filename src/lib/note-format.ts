@@ -1,12 +1,7 @@
 // Equal-tempered note-name formatter.
 //
 // A pure function so React components can call it inline without effects.
-// The Phase-4 movable-do solfège formatter (DESIGN.md §13.5, ADR-0004) will
-// drop into the same shape behind a `Formatter` interface.
 //
-// Cross-references:
-//   docs/adr/0004-default-note-name-system-english-with-formatter-trait.md
-//   docs/design/DESIGN.md §7 (NoteDisplay surface)
 
 const SHARP_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"] as const;
 const ACCIDENTAL: ReadonlyArray<"" | "#"> = ["", "#", "", "#", "", "", "#", "", "#", "", "#", ""];

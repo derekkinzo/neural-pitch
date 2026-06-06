@@ -2,9 +2,8 @@
 set -euo pipefail
 
 # Installs pre-commit, commit-msg, AND pre-push hooks for the
-# neural-pitch repo. The pre-push hook wires `scripts/ci-local.sh
-# quick` as the canonical pre-push gate (see ADR-0022 and
-# CONTRIBUTING.md). Without --hook-type pre-push the gate is silently
+# neural-pitch repo. Wires `scripts/ci-local.sh quick` as the canonical
+# pre-push gate. Without --hook-type pre-push the gate is silently
 # inactive — devs would push red into CI without warning.
 
 if ! command -v pre-commit >/dev/null 2>&1; then

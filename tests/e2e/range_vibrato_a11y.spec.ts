@@ -5,10 +5,6 @@
 // serious / critical axe-core violations against WCAG 2.1 AA across
 // both `role="group"` regions when both reports are seeded.
 //
-// Cross-references:
-//   docs/design/TEST-PLAN.md §6.2 (Accessibility — every page-level spec)
-//   docs/design/DESIGN.md §7.5 (Phase 2.3 frontend additions)
-//   docs/adr/0006-visual-only-feedback-prefers-reduced-motion.md
 
 import { expect, test } from "./fixtures";
 import {

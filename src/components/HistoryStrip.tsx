@@ -1,11 +1,9 @@
 // HistoryStrip — ~3 s of cents-history scrolled across a canvas.
 //
 // Reads up to ~280 frames from the rAF ring (capacity 256, ~2.7 s @ 93 Hz).
-// Honours `prefers-reduced-motion` per ADR-0006 by short-circuiting the rAF
+// Honours `prefers-reduced-motion` by short-circuiting the rAF
 // loop and rendering a static `<output role="meter">` of the current cents.
 //
-// Cross-references:
-//   docs/design/DESIGN.md §1 (history strip), §4 (canvas pattern)
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { SILENT_PITCH, type PitchUpdate } from "@/types/pitch";

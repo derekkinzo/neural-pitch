@@ -1,12 +1,14 @@
 #![allow(clippy::doc_markdown)]
 //! Backend factory for [`PitchEstimator`] instances.
 //!
-//! Day 1 ships the classical time-domain backends `Backend::YinMpm` (YIN with
-//! parabolic interpolation) and `Backend::Mpm` (McLeod Pitch Method, sharing
-//! the same [`yin::YinMpmEstimator`] struct via [`yin::YinAlgorithm`]).
-//!
-//! Future variants (`PYin`, `OnnxPesto`, `OnnxCrepeTiny`) will be added behind
-//! the `neural` and `pyin` Cargo features in Phase 2.
+//! Currently exposes the classical time-domain backends `Backend::YinMpm`
+//! (YIN with parabolic interpolation) and `Backend::Mpm` (McLeod Pitch
+//! Method, sharing the same [`yin::YinMpmEstimator`] struct via
+//! [`yin::YinAlgorithm`]). The pYIN and neural backends
+//! ([`crate::pitch::pyin::PYinEstimator`],
+//! [`crate::pitch::pesto::PestoEstimator`],
+//! [`crate::pitch::crepe::CrepeTinyEstimator`]) are constructed directly
+//! by callers and are not yet routed through this factory.
 
 use std::path::Path;
 
@@ -17,12 +19,10 @@ use crate::pitch::{
 
 /// Stable identifier for the available pitch detection backends.
 ///
-/// Day 1 contains `YinMpm` and `Mpm`, both implemented by
-/// [`YinMpmEstimator`] under different [`yin::YinAlgorithm`] choices. The
-/// enum is non-exhaustive in spirit; new variants will be added as Phase 2
-/// brings up neural backends behind the `neural` feature gate. Callers MUST
-/// handle the case where a feature is not enabled, which surfaces as
-/// [`EstimatorError::FeatureDisabled`].
+/// Currently contains `YinMpm` and `Mpm`, both implemented by
+/// [`YinMpmEstimator`] under different [`yin::YinAlgorithm`] choices.
+/// Callers MUST handle the case where a feature is not enabled, which
+/// surfaces as [`EstimatorError::FeatureDisabled`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Backend {
     /// Classical YIN time-domain estimator (de Cheveigne & Kawahara 2002).

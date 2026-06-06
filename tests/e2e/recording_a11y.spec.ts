@@ -6,10 +6,6 @@
 // inside the drawer body. We assert zero serious / critical axe-core
 // violations against WCAG 2.1 AA.
 //
-// Cross-references:
-//   docs/design/TEST-PLAN.md §6.2 (Accessibility — every page-level spec)
-//   docs/design/DESIGN.md §7.5 (RecordingDetail — drawer body siblings)
-//   docs/adr/0006-visual-only-feedback-prefers-reduced-motion.md
 
 import { expect, test } from "./fixtures";
 import {
@@ -98,7 +94,7 @@ test.describe("a11y — recording detail panel", () => {
     await page.getByTestId("recording-row").first().click();
 
     // The semantic role is on the wrapper, not the <canvas>; per
-    // DESIGN.md §7.5 the canvas itself is aria-hidden.
+    // The canvas itself is aria-hidden.
     const figure = page.getByRole("img", { name: /Pitch contour/i });
     await expect(figure).toBeVisible();
 

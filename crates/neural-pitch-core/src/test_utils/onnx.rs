@@ -6,14 +6,13 @@
 //! CREPE-tiny weights**. Instead, the tests embed a tiny synthetic stub ONNX
 //! graph inline as bytes and write it to a `tempfile`-style path before
 //! calling `from_onnx`. This keeps test runs hermetic — no network, no
-//! external assets, no LGPL-tainted vendored weights (ADR-0008,
-//! `MODULAR-PITCH-RESEARCH.md` §8.1).
+//! external assets, no LGPL-tainted vendored weights.
 //!
 //! # Why bytes, not a build script?
 //!
 //! A `build.rs` that runs Python's `onnx` library to emit a fresh stub
 //! every build would couple our Rust CI to a Python toolchain — exactly the
-//! provenance contamination ADR-0008 closes off. Hard-coded bytes keep the
+//! provenance contamination this design closes off. Hard-coded bytes keep the
 //! test crate pure-Rust.
 //!
 //! # TDD-RED placeholder

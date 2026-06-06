@@ -19,7 +19,7 @@
 //   channel; the primary distinction is needle x-position relative to the
 //   center reference line.
 //
-// `prefers-reduced-motion: reduce` (ADR-0006) downshifts the rAF cadence to
+// `prefers-reduced-motion: reduce` downshifts the rAF cadence to
 // `REDUCED_PAINT_MS` so the needle does not animate at 60 Hz; ARIA updates
 // are still throttled to `ARIA_THROTTLE_MS` so AT users get a stable,
 // debounced readout.
@@ -30,9 +30,6 @@
 // `matchMedia("(resolution: <Ndppx>)")` listener and re-scale on every
 // transition.
 //
-// Cross-references:
-//   docs/design/DESIGN.md §1, §4 (canvas pattern), §5 (ARIA mapping)
-//   docs/adr/0006-prefers-reduced-motion.md
 
 import { useEffect, useRef, type ReactNode } from "react";
 import { SILENT_PITCH, type PitchUpdate } from "@/types/pitch";
@@ -179,7 +176,7 @@ export function CentsMeter({ ringRef }: CentsMeterProps): ReactNode {
     };
     subscribeDpr();
 
-    // Reduced-motion cadence (ADR-0006). The matchMedia listener is
+    // Reduced-motion cadence. The matchMedia listener is
     // re-evaluated reactively so a user toggling the OS-level setting at
     // runtime is honoured without a remount.
     const motionMql = window.matchMedia("(prefers-reduced-motion: reduce)");

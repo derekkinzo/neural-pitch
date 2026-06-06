@@ -1,9 +1,7 @@
-// Phase 2.0 — RecordButton lifecycle spec.
+// RecordButton lifecycle spec.
 //
 // Drives the idle → recording → saving lifecycle through the mock IPC
-// surface and asserts the visible affordances called out in the Phase-2.0
-// UI brief (`docs/design/PHASE-2.0-UI.md` §1, §6 — paraphrased in the
-// task spec):
+// surface and asserts the visible affordances:
 //
 //   1. Pressing [data-testid=record-button] in the idle state starts a
 //      recording (state flips to "recording", aria-pressed=true).
@@ -14,10 +12,6 @@
 //      is suppressed (no CSS animation on the pulse element) and the
 //      mm:ss elapsed counter is the visual cue.
 //
-// Cross-references:
-//   docs/design/DESIGN.md §7.5 (frontend module additions for Phase 2.0)
-//   docs/adr/0011-recording-defaults-48k-24bit-mono-flac.md
-//   docs/design/TEST-PLAN.md §6.2 (recording-lifecycle.spec)
 
 import { expect, test } from "./fixtures";
 import {

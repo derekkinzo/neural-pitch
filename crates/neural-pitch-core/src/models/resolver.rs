@@ -1,10 +1,9 @@
-//! Phase 2.2 — model resolver. Locate, verify, and (later) fetch ONNX blobs
-//! described by the workspace `models.toml`.
+//! Model resolver. Locate and verify ONNX blobs described by the
+//! workspace `models.toml`.
 //!
-//! Phase 2.2 ships the manifest + on-disk verification plumbing only. The
-//! real network fetch (step 7 of the algorithm in the resolver spec) is
-//! gated behind `cfg(feature = "live-fetch")` or a runtime env-var so unit
-//! tests stay hermetic.
+//! Ships the manifest + on-disk verification plumbing. Live network fetch
+//! is not currently implemented; placeholder manifest entries surface as
+//! [`ResolverError::NotConfigured`].
 
 use std::fs;
 use std::io::Read;
@@ -16,8 +15,8 @@ use super::manifest::{Manifest, ManifestEntry};
 
 /// All failure modes surfaced by [`ensure_model`].
 ///
-/// The variants intentionally match the resolver spec 1:1 so callers (the
-/// Tauri `get_model_status` command, the future Settings UI) can pattern-match
+/// Variants are exhaustive enough that callers (the Tauri
+/// `get_model_status` command and similar consumers) can pattern-match
 /// without grepping the implementation.
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
@@ -32,9 +31,8 @@ pub enum ResolverError {
     /// The requested model name is absent from the manifest.
     #[error("unknown model: {0}")]
     UnknownModel(String),
-    /// The manifest entry is a placeholder: empty URL or the all-zeros
-    /// dummy sha256. The model cannot be fetched until Phase 2.5/3 fills
-    /// the fields in.
+    /// The manifest entry is a placeholder (empty URL or all-zeros
+    /// sha256) and is treated as unfetchable.
     #[error("model {name} is not configured (placeholder manifest entry)")]
     NotConfigured {
         /// Name of the un-configured model.
@@ -59,13 +57,9 @@ pub enum ResolverError {
 
 /// Resolve the canonical workspace `models.toml` path.
 ///
-/// Phase 2.2: returns `<workspace-root>/models.toml` for dev builds. The
-/// workspace root is anchored on `CARGO_MANIFEST_DIR` of the
-/// `neural-pitch-core` crate (which lives at `crates/neural-pitch-core/`),
-/// so the manifest is two parents up.
-///
-/// Packaged builds will resolve `<app-data>/models.toml` from the Tauri
-/// shell; that branch is added in a later phase.
+/// Returns `<workspace-root>/models.toml`. The workspace root is anchored
+/// on `CARGO_MANIFEST_DIR` of the `neural-pitch-core` crate (which lives
+/// at `crates/neural-pitch-core/`), so the manifest is two parents up.
 #[must_use]
 pub fn manifest_path() -> PathBuf {
     // `CARGO_MANIFEST_DIR` is set at compile time to the crate dir
@@ -165,10 +159,9 @@ fn read_workspace_manifest() -> Result<Manifest, ResolverError> {
 
 /// Ensure `<dest_dir>/<name>.onnx` exists and matches the manifest's sha256.
 ///
-/// Algorithm (per the resolver spec):
+/// Algorithm:
 ///
-/// 1. Locate manifest via [`manifest_path`] (or a caller-supplied path in
-///    tests).
+/// 1. Locate manifest via [`manifest_path`].
 /// 2. Parse with `Manifest::from_toml_str`; reject `schema_version != 1`.
 /// 3. Look up entry by `name` — `UnknownModel` if missing.
 /// 4. Compute `target = dest_dir.join(format!("{name}.onnx"))`.
@@ -176,11 +169,8 @@ fn read_workspace_manifest() -> Result<Manifest, ResolverError> {
 ///    `Ok(target)`. Mismatch → delete and fall through.
 /// 6. If `entry.url` is empty or the sha256 is the placeholder, return
 ///    `NotConfigured { name }`.
-/// 7. Otherwise: lock `<target>.lock`, fetch into `<target>.partial`,
-///    hash on the fly, verify, atomic `fs::rename` to `target`.
-///
-/// Phase 2.2 ships steps 1–6 + the lock/rename plumbing; step 7's network
-/// call is gated behind the `live-fetch` feature.
+/// 7. Otherwise return `NotConfigured { name }` — the network fetch path
+///    is not currently implemented.
 ///
 /// # Errors
 ///
@@ -233,10 +223,9 @@ pub fn ensure_model(name: &str, dest_dir: &Path) -> Result<PathBuf, ResolverErro
         });
     }
 
-    // 7. Real fetch path is gated behind `live-fetch`. With the gate off,
-    //    Phase 2.2 ends here — the caller is expected to surface
-    //    `NotConfigured` semantics through the Tauri `get_model_status`
-    //    command and not enter `ensure_model` until Phase 2.5/3.
+    // 7. Network fetch is not currently implemented; surface
+    //    `NotConfigured` so callers (e.g. the Tauri `get_model_status`
+    //    command) can render a consistent state.
     Err(ResolverError::NotConfigured {
         name: name.to_string(),
     })

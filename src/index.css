@@ -2,12 +2,11 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Phase 2.0 — RecordButton pulse keyframe.
+/* RecordButton pulse keyframe.
  *
  * Applied via the `record-pulse` class on the inner dot when the button is in
  * the `recording` state. Reduced-motion users see a static dot; the elapsed
- * mm:ss counter is the visual cue in both modes (per docs/design/DESIGN.md
- * §7.5 Phase-2.0 frontend additions). The Playwright spec
+ * mm:ss counter is the visual cue in both modes. The Playwright spec
  * `recording_lifecycle.spec.ts` asserts `getComputedStyle(...).animationName
  * === "none"` under `prefers-reduced-motion: reduce`. */
 @keyframes record-pulse {

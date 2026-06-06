@@ -10,7 +10,7 @@
 //! Every persisted blob carries [`TunerSettings::schema_version`]. Hand-edits
 //! and version drift are handled by [`migrate`], which dispatches a chain of
 //! `migrate_v{N}_to_v{N+1}` functions. The loop shape is fixed; subsequent
-//! migrations add new arms to its `match`. See ADR-0013.
+//! migrations add new arms to its `match`.
 //!
 //! # Defaults
 //!
@@ -52,10 +52,9 @@ pub const A4_HZ_MAX: f32 = 480.0;
 /// Persisted, user-tunable tuner settings.
 ///
 /// Held in core (not the Tauri shell) so the same struct serialises through
-/// `tauri-plugin-store` on desktop and through future CLI / mobile shells.
-/// Every field has `#[serde(default)]` (via the struct-level attribute) so a
-/// partial JSON blob written by a hand-edit recovers cleanly. See
-/// `docs/design/DESIGN.md` §6 and ADR-0013.
+/// `tauri-plugin-store`. Every field has `#[serde(default)]` (via the
+/// struct-level attribute) so a partial JSON blob written by a hand-edit
+/// recovers cleanly.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct TunerSettings {

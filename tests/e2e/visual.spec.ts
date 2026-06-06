@@ -9,9 +9,6 @@
 // renders its static <output> form rather than the canvas spline — keeping
 // pixel diffs deterministic regardless of rAF timing.
 //
-// Cross-references:
-//   docs/design/TEST-PLAN.md §6.2 (Visual regression)
-//   docs/design/TEST-PLAN.md §11.3 (visual baseline update process)
 
 import { test, expect } from "./fixtures";
 import {
@@ -30,7 +27,7 @@ import {
 test.describe("visual — Phase 1.2 tuner states", () => {
   test.skip(
     ({ browserName }) => browserName !== "chromium",
-    "visual baselines pinned to chromium-linux per TEST-PLAN.md §6.2",
+    "visual baselines pinned to chromium-linux",
   );
 
   test.beforeEach(async ({ page }) => {
@@ -83,7 +80,7 @@ test.describe("visual — Phase 1.2 tuner states", () => {
 test.describe("visual — Phase 2.1 RecordingDetail", () => {
   test.skip(
     ({ browserName }) => browserName !== "chromium",
-    "visual baselines pinned to chromium-linux per TEST-PLAN.md §6.2",
+    "visual baselines pinned to chromium-linux",
   );
 
   test.beforeEach(async ({ page }) => {

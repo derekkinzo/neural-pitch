@@ -5,9 +5,6 @@
 // `configure` IPC). The drawer itself is a thin wrapper around the vendored
 // `Drawer` primitive in `components/ui/`.
 //
-// Cross-references:
-//   docs/design/DESIGN.md §6 (Settings drawer)
-//   docs/adr/0005-default-a4-440hz-with-user-override.md
 
 import { useEffect, useId, useState, type ChangeEvent, type ReactNode } from "react";
 import { Drawer } from "@/components/ui/Drawer";

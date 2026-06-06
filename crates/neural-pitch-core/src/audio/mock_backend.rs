@@ -7,7 +7,7 @@
 //! the same back-pressure semantics as the cpal callback (drop on full,
 //! incrementing an `AtomicU64` counter).
 //!
-//! This is a Tier-2 test fixture per ADR-0016: deterministic, single-threaded,
+//! This is a Tier-2 test fixture: deterministic, single-threaded,
 //! and free of any platform-specific I/O.
 
 use core::f32::consts::TAU;
@@ -75,10 +75,10 @@ pub enum Pacing {
     /// mode used by the Tier-2 deterministic tests today.
     #[default]
     AsFastAsPossible,
-    /// Reserved for future use: simulate real-time pacing in long-running
-    /// integration tests. **Currently a no-op marker** — `MockAudioBackend`
-    /// does not consult this variant; `feed` always runs as fast as the ring
-    /// drains.
+    /// Marker variant intended to simulate real-time pacing in
+    /// long-running integration tests. **Currently a no-op marker** —
+    /// `MockAudioBackend` does not consult this variant; `feed` always
+    /// runs as fast as the ring drains.
     Realtime,
 }
 
@@ -195,11 +195,8 @@ impl MockAudioBackend {
     ///
     /// The counter is incremented inside [`MockAudioBackend::feed`] (and
     /// inside the cpal callback in production) every time a sample is
-    /// dropped because the SPSC ring was full. Phase 1.1 exposes the
-    /// counter as a poll-only handle: callers (tests and the future
-    /// Phase 1.2 Tauri shell) read it as needed. The DSP worker does
-    /// **not** currently poll it — wiring of the structured underrun
-    /// warning is Phase 1.2 work.
+    /// dropped because the SPSC ring was full. Exposed as a poll-only
+    /// handle: callers (tests and the Tauri shell) read it as needed.
     pub fn dropped_samples(&self) -> Arc<AtomicU64> {
         Arc::clone(&self.dropped_samples)
     }

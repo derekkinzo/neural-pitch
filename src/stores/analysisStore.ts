@@ -1,12 +1,12 @@
 // Analysis store — slow-path Zustand state for the Phase 2.1 RecordingDetail.
 //
-// Per ADR-0003 the hot path (live PitchUpdate frames) lives in a RingBuffer,
+// The hot path (live PitchUpdate frames) lives in a RingBuffer,
 // not Zustand. Analysis is intrinsically slow (one IPC per row click, one
 // progress event per ~100 ms while a forced re-analyze is running) so the
 // store is the right home for the summary card, contour cache, and
 // in-progress / error sets.
 //
-// IPC surface (DESIGN.md §7.5 / §8.3):
+// IPC surface:
 //   - `analyze_recording({ recordingId, forceRefresh })` -> AnalysisSummary
 //   - `get_contour({ recordingId })`                     -> ContourResult
 //   - `analysis-progress` event channel emits AnalysisProgress at ~10 Hz
@@ -28,9 +28,6 @@
 //      returns `was_cached=true` from the `analysis_cache` SHA-256 hit and
 //      the summary lands in `byRecording` as soon as the promise resolves.
 //
-// Cross-references:
-//   docs/design/DESIGN.md §7.5 (Phase 2.1 frontend additions)
-//   docs/design/DESIGN.md §8.3 (analysis_cache schema)
 //   src/stores/recordingsStore.ts (precedent for slow-path Zustand patterns)
 
 import { create } from "zustand";

@@ -4,9 +4,6 @@
 // serious or critical axe-core violations against WCAG 2.1 AA. Mirrors
 // the existing tuner-a11y baseline in `a11y.spec.ts`.
 //
-// Cross-references:
-//   docs/design/TEST-PLAN.md §6.2 (Accessibility — every page-level spec)
-//   docs/design/DESIGN.md §7.5 (RecordingsList — drawer reuse)
 
 import { expect, test } from "./fixtures";
 import { installRecordingsMock, type MockRecording } from "./helpers/tauri-mock";

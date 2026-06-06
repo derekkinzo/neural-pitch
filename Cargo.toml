@@ -56,9 +56,9 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 serde        = { version = "1", features = ["derive"] }
 serde_json   = "1"
 parking_lot  = "0.12"
-# Phase 2.1 — `postcard` is the on-the-wire serialiser for the
+# `postcard` is the on-the-wire serialiser for the
 # `analysis_cache.result_blob` column. Pure-Rust, MIT/Apache-2.0,
-# 5–10× smaller than `serde_json` for the dense `Vec<F0Frame>` payload.
+# 5-10x smaller than `serde_json` for the dense `Vec<F0Frame>` payload.
 postcard     = { version = "1", features = ["use-std"] }
 
 [profile.release]

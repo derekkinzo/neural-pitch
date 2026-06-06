@@ -14,8 +14,6 @@
 // `window.__neuralPitchTestHooks.listeners` keyed by `"audio:backend"`,
 // which a spec drives via `pushDeviceEvent(page, event)`.
 //
-// Cross-references:
-//   docs/design/DESIGN.md §9.3 (audio backend events)
 //   tests/e2e/helpers/tauri-mock.ts (synthetic event delivery)
 
 import { useEffect } from "react";

@@ -6,13 +6,13 @@
 //! algorithm memo for the full specification.
 //!
 //! Public contract:
-//!   * `a4_hz` is a parameter (per ADR-0005 — no module-level A4 state).
+//!   * `a4_hz` is a parameter (no module-level A4 state).
 //!   * Voicing is taken at face value from `contour.frames[i].voiced`; the
 //!     analyser does not re-gate against confidence (that would
 //!     double-gate with [`crate::voicing::VoiceActivityGate`] upstream).
 //!   * Returns [`RangeReport::insufficient`] when fewer than 50 voiced
 //!     frames are present (~0.5 s at 93.75 fps).
-//!   * `voice_type_hint` is *informational only* (ADR-0008) and may report
+//!   * `voice_type_hint` is *informational only* and may report
 //!     multiple overlapping types (e.g. `Some(vec![Tenor, Baritone])`).
 
 use serde::{Deserialize, Serialize};
@@ -33,7 +33,7 @@ const NUM_BINS: usize = 128;
 ///
 /// Ranges follow New Grove Dictionary of Music with ±1 semitone tolerance.
 /// Multiple variants may be returned when the comfortable range overlaps
-/// adjacent types — by design we never auto-assign one (ADR-0008).
+/// adjacent types — by design we never auto-assign one.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum VoiceType {
     /// Soprano — roughly C4–C6.
@@ -53,7 +53,7 @@ pub enum VoiceType {
 /// Whole-recording vocal-range histogram report.
 ///
 /// Field order matters for postcard byte-equal round-trips — do not
-/// reorder without bumping the analyzer-version cache key (ADR-0012).
+/// reorder without bumping the analyzer-version cache key.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct RangeReport {
     /// Number of voiced frames considered. Below 50 the report is the
@@ -73,7 +73,7 @@ pub struct RangeReport {
     pub full_min_midi: i32,
     /// Upper bound of the full range (0.1% trim) as a MIDI number.
     pub full_max_midi: i32,
-    /// Voice-type hints (informational; ADR-0008). `None` when the
+    /// Voice-type hints (informational). `None` when the
     /// recording does not contain enough voiced data.
     pub voice_type_hint: Option<Vec<VoiceType>>,
 }
@@ -98,7 +98,7 @@ impl RangeReport {
 
 /// Compute the vocal-range report for one contour.
 ///
-/// `a4_hz` is the caller-supplied reference pitch (per ADR-0005 — no
+/// `a4_hz` is the caller-supplied reference pitch (no
 /// module-level state).
 #[must_use]
 pub fn compute_range(contour: &ContourResult, a4_hz: f32) -> RangeReport {

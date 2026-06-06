@@ -7,9 +7,6 @@
 // the hot path. The Tier-5 mock (`tests/e2e/helpers/tauri-mock.ts`) emits the
 // same shape via `pushPitchUpdate`.
 //
-// Cross-references:
-//   docs/design/DESIGN.md §7 (Phase 1.2 — Live tuner UI)
-//   docs/adr/0003-stack-tauri-react-tailwind.md (no `any` on hot path)
 
 export interface PitchUpdate {
   /** Absolute timestamp of the analysis frame's centre, in samples. */

@@ -1,7 +1,7 @@
 // Performance budget stub.
 //
 // Phase-0 has no real hot path: the placeholder page is a single static
-// React tree. Web-Vitals targets defined in TEST-PLAN.md §6.2 (LCP < 2.0 s,
+// React tree. Web-Vitals targets (LCP < 2.0 s,
 // CLS < 0.05, p95 FPS > 55, no `longtask` > 50 ms) gain teeth in Phase 1.2
 // when the tuner needle is the actual measurement subject.
 //
@@ -9,9 +9,6 @@
 //   - capture LargestContentfulPaint via PerformanceObserver
 //   - assert against a relaxed CI-friendly bound
 //
-// Cross-references:
-//   docs/design/TEST-PLAN.md §6.2 (Performance category)
-//   docs/design/TEST-PLAN.md §11.2 (10% warning band)
 
 import { test, expect } from "./fixtures";
 

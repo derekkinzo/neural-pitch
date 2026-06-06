@@ -1,7 +1,7 @@
 //! Music theory math: frequency ↔ MIDI ↔ note-name conversions, cents.
 //!
 //! All public functions take `a4_hz` as an explicit parameter. There is no
-//! module-level state (ADR-0005). The reference formula for cents-relative-
+//! module-level state. The reference formula for cents-relative-
 //! to-equal-temperament is:
 //!
 //! ```text

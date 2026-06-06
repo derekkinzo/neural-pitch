@@ -19,9 +19,6 @@
 //     `aria-live` region from the tuner is NOT reused (label-only updates
 //     are silent unless the user explicitly re-focuses the button).
 //
-// Cross-references:
-//   docs/design/DESIGN.md §7.5 (RecordButton — top-right of header)
-//   docs/adr/0011-recording-defaults-48k-24bit-mono-flac.md
 
 import { type ReactNode } from "react";
 import { formatElapsed } from "@/lib/duration-format";

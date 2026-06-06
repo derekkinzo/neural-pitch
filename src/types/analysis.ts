@@ -4,9 +4,6 @@
 // the IPC boundary (`analyze_recording`, `get_contour`, `analysis-progress`)
 // shares this shape with the Tier-5 Tauri-mock under tests/e2e/helpers.
 //
-// Cross-references:
-//   docs/design/DESIGN.md §7.5 (Phase 2.1 frontend additions)
-//   docs/design/DESIGN.md §8.3 (analysis_cache schema)
 //   tests/e2e/helpers/tauri-mock.ts (MockAnalysisSummary / MockContourResult)
 
 import type { RecordingId } from "@/types/recording";
@@ -20,8 +17,6 @@ import type { RecordingId } from "@/types/recording";
  *  follows the New Grove vocal-range conventions — informational only,
  *  NOT a vocal-coach assessment.
  *
- *  Cross-references:
- *    docs/design/DESIGN.md §7.5 (Phase 2.3 frontend additions)
  */
 export interface RangeReport {
   /** 5th percentile of voiced MIDI. */

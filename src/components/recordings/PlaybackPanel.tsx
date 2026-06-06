@@ -11,8 +11,6 @@
 // stays stable across selection changes (avoids layout-shift / focus-trap
 // recompute).
 //
-// Cross-references:
-//   docs/design/DESIGN.md §7.5 phase-additions table
 
 import { useEffect, useState, type ReactNode } from "react";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";

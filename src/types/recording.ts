@@ -3,10 +3,6 @@
 // Field names are camelCase on the TS side; the IPC boundary maps from
 // snake_case Rust per the existing `audio-event.ts` convention.
 //
-// Cross-references:
-//   docs/design/DESIGN.md §7.5 (Phase 2.0 frontend additions)
-//   docs/design/DESIGN.md §8.3 (recordings DB schema)
-//   docs/adr/0011-recording-defaults-48k-24bit-mono-flac.md
 
 /** UUIDv7 string identifier minted on `start_recording` and persisted in
  *  the SQLite library. */

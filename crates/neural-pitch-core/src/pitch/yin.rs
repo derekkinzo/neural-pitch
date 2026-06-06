@@ -18,8 +18,7 @@
 //! 1. Difference function `d(tau) = sum_t (x[t] - x[t+tau])^2` for
 //!    `tau in [tau_min, tau_max]`. Naive O(W * (tau_max - tau_min)) form;
 //!    for `window_size = 2048` this is roughly 4M FLOPs per frame, well
-//!    within the latency budget (Phase 1 of the design doc; FFT-based
-//!    autocorrelation is deferred to Phase 1.1 if profiling shows need).
+//!    within the latency budget.
 //! 2. Cumulative-mean-normalized difference
 //!    `d'(tau) = d(tau) * tau / cumsum_{i=1..=tau} d(i)`, with
 //!    `d'(0) = 1.0` per the paper.
@@ -115,7 +114,7 @@ pub struct YinMpmEstimator {
     tau_min_floor: usize,
     /// Constructor-time maximum lag ceiling (in samples). `process_with_range`
     /// MUST never widen `tau_max` above this — the scratch buffers were
-    /// sized for exactly this lag, satisfying DESIGN.md §5.6 invariant 3.
+    /// sized for exactly this lag.
     tau_max_ceiling: usize,
 
     /// Scratch buffer holding either `d(tau)` (YIN) or `m(tau)` (MPM) for

@@ -1,12 +1,9 @@
-// Playwright configuration for the Tier-5 E2E harness.
+// Playwright configuration for the E2E harness.
 //
-// Cross-references:
-//   docs/design/TEST-PLAN.md §6 (Tier 5 — UI E2E with Playwright MCP)
-//   docs/adr/0019-tier-5-e2e-playwright-mcp.md (Track A — Browser-mode every PR)
-//
-// Three browser projects (chromium, webkit, firefox) gate the Phase-0 placeholder
-// surface. Visual baselines are pinned to chromium-linux per TEST-PLAN.md §6.2;
-// firefox is wired now so promotion to per-PR coverage is a config flip.
+// Three browser projects (chromium, webkit, firefox) drive the React UI
+// against the mock-Tauri bridge. Visual baselines are pinned to
+// chromium-linux because cross-arch render drift makes other-browser
+// baselines unreliable.
 
 import { defineConfig, devices } from "@playwright/test";
 

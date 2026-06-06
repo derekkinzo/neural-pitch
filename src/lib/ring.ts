@@ -9,9 +9,6 @@
 // MUST treat the returned reference as read-only — mutating it would corrupt
 // the next push.
 //
-// Cross-references:
-//   docs/design/DESIGN.md §7 (hot-path / no useState on per-frame path)
-//   docs/adr/0003-stack-tauri-react-tailwind.md
 
 export class RingBuffer<T> {
   private readonly buf: Array<T | undefined>;

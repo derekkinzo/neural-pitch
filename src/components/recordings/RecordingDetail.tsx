@@ -20,10 +20,6 @@
 // event with `percent >= 100` arrives — the cache spec drives this with
 // `pushAnalysisProgress`.
 //
-// Cross-references:
-//   docs/design/DESIGN.md §7.5 (Phase 2.1 frontend additions)
-//   docs/design/DESIGN.md §8.3 (analysis_cache schema)
-//   docs/adr/0006-visual-only-feedback-prefers-reduced-motion.md
 //   src/components/CentsMeter.tsx (canonical canvas + DPR + reduced-motion pattern)
 
 import { useEffect, useMemo, type ReactNode } from "react";

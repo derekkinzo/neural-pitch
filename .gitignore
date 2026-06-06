@@ -52,7 +52,7 @@ Thumbs.db
 /tests/e2e/.auth
 
 # Acceptance harness regenerated artifact (timestamp + cents change per run)
-/docs/reports/*.json
+/.acceptance-reports/
 
 # Local env
 .env

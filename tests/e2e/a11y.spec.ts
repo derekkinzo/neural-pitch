@@ -6,8 +6,6 @@
 //   2. The settings drawer (when open) also passes the same scan.
 //   3. Tab traversal reaches the gear button.
 //
-// Cross-references:
-//   docs/design/TEST-PLAN.md §6.2 (Accessibility — every page-level spec)
 
 import { test, expect } from "./fixtures";
 

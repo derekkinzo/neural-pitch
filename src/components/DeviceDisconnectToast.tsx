@@ -5,8 +5,6 @@
 // The Reconnect button invokes `configure({ device: "default" })` which on
 // the Rust side triggers a stop_capture / start_capture cycle.
 //
-// Cross-references:
-//   docs/design/DESIGN.md §9.3 (audio backend events — recovery path)
 
 import { useState, type ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
@@ -35,7 +33,7 @@ export function DeviceDisconnectToast(): ReactNode {
   // role="alert" implies aria-live="assertive" + aria-atomic="true": a
   // device disconnect carries a destructive recovery action and SHOULD
   // be announced immediately rather than queued behind speech the way a
-  // polite live region would. See docs/design/DESIGN.md §9.3 for the
+  // polite live region would.md §9.3 for the
   // rationale and the matching playwright assertion in
   // tests/e2e/disconnect.spec.ts.
   return (

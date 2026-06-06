@@ -3,7 +3,7 @@
 //! Same shape as `pesto_synthetic_onnx.rs` — push a 960-sample @ 48 kHz
 //! 440 Hz sine through [`CrepeTinyEstimator::process`] and assert the
 //! recovered f0 lies within 5 cents of 440 Hz. The differences from PESTO
-//! per `MODULAR-PITCH-RESEARCH.md` §8.2 are:
+//! are:
 //!   * stateless graph — no `cache_in` / `cache_out` tensors,
 //!   * native rate is 16 kHz with a 1024-sample window, so the estimator
 //!     must resample the 48 kHz capture audio internally (rubato) and

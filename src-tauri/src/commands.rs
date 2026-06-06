@@ -1,6 +1,6 @@
 //! Tauri command surface for the NeuralPitch shell.
 //!
-//! All commands return `Result<T, String>` per ADR-0015 — errors are
+//! All commands return `Result<T, String>` — errors are
 //! formatted with `format!("{e:#}")` so the front-end gets the full
 //! `anyhow`-style chain. Validation failures do not mutate state.
 
@@ -54,7 +54,7 @@ const DSP_JOIN_BUDGET: Duration = Duration::from_millis(500);
 /// on denial cpal returns `BuildStreamError::BackendSpecific`, which the
 /// shell maps to a user-facing string telling the operator to enable the
 /// permission in System Settings → Privacy & Security → Microphone.
-/// ADR-0017 forbids any telemetry on permission denial.
+/// No telemetry is emitted on permission denial.
 #[tauri::command]
 #[tracing::instrument(
     skip(state, channel, events),
@@ -273,7 +273,7 @@ pub async fn start_recording(
     let sample_rate_hz = settings_snapshot.sample_rate_hz;
     if sample_rate_hz != 48_000 {
         return Err(format!(
-            "ADR-0011 requires 48 kHz sample rate for FLAC recordings (current: {sample_rate_hz})"
+            "FLAC recordings require a 48 kHz sample rate (current: {sample_rate_hz})"
         ));
     }
 
@@ -561,7 +561,7 @@ const DEFAULT_ANALYZER_VERSION: &str = neural_pitch_core::analysis::contour::PYI
 
 /// Adapter that lets `analyze_recording_blocking` emit progress through a
 /// `tauri::ipc::Channel<AnalysisProgress>` without dragging Tauri types
-/// into `neural-pitch-core` (P2 / ADR-0002).
+/// into `neural-pitch-core`.
 ///
 /// `Channel::send` synchronously serialises JSON on the calling thread.
 /// The blocking analyzer runs inside `spawn_blocking`, so the send happens
@@ -730,7 +730,7 @@ pub async fn delete_analysis(
 // `spawn_blocking` worker that postcard-decodes the cached `(recording_id,
 // analyzer_name, analyzer_version)` blob and projects the requested
 // sub-field. No separate row, no second cache key — see Phase 2.3 §2 and
-// ADR-0021 for the cache-version bump that backs the projection.
+// Cache-version bump backs the projection.
 //
 // Both commands re-use the `a4_hz` stored on the originating recordings
 // row so the projection is consistent with what `analyze_recording`'s
@@ -741,7 +741,7 @@ pub async fn delete_analysis(
 /// Resolve a recording id to its `a4_hz` reference pitch.
 ///
 /// Phase 2.3 range / vibrato projections need the `a4_hz` from the row
-/// (per ADR-0005 — no module-level A4 state). We accept the SQLite hop on
+/// (no module-level A4 state). We accept the SQLite hop on
 /// the spawn_blocking worker rather than forcing the caller to supply
 /// `a4_hz` over IPC; the recording row is the source of truth.
 ///
@@ -774,7 +774,7 @@ fn lookup_a4_hz(
 /// Otherwise the cached blob is decoded, `compute_range` is projected
 /// over the contour, and the result is returned. The same `a4_hz`
 /// reference the originating recording row carries is used (per
-/// ADR-0005).
+///
 #[tauri::command]
 #[tracing::instrument(skip(state))]
 pub async fn get_range_report(
@@ -1015,9 +1015,9 @@ pub async fn analyze_recording_with_backend(
 /// Read-only snapshot of the build's compiled-in capabilities.
 ///
 /// The front-end uses this to light a developer-mode status pill and to
-/// gate the (Phase 2.5/3) backend-picker UI. Mirrors the `cfg!` flags at
-/// the Tauri layer so the front-end never has to guess which backends are
-/// linked in.
+/// gate UI that depends on which backends are linked in. Mirrors the
+/// `cfg!` flags at the Tauri layer so the front-end never has to guess
+/// which backends are linked in.
 #[derive(Serialize, Debug, Clone)]
 pub struct Capabilities {
     /// `true` when this binary was built with `--features app-neural`
@@ -1064,7 +1064,7 @@ pub enum ModelStatus {
     /// The model is not on disk, but the manifest carries a real URL +
     /// sha256 — the front-end may offer a download.
     MissingButFetchable {
-        /// HTTPS URL the resolver will fetch from in Phase 2.5/3.
+        /// HTTPS URL recorded for the model.
         url: String,
     },
     /// The manifest entry is still a placeholder (empty URL or all-zeros
@@ -1075,12 +1075,9 @@ pub enum ModelStatus {
 /// Inspect the on-disk + manifest state for a single model.
 ///
 /// Calls [`neural_pitch_core::models::peek`] (a non-fetching variant of
-/// `ensure_model`) and maps the result onto [`ModelStatus`]. Phase 2.2:
-/// the workspace `models.toml` only carries `pesto-v1` with placeholder
-/// fields, so this command always surfaces
-/// [`ModelStatus::MissingNotConfigured`] until Phase 2.5/3 fills the URL +
-/// sha256 in. The shape is wired up early so Phase 2.5 only has to flip
-/// the manifest, not the IPC.
+/// `ensure_model`) and maps the result onto [`ModelStatus`]. The
+/// workspace `models.toml` carries placeholder rows today, so this
+/// command always surfaces [`ModelStatus::MissingNotConfigured`].
 #[tauri::command]
 #[tracing::instrument(skip(state), fields(model_name = %name))]
 #[allow(clippy::needless_pass_by_value)]
@@ -1185,13 +1182,11 @@ pub async fn rename_recording(
 
 /// Reconfigure the settings cache.
 ///
-/// Phase 1.2 contract: `configure` MAY NOT be called while capture is live;
-/// reconfiguring an active pipeline requires a `stop_capture`/`start_capture`
-/// round-trip so the front-end and the worker stay in lock-step on
-/// `window_size`, `hop_size`, `sample_rate_hz`, and `instrument_hint`.
-/// Calling `configure` while live returns `Err`. Phase 1.3 will introduce a
-/// dedicated `reconfigure_running` that performs stop→mutate→start
-/// atomically.
+/// Contract: `configure` MAY NOT be called while capture is live;
+/// reconfiguring an active pipeline requires a `stop_capture` /
+/// `start_capture` round-trip so the front-end and the worker stay in
+/// lock-step on `window_size`, `hop_size`, `sample_rate_hz`, and
+/// `instrument_hint`. Calling `configure` while live returns `Err`.
 ///
 /// If the supplied settings do not validate, `Err` is returned and the
 /// settings cache is left untouched.
@@ -1367,7 +1362,7 @@ where
 /// Translate a [`BuildError`] into the user-facing string surfaced to the
 /// front-end. `AudioBackend` permission denials are detected on the typed
 /// [`AudioBackendError::PermissionDenied`] variant; other variants pass
-/// through as a structured `format!` chain. ADR-0017 forbids any telemetry
+/// through as a structured `format!` chain. No telemetry
 /// on the permission-denial path.
 ///
 /// Takes `BuildError` by value so it composes cleanly with
@@ -1400,7 +1395,7 @@ fn build_controller(
 ) -> Result<DspController, BuildError> {
     // 1) Discover the default input device. We do not currently allow
     //    explicit device selection from the front-end; that is Phase 1.3
-    //    work (see ADR-0017).
+    //    work.
     let host = cpal::default_host();
     let device = host
         .default_input_device()

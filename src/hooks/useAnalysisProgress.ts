@@ -4,8 +4,6 @@
 // ~10 Hz. The mock-Tauri bridge surfaces the same channel via
 // `pushAnalysisProgress(page, progress)` for E2E specs.
 //
-// Cross-references:
-//   docs/design/DESIGN.md §7.5 (Phase 2.1 frontend additions)
 //   src/hooks/useRecordingProgress.ts (precedent for the same pattern)
 
 import { useEffect } from "react";

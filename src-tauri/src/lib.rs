@@ -1,8 +1,7 @@
-//! NeuralPitch Tauri shell — all logic lives in the library so iOS / Android
-//! builds can link it.
+//! NeuralPitch Tauri shell — all logic lives in the library so platform
+//! entry points (desktop today) link it.
 //!
-//! Phase 1.2 wires the Phase 1.1 `neural-pitch-core` DSP pipeline into Tauri
-//! 2 commands per ADR-0014. Streaming `PitchUpdate` frames flow over a
+//! Streaming `PitchUpdate` frames flow over a
 //! `tauri::ipc::Channel<PitchUpdate>` that the JavaScript side constructs
 //! and passes into `start_capture` as a command argument; the Rust shell
 //! does not own or create the channel.
@@ -23,8 +22,7 @@ use tracing_subscriber::EnvFilter;
 
 use crate::state::AppState;
 
-/// Entry point invoked by both desktop main.rs and mobile platform
-/// frameworks.
+/// Entry point invoked by the desktop main.rs.
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tracing_subscriber::fmt()
@@ -33,12 +31,12 @@ pub fn run() {
                 .unwrap_or_else(|_| EnvFilter::new("info,neural_pitch=debug")),
         )
         .init();
-    tracing::info!("NeuralPitch Phase 1.2 starting");
+    tracing::info!(version = env!("CARGO_PKG_VERSION"), "NeuralPitch starting");
 
-    // Builder failure at startup is unrecoverable — no front-end exists
-    // yet, no state is persisted, the OS-level shell window is not open.
-    // Allow the panic in this single bootstrap path. ADR-0014 documents
-    // this exception.
+    // Builder failure at startup is unrecoverable — no front-end exists,
+    // no state is persisted, the OS-level shell window is not open. The
+    // single bootstrap path is the documented exception to the
+    // `expect_used` lint.
     #[allow(clippy::expect_used)]
     tauri::Builder::default()
         .plugin(tauri_plugin_log::Builder::default().build())

@@ -6,8 +6,6 @@
 // `window.__neuralPitchTestHooks.listeners` keyed by `"recording-progress"`,
 // which a spec drives via `pushRecordingProgress(page, progress)`.
 //
-// Cross-references:
-//   docs/design/DESIGN.md §7.5 (Phase 2.0 frontend additions)
 //   tests/e2e/helpers/tauri-mock.ts (synthetic event delivery)
 
 import { useEffect } from "react";

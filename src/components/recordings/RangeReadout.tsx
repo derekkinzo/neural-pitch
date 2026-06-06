@@ -24,9 +24,6 @@
 //   focus event rather than twice (once from `aria-label` + once from a
 //   sibling sr-only span).
 //
-// Cross-references:
-//   docs/design/DESIGN.md §7.5 (Phase 2.3 frontend additions)
-//   docs/adr/0006-visual-only-feedback-prefers-reduced-motion.md
 //   src/components/recordings/RecordingDetail.tsx (parent — single subscription)
 
 import type { ReactNode } from "react";

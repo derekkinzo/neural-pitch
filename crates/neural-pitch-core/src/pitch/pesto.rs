@@ -1,22 +1,21 @@
 #![allow(clippy::doc_markdown)]
-//! Phase 2.2 — PESTO neural pitch estimator.
+//! PESTO neural pitch estimator.
 //!
 //! PESTO (Riou et al., ISMIR 2023) is a self-supervised, cents-bin-classifier
-//! pitch estimator. We use the `StatelessPESTO` ONNX export
-//! (`MODULAR-PITCH-RESEARCH.md` §8.2): the model surfaces its temporal
-//! receptive field as an explicit `cache_in` / `cache_out` tensor pair so
-//! we can drive it window-by-window from Rust. The Rust caller
-//! **MUST** thread `cache_out -> cache_in` across consecutive `process`
-//! calls — without it, every window starts cold and the estimator returns
-//! garbage on the first ~100 ms of any stream.
+//! pitch estimator. We target the `StatelessPESTO` ONNX export — the model
+//! surfaces its temporal receptive field as an explicit `cache_in` /
+//! `cache_out` tensor pair so we can drive it window-by-window from Rust.
+//! The Rust caller **MUST** thread `cache_out -> cache_in` across
+//! consecutive `process` calls — without it, every window starts cold and
+//! the estimator returns garbage on the first ~100 ms of any stream.
 //!
 //! # Asset and license posture
 //!
-//! Per ADR-0008 and `MODULAR-PITCH-RESEARCH.md` §8.1 we **do not vendor**
-//! the PESTO weights. Tests use a tiny synthetic stub ONNX (see
-//! [`crate::test_utils`]); production users supply the real `.onnx` via
-//! the resolver path Phase 2.5/3+ lands. The Rust code in this module is
-//! clean-room and ships under the workspace's MIT / Apache-2.0 dual licence.
+//! We **do not vendor** the PESTO weights. Tests use a tiny synthetic stub
+//! ONNX (see [`crate::test_utils`]); the real-ONNX inference path returns
+//! [`EstimatorError::Ort`] today and is wired alongside the model resolver.
+//! The Rust code in this module is clean-room and ships under the
+//! workspace's MIT / Apache-2.0 dual licence.
 //!
 //! # Hot-path discipline
 //!
@@ -46,7 +45,7 @@ use ndarray::Array4;
 use crate::pitch::{EstimatorConfig, EstimatorError, F0Frame, PitchEstimator};
 
 /// Constructor-time invariant: PESTO v1 is a 48 kHz model with a
-/// 960-sample window per `MODULAR-PITCH-RESEARCH.md` §8.2.
+/// 960-sample window.
 const PESTO_SAMPLE_RATE_HZ: u32 = 48_000;
 /// Constructor-time invariant: 960-sample window @ 48 kHz.
 const PESTO_WINDOW_SIZE: usize = 960;
@@ -135,7 +134,7 @@ impl PestoEstimator {
         };
 
         // Pre-allocate the cache tensor zero-initialised. The shape
-        // matches `MODULAR-PITCH-RESEARCH.md` §8.2's StatelessPESTO
+        // matches StatelessPESTO's
         // export; if a future export changes the shape, only this
         // constructor and the `process` plumbing need updating.
         let cache = Array4::<f32>::zeros(PESTO_CACHE_SHAPE);

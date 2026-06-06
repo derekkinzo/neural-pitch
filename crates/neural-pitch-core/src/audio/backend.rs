@@ -3,16 +3,16 @@
 //! [`AudioBackend`] is the single boundary between live capture (cpal in
 //! production, [`crate::audio::MockAudioBackend`] in tests) and the DSP
 //! worker. Concrete backends push interleaved-mono `f32` samples into an
-//! [`rtrb::Producer<f32>`]; the worker drains them on a dedicated `std::thread`
-//! (ADR-0014).
+//! [`rtrb::Producer<f32>`]; the worker drains them on a dedicated
+//! `std::thread`.
 //!
 //! Out-of-band device events ([`AudioBackendEvent`]) flow through an
 //! [`AudioEventEmitter`] supplied by the Tauri shell at construction time.
-//! Phase 1.3 wires the emitter as a `Arc<dyn Fn(AudioBackendEvent) + Send + Sync>`
-//! so the core crate keeps zero `tauri::*` imports (P2). The shell wraps a
+//! The emitter is an `Arc<dyn Fn(AudioBackendEvent) + Send + Sync>` so the
+//! core crate keeps zero `tauri::*` imports. The shell wraps a
 //! `tauri::ipc::Channel<AudioBackendEvent>` in a matching closure. Events
-//! MUST NOT be funnelled through the sample producer (P3, DESIGN §2.4); the
-//! producer is real-time-safe and must not carry structured data.
+//! MUST NOT be funnelled through the sample producer; the producer is
+//! real-time-safe and must not carry structured data.
 
 use std::io;
 use std::sync::Arc;
@@ -26,8 +26,7 @@ use thiserror::Error;
 /// `AudioBackendConfig` is the single source of truth for the analyzer's
 /// expected geometry: sample rate, channel count, hop size, and analysis
 /// window length. The DSP worker uses these to size its sliding-window buffer
-/// and to compute the ring-buffer capacity (`next_pow2(3 * window)` per
-/// DESIGN §6.4).
+/// and to compute the ring-buffer capacity (`next_pow2(3 * window)`).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AudioBackendConfig {
     /// Sample rate of incoming audio, in Hertz.
@@ -49,7 +48,7 @@ impl AudioBackendConfig {
     /// audio callback and the DSP worker.
     ///
     /// Returns `next_pow2(3 * window)` so the producer never has to wrap
-    /// inside a single analysis frame. This matches DESIGN §6.4.
+    /// inside a single analysis frame.
     pub fn ring_capacity(&self) -> usize {
         // `checked_next_power_of_two` returns `None` only on overflow at the
         // very top of the `usize` range, which we never approach in practice.
@@ -68,7 +67,7 @@ impl AudioBackendConfig {
 /// These flow through an [`AudioEventEmitter`] supplied by the Tauri shell at
 /// backend construction time. The shell wraps a
 /// `tauri::ipc::Channel<AudioBackendEvent>` in a matching closure so the core
-/// crate keeps zero `tauri::*` imports (P2, ADR-0002). Events are intentionally
+/// crate keeps zero `tauri::*` imports. Events are intentionally
 /// out-of-band: they MUST NOT be funnelled through the sample producer, which
 /// is real-time-safe and must not carry structured data.
 ///
@@ -102,23 +101,23 @@ pub enum AudioBackendEvent {
 /// closure satisfying this signature; the core crate stays free of any
 /// `tauri::*` imports (P2). Calls to the emitter are non-blocking: the cpal
 /// `err_fn` runs on the platform audio thread, and the closure MUST NOT
-/// allocate or block per ADR-0014. `tauri::ipc::Channel::send` does perform
+/// allocate or block. `tauri::ipc::Channel::send` does perform
 /// JSON serialisation on the calling thread, but only on the rare device-
 /// event path (not the per-sample hot path), so the cost is acceptable.
 pub type AudioEventEmitter = Arc<dyn Fn(AudioBackendEvent) + Send + Sync>;
 
 /// Errors raised by [`AudioBackend::start`] and related lifecycle calls.
 ///
-/// Variants are intentionally coarse-grained for Phase 1.1; most cpal-specific
-/// branches surface as [`AudioBackendError::BuildStream`] with the underlying
-/// error message preserved.
+/// Variants are intentionally coarse-grained; most cpal-specific branches
+/// surface as [`AudioBackendError::BuildStream`] with the underlying error
+/// message preserved.
 ///
-/// [`AudioBackendError::PermissionDenied`] is the dedicated typed channel for
-/// the macOS TCC microphone-denial case (and any future platform-equivalent
+/// [`AudioBackendError::PermissionDenied`] is the dedicated typed channel
+/// for the macOS TCC microphone-denial case (and any platform-equivalent
 /// permission rejection): consumers branch on the *variant*, not on a
 /// stringified message, so that locale-dependent backend-specific text
-/// changes cannot regress the user-facing recovery flow. ADR-0017 requires
-/// no telemetry on this path.
+/// changes cannot regress the user-facing recovery flow. The contract
+/// requires no telemetry on this path.
 #[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum AudioBackendError {
@@ -168,8 +167,8 @@ pub enum AudioBackendError {
 pub trait AudioBackend: Send {
     /// Begin capture and route samples through `producer`.
     ///
-    /// May be called at most once per backend instance for Phase 1.1.
-    /// Subsequent calls SHOULD return [`AudioBackendError::BuildStream`].
+    /// May be called at most once per backend instance. Subsequent calls
+    /// SHOULD return [`AudioBackendError::BuildStream`].
     fn start(&mut self, producer: rtrb::Producer<f32>) -> Result<(), AudioBackendError>;
 
     /// Stop capture and tear down the underlying stream. Idempotent.

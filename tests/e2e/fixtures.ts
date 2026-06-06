@@ -1,8 +1,5 @@
 // Custom Playwright test fixtures for the Tier-5 harness.
 //
-// Cross-references:
-//   docs/design/TEST-PLAN.md §6 (Tier 5 — UI E2E with Playwright MCP)
-//   docs/design/TEST-PLAN.md §6.3 (mock-Tauri bridge)
 //
 // Provides:
 //   - mockTauri: installs the @tauri-apps/api/mocks bridge before navigation

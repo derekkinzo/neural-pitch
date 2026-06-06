@@ -11,15 +11,12 @@
 //   2. Per-window dot strip — one dot per `windows[i]`.
 //   3. Reduced-motion — when `prefers-reduced-motion: reduce` matches,
 //      the indicator carries a `transition-none` class (no animated
-//      movement) per ADR-0006.
+//      movement).
 //   4. Empty state — `vibratoRatio < 0.05` renders the single
 //      "No vibrato detected." paragraph.
 //
 // All payloads come from the Phase-2.3 mocks; no real IPC fires.
 //
-// Cross-references:
-//   docs/design/DESIGN.md §7.5 (Phase 2.3 frontend additions)
-//   docs/adr/0006-visual-only-feedback-prefers-reduced-motion.md
 //   src/components/CentsMeter.tsx (canonical reduced-motion pattern)
 
 import { expect, test } from "./fixtures";

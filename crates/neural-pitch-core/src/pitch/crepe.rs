@@ -1,36 +1,33 @@
 #![allow(clippy::doc_markdown)]
-//! Phase 2.2 — CREPE-tiny neural pitch estimator.
+//! CREPE-tiny neural pitch estimator.
 //!
 //! CREPE-tiny (Kim et al., ICASSP 2018) is a 6-conv-layer cents-bin
-//! classifier. We use the MIT-licensed weights from `yqzhishen/onnxcrepe`
-//! v1.1.0 (1.96 MB) per `MODULAR-PITCH-RESEARCH.md` §2.1 — explicitly the
+//! classifier. We target the MIT-licensed weights from
+//! `yqzhishen/onnxcrepe` v1.1.0 (1.96 MB) — explicitly the
 //! **license-clean fallback** for builds where counsel rejects PESTO's
 //! LGPL-3.0 lineage or where a profile sets `--cfg license_strict_mit`.
 //!
 //! Unlike PESTO, CREPE has **no temporal cache tensor** — it is fully
-//! stateless per `MODULAR-PITCH-RESEARCH.md` §8.2. Each `process` call is
-//! a single forward pass over a 1024-sample @ 16 kHz window. Phase 2.2
-//! ships only the synthetic stub backend (which operates on the raw 48 kHz
-//! buffer because the recover-440-Hz-within-5-cents contract does not
-//! require a real resample); Phase 2.5 will introduce a pre-allocated
-//! `rubato::SincFixedIn` resampler so the real-ONNX hot path stays
-//! alloc-free at 48 kHz capture rate.
+//! stateless. Each `process` call is a single forward pass over a
+//! 1024-sample @ 16 kHz window.
+//!
+//! # Backends
+//!
+//! Two backends share the [`CrepeTinyEstimator`] struct:
+//!
+//! * `Stub` — used by the Tier-1 test suite. Performs autocorrelation
+//!   pitch detection over the raw 48 kHz window (the stub does not
+//!   round-trip through 16 kHz because the Tier-1 contract is
+//!   "recover 440 Hz within 5 cents"; a stub-internal resample would
+//!   only add quantisation noise).
+//! * `Onnx` — currently surfaces an [`EstimatorError::Ort`] with a
+//!   "real CREPE-tiny ONNX path not yet wired" message; the real-ONNX
+//!   inference path is not yet hooked up.
 //!
 //! # Asset and license posture
 //!
-//! The `.onnx` file is treated as a runtime asset (ADR-0008). Tests use a
-//! tiny synthetic stub ONNX (see [`crate::test_utils`]); production users
-//! supply the real `.onnx` via the resolver path Phase 2.5/3+ lands.
-//!
-//! # Stub-graph fallback
-//!
-//! When the on-disk bytes match the in-tree stub marker, the estimator
-//! takes a Stub backend that performs autocorrelation pitch detection
-//! over the raw 48 kHz window (the stub does not need to round-trip
-//! through 16 kHz because the Tier-1 contract is "recover 440 Hz within
-//! 5 cents"; a stub-internal resample would only add quantisation
-//! noise). The real-ONNX branch is wired in Phase 2.5 once the resolver
-//! lands.
+//! The `.onnx` file is treated as a runtime asset. Tests use a tiny
+//! synthetic stub ONNX (see [`crate::test_utils`]).
 
 use std::path::Path;
 
@@ -74,9 +71,8 @@ enum Backend {
 ///   * `cfg.fmax_hz <= sample_rate_hz / 2`
 ///
 /// No state survives across `process` calls (CREPE is stateless and
-/// Phase 2.2 has no rubato resampler yet — it will land in Phase 2.5
-/// alongside the real-ONNX path). `reset` is therefore a no-op other than
-/// rolling the timestamp counter.
+/// the current build has no rubato resampler). `reset` is therefore a
+/// no-op other than rolling the timestamp counter.
 pub struct CrepeTinyEstimator {
     cfg: EstimatorConfig,
     backend: Backend,

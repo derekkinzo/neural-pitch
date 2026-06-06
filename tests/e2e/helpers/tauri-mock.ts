@@ -1,8 +1,5 @@
 // Tauri IPC mock bridge for Playwright.
 //
-// Cross-references:
-//   docs/design/TEST-PLAN.md §6.3 (Mock-Tauri bridge)
-//   docs/adr/0019-tier-5-e2e-playwright-mcp.md ("page.addInitScript before React mounts")
 //
 // Implementation note: rather than dynamically importing
 // `@tauri-apps/api/mocks` from the init script (which is async and races
@@ -252,7 +249,7 @@ export async function pushPitchUpdate(page: Page, update: MockPitchUpdate): Prom
 
 /**
  * Wire-format AudioBackendEvent variants the Tier-5 specs synthesise.
- * Mirrors the Phase-1.3 contract documented in DESIGN.md §9.3.
+ * Mirrors the Phase-1.3 IPC contract.
  */
 export type MockAudioBackendEvent =
   | { type: "PriorNarrowed"; rangeHz: readonly [number, number] }
@@ -349,7 +346,7 @@ export interface MockRecordingProgress {
  * `Function.prototype.toString()`, so each handler self-initialises the
  * shared slot from its embedded seed on first call.
  *
- * Phase-2.0 contract (see DESIGN.md §7.5):
+ * Phase-2.0 contract:
  *   - `list_recordings()`                          → MockRecording[]
  *     (returned descending by createdAt to match the store selector)
  *   - `start_recording({ instrumentProfile })`     → { recordingId }
@@ -545,7 +542,7 @@ export interface MockAnalysisProgress {
  * embeds a JSON-encoded literal for the seed maps and self-initialises the
  * shared `__neuralPitchTestHooks.analysis` slot on first call.
  *
- * Phase-2.1 contract (see DESIGN.md §7.5 / §8.3):
+ * Phase-2.1 contract:
  *   - `analyze_recording({ recordingId, forceRefresh })`
  *       → MockAnalysisSummary (with `wasCached = !forceRefresh`)
  *   - `get_contour({ recordingId })`
@@ -647,8 +644,6 @@ export async function pushAnalysisProgress(
  * field next to the existing pYIN/PESTO numerics; readouts read from the
  * same `byRecording` Map entry.
  *
- * Cross-references:
- *   docs/design/DESIGN.md §7.5 (Phase 2.3 frontend additions)
  *   New Grove Dictionary of Music — vocal-range conventions for
  *   `voiceTypeHints` (e.g. ["Alto", "Mezzo-soprano"]).
  */
@@ -687,7 +682,7 @@ export interface MockVibratoReport {
  * exercise the vocal-range readout call this so the seeded summary
  * carries `range` directly — no second IPC, no second store entry.
  *
- * Per the Phase-2.3 architecture (DESIGN.md §7.5), the `byRecording`
+ * Per the Phase-2.3 architecture, the `byRecording`
  * Map already holds `AnalysisSummary`; `RangeReadout` reads
  * `byRecording.get(id)?.range` from the same entry as the existing
  * summary card.

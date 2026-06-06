@@ -1,9 +1,9 @@
 //! Strongly-typed view of the workspace `models.toml` manifest.
 //!
-//! Phase 2.2 — the manifest parser sits in front of the resolver
-//! algorithm: it round-trips `[[models]]` blocks into [`ManifestEntry`]s
-//! and enforces the `schema_version` exact-match guard so a future v2
-//! manifest fails fast rather than silently reinterpreting v1 fields.
+//! The manifest parser sits in front of the resolver algorithm: it
+//! round-trips `[[models]]` blocks into [`ManifestEntry`]s and enforces
+//! the `schema_version` exact-match guard so a v2 manifest fails fast
+//! rather than silently reinterpreting v1 fields.
 
 use std::path::Path;
 
@@ -14,8 +14,7 @@ use serde::Deserialize;
 /// Fields mirror the manifest 1:1; placeholder values (`url = ""`,
 /// `sha256 = "0000…"`) are tolerated by the parser but cause
 /// [`super::resolver::ensure_model`] to surface
-/// [`super::resolver::ResolverError::NotConfigured`] until Phase 2.5/3 fills
-/// them in.
+/// [`super::resolver::ResolverError::NotConfigured`].
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct ManifestEntry {
     /// Stable model identifier, e.g. `"pesto-v1"`.
@@ -32,8 +31,8 @@ pub struct ManifestEntry {
 
 /// All-zeros placeholder sha256 used by the workspace `models.toml`
 /// before a real blob is published. The resolver treats this hash as
-/// "not configured" so a future Phase 2.5/3 commit only has to swap in
-/// the real hex digest to flip the same code path on.
+/// "not configured" and surfaces
+/// [`super::resolver::ResolverError::NotConfigured`].
 pub const PLACEHOLDER_SHA256: &str =
     "0000000000000000000000000000000000000000000000000000000000000000";
 
@@ -49,7 +48,7 @@ impl ManifestEntry {
 /// Top-level `models.toml` document.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct Manifest {
-    /// Exact-match schema guard. Phase 2.2 ships `schema_version = 1`.
+    /// Exact-match schema guard. The current manifest is `schema_version = 1`.
     pub schema_version: u32,
     /// All `[[models]]` entries, preserving manifest order.
     #[serde(default)]

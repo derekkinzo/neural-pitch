@@ -9,9 +9,6 @@
 // reported once after `start_capture` resolves and live read-only on the same
 // store for cheap UI consumption.
 //
-// Cross-references:
-//   docs/design/DESIGN.md §7 (settings model)
-//   docs/adr/0005-default-a4-440hz-with-user-override.md
 
 import { create } from "zustand";
 import {

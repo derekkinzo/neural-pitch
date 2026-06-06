@@ -6,8 +6,6 @@
 // "free". Phase 4 may swap this for a Combobox if the movable-do solfege
 // formatter introduces typeahead requirements.
 //
-// Cross-references:
-//   docs/design/DESIGN.md §6 (Settings drawer controls)
 
 import {
   forwardRef,

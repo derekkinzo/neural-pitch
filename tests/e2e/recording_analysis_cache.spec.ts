@@ -10,9 +10,6 @@
 //      `pushAnalysisProgress(percent=100)` resolves the in-flight
 //      analyze_recording call, the badge re-renders as "Fresh".
 //
-// Cross-references:
-//   docs/design/DESIGN.md §7.5 (RecordingDetail — re-analyze flow)
-//   docs/design/DESIGN.md §8.3 (analysis_cache schema; was_cached column)
 
 import { expect, test } from "./fixtures";
 import {

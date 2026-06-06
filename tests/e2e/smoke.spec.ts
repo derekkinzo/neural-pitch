@@ -5,9 +5,6 @@
 //   2. The mock-Tauri bridge is wired and `start_capture` resolves through
 //      the default mock response (StatusPill → "live").
 //
-// Cross-references:
-//   docs/design/TEST-PLAN.md §6.2 (user flows category)
-//   docs/design/DESIGN.md §13.2 (Phase-1 acceptance — live tuner)
 
 import { test, expect } from "./fixtures";
 

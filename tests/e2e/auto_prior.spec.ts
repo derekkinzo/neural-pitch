@@ -5,9 +5,6 @@
 // `audio:backend` channel, the badge text updates to the narrowed range
 // and `data-prior-mode` reads "auto".
 //
-// Cross-references:
-//   docs/design/TEST-PLAN.md §6.2 (user flows)
-//   docs/adr/0007-instrument-hint-auto-prior.md (auto-prior visibility)
 
 import { test, expect } from "./fixtures";
 import { makePitchUpdate, pushDeviceEvent, pushPitchUpdate } from "./helpers/tauri-mock";
@@ -59,7 +56,7 @@ test.describe("auto-prior — StatusPill badge", () => {
     await expect(page.getByTestId("status-pill")).toHaveAttribute("data-state", "live");
 
     // Open the drawer and switch to "Guitar". The Phase-1 staged range for
-    // Guitar is [80, 1300] per ADR-0007.
+    // Guitar is [80, 1300].
     await page.getByTestId("settings-trigger").click();
     await page.getByLabel(/Instrument hint/i).selectOption("Guitar");
     // Close drawer to drop the focus trap before reading the badge.

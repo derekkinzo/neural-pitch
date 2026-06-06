@@ -10,7 +10,7 @@
 //! - the median YIN-detected f0 over the decoded buffer is within ±1 cent
 //!   of 440 Hz.
 //!
-//! Covers the ADR-0011 fidelity contract: 48 kHz / 24-bit / mono / FLAC
+//! Covers the FLAC fidelity contract: 48 kHz / 24-bit / mono / FLAC
 //! must round-trip through `FlacRecordingSink` without measurable pitch
 //! drift.
 
@@ -107,7 +107,7 @@ fn flac_sink_roundtrip_440hz_within_one_cent() {
     // Decode and assert geometry.
     let (sr, channels, decoded) = decode_flac(&artifact.path);
     assert_eq!(sr, SAMPLE_RATE_HZ, "decoded sample rate must be 48 kHz");
-    assert_eq!(channels, 1, "decoded FLAC must be mono per ADR-0011");
+    assert_eq!(channels, 1, "decoded FLAC must be mono");
     assert_eq!(
         decoded.len(),
         samples.len(),

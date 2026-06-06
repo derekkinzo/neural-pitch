@@ -25,7 +25,7 @@
 //!   `start_capture`; the cpal backend's `err_fn` forwards
 //!   `Disconnected` / `Underrun` / `FormatChanged` over that channel.
 //!
-//! `parking_lot::Mutex` is non-poisoning (ADR-0014). The atomic
+//! `parking_lot::Mutex` is non-poisoning. The atomic
 //! "build_controller succeeds before the cache and disk are mutated" rule
 //! lives in `commands::start_capture` — see that function for details.
 
@@ -52,9 +52,10 @@ use tokio_util::sync::CancellationToken;
 /// satisfying the "stop frees the OS handle" rule from
 /// [`neural_pitch_core::audio::backend`].
 pub(crate) struct DspController {
-    /// Concrete backend (cpal in production). Wrapping in `Box<dyn ...>`
-    /// keeps the struct backend-agnostic so a future Phase 1.4 mock-driven
-    /// integration test can swap it without rewriting the controller.
+    /// Concrete backend (cpal in production). Stored as a trait object so
+    /// the struct stays backend-agnostic — alternative implementations
+    /// (e.g. mock backends in tests) can be slotted in without changing
+    /// the field shape.
     pub(crate) backend: Box<dyn AudioBackend>,
 
     /// Join handle for the DSP worker thread. `None` while we are mid-
@@ -98,7 +99,7 @@ pub(crate) struct ActiveRecording {
     pub(crate) filename: String,
     /// Instrument profile slug at the moment recording started.
     pub(crate) instrument_profile: String,
-    /// Sample rate locked to 48 kHz (ADR-0011) but recorded explicitly
+    /// Sample rate locked to 48 kHz but recorded explicitly
     /// for forward-compatibility with future variable-rate paths.
     pub(crate) sample_rate_hz: i64,
     /// Wall-clock recording-start timestamp. Stamped on the

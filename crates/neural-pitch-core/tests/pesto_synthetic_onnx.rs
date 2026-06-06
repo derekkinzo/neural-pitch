@@ -22,7 +22,7 @@ use neural_pitch_core::test_utils::signals::sine_wave;
 
 fn pesto_cfg() -> EstimatorConfig {
     // PESTO v1's native rate is 48 kHz with a 960-sample window per
-    // `MODULAR-PITCH-RESEARCH.md` §8.2. Constructor-time invariants on
+    // Constructor-time invariants on
     // `PestoEstimator::from_onnx` mirror that; deviating here would be
     // tested separately.
     EstimatorConfig {

@@ -1,10 +1,9 @@
 //! Pitch detection trait surface and supporting types.
 //!
 //! The [`PitchEstimator`] trait is the single backend-agnostic interface for
-//! all pitch detection algorithms shipped or planned in `neural-pitch-core`
-//! (YIN/MPM in Phase 1; pYIN, PESTO, CREPE-tiny in Phase 2). Pipelines own
-//! exactly one boxed estimator at a time and call [`PitchEstimator::process`]
-//! on hop-aligned sample chunks.
+//! every pitch-detection algorithm in `neural-pitch-core`: YIN/MPM, pYIN,
+//! PESTO, and CREPE-tiny. Pipelines own exactly one boxed estimator at a
+//! time and call [`PitchEstimator::process`] on hop-aligned sample chunks.
 //!
 //! # Contract
 //!
@@ -34,11 +33,11 @@ pub mod factory;
 pub mod pyin;
 pub mod yin;
 
-// Phase 2.2 — neural backends. Both modules are `#[cfg(feature = "neural")]`-
-// gated at their own crate-attribute level, so re-declaring the same gate
-// here is required to keep `cargo build --no-default-features` green: with
-// the gate off, the `mod` statement still expects a compilable file, and
-// the inner `#![cfg(feature = "neural")]` would otherwise produce an
+// Neural backends. Both modules are `#[cfg(feature = "neural")]`-gated at
+// their own crate-attribute level, so re-declaring the same gate here is
+// required to keep `cargo build --no-default-features` green: with the
+// gate off, the `mod` statement still expects a compilable file, and the
+// inner `#![cfg(feature = "neural")]` would otherwise produce an
 // empty-but-imported module.
 #[cfg(feature = "neural")]
 pub mod crepe;
@@ -52,8 +51,8 @@ pub mod pesto;
 /// use cents-based or absolute-tolerance helpers instead.
 ///
 /// `Serialize` / `Deserialize` are emitted unconditionally so the offline
-/// pYIN analysis cache (Phase 2.1) can postcard-encode `Vec<F0Frame>`
-/// without re-deriving them per build configuration. Live-path code never
+/// pYIN analysis cache can postcard-encode `Vec<F0Frame>` without
+/// re-deriving them per build configuration. Live-path code never
 /// serialises an `F0Frame` directly.
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct F0Frame {
@@ -65,14 +64,7 @@ pub struct F0Frame {
     ///
     /// Per-backend semantics — consumers that compare confidence across
     /// backends MUST be aware that the underlying probability is not the
-    /// same:
-    ///   * **YIN/MPM**: clarity score (1 - normalised CMNDF minimum).
-    ///   * **pYIN** (Phase 2.1): per-frame voicing posterior probability
-    ///     returned by the `pyin` crate, clamped to `[0, 1]`. Reflects
-    ///     "how confident is the HMM that this frame is voiced", not "how
-    ///     confident is the bin-posterior in the chosen f0".
-    ///   * **PESTO** (Phase 2.2): TBD; see the PESTO estimator's struct
-    ///     doc when it lands.
+    /// same. See each estimator's struct docs for the precise meaning.
     pub confidence: f32,
 
     /// Conjunction of the estimator's internal voicing decision and any

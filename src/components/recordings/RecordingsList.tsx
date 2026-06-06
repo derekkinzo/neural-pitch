@@ -20,9 +20,6 @@
 // The store selector returns items already sorted descending by `createdAt`,
 // so the rendered order does not need re-sorting per render.
 //
-// Cross-references:
-//   docs/design/DESIGN.md §7.5 (RecordingsList — drawer reuse)
-//   docs/design/DESIGN.md §8.3 (recordings DB schema)
 
 import { useEffect, useMemo, useRef, type KeyboardEvent, type ReactNode } from "react";
 import { Drawer } from "@/components/ui/Drawer";

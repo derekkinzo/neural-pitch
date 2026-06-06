@@ -16,7 +16,7 @@
 //!   with `Ordering::Relaxed`. It never blocks, locks, or returns early
 //!   on a partial drop.
 //!
-//! ## Phase 1.3 additions
+//! ## Out-of-band events and platform fallbacks
 //!
 //! - **Out-of-band events.** [`CpalAudioBackend::with_emitter`] takes an
 //!   [`AudioEventEmitter`] (a `Fn(AudioBackendEvent)`) supplied by the Tauri

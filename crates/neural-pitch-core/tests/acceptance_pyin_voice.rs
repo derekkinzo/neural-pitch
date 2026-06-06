@@ -4,7 +4,7 @@
 //! `tests/fixtures/voice/`, computes the median voiced F0 per fixture
 //! against the MIDI binding from `MANIFEST.toml`, and asserts ≥ 95% of
 //! fixtures land within 5 cents of truth (Tier-2 acceptance gate per
-//! ADR-0016 / spec §8). Until `analyze_contour` is implemented the test
+//! Until `analyze_contour` is implemented the test
 //! panics with `todo!` on the very first fixture, which is the red signal.
 #![cfg(feature = "pyin")]
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]

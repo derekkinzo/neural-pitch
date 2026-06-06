@@ -7,9 +7,6 @@
 //   3. After A4 is changed to 442, a frame at 442 Hz exact is rendered as
 //      "A4" with cents = 0 (i.e. note-format.ts re-targets).
 //
-// Cross-references:
-//   docs/design/TEST-PLAN.md §6.2 (settings flows)
-//   docs/design/DESIGN.md §8 (test plan — settings.spec.ts)
 
 import { expect, test } from "./fixtures";
 import { getInvokeCalls, makePitchUpdate, pushPitchUpdate } from "./helpers/tauri-mock";

@@ -5,8 +5,6 @@
 // wraps Radix Slider for visual richness; for Phase 1.2 the native control is
 // the right balance of low surface area + correct semantics.
 //
-// Cross-references:
-//   docs/design/DESIGN.md §6 (Smoothing window slider)
 
 import { forwardRef, type ChangeEvent, type InputHTMLAttributes } from "react";
 

@@ -6,7 +6,7 @@
 //! [`ContourSmoother`]), and pushes a [`PitchUpdate`] through the supplied
 //! [`FrameSink`]. No allocation occurs after `new()`.
 //!
-//! The cancellation contract (ADR-0014): on each iteration the worker
+//! The cancellation contract: on each iteration the worker
 //! checks the [`CancellationToken`] *before* doing any work. Cancellation
 //! is the only ordered shutdown path; tests MUST `cancel.cancel()` and then
 //! `join()` to confirm the worker exits within one packet boundary
@@ -224,10 +224,9 @@ impl DspWorker {
         self
     }
 
-    /// Borrow the worker's [`AutoPrior`] for diagnostics — Tauri / UI
-    /// surfaces SHOULD instead read the dedicated status channel that
-    /// will be added in Phase 1.3 step (5). This accessor exists for
-    /// integration tests.
+    /// Borrow the worker's [`AutoPrior`] for diagnostics. Production
+    /// callers SHOULD prefer the dedicated audio-backend status channel;
+    /// this accessor exists for integration tests.
     #[must_use]
     pub fn auto_prior(&self) -> &AutoPrior {
         &self.auto_prior
@@ -433,7 +432,7 @@ impl DspWorker {
     }
 
     /// Convenience wrapper around [`DspWorker::run`] that spawns it on a
-    /// named [`std::thread`] (ADR-0014).
+    /// named [`std::thread`].
     pub fn spawn(self) -> Result<JoinHandle<Result<(), DspError>>, DspError> {
         std::thread::Builder::new()
             .name("neuralpitch-dsp".to_string())

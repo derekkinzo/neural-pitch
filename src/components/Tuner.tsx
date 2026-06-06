@@ -9,11 +9,6 @@
 //   - PermissionNotice + DeviceDisconnectToast + SavedToast (rendered as
 //     siblings of <main>)
 //
-// Cross-references:
-//   docs/design/DESIGN.md §1 (layout)
-//   docs/design/DESIGN.md §7 (component tree)
-//   docs/design/DESIGN.md §7.5 (Phase 2.0 frontend additions)
-//   docs/design/DESIGN.md §9.3 (audio backend events)
 
 import { useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/Button";

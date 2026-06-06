@@ -8,8 +8,6 @@
 // side-by-side without conflicting because the disconnect-toast is a
 // `role="alert"` (assertive) and this one is a `role="status"` (polite).
 //
-// Cross-references:
-//   docs/design/DESIGN.md §7.5 (Phase 2.0 frontend additions — saved toast)
 
 import { useEffect, type ReactNode } from "react";
 import { useRecordingsStore } from "@/stores/recordingsStore";

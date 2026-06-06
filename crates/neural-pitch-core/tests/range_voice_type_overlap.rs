@@ -3,7 +3,7 @@
 //! 200 voiced frames spanning C3 (MIDI 48, ~130.81 Hz) up to C5
 //! (MIDI 72, ~523.25 Hz) lands inside the New Grove range for both
 //! tenor (C3–C5) and baritone (G2–G4) when the comfortable trim is
-//! applied. The hint is informational only (ADR-0008) — we MUST NOT
+//! applied. The hint is informational only — we MUST NOT
 //! collapse to a single type. The test asserts that at least both
 //! `Tenor` and `Baritone` are present in the returned hint, and the
 //! order is deterministic so the assertion stays stable across runs.

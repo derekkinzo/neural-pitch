@@ -1,6 +1,6 @@
 [package]
 name        = "neural-pitch-core"
-description = "Pure-Rust core: pitch detection, audio I/O abstractions, music theory, modular pipeline traits."
+description = "Pitch detection, audio I/O, music theory, recordings library, and DSP pipeline for NeuralPitch."
 version.workspace      = true
 edition.workspace      = true
 rust-version.workspace = true
@@ -12,28 +12,17 @@ readme.workspace       = true
 [features]
 default = ["cpal", "flac", "pyin"]
 cpal              = ["dep:cpal"]
-decoder-symphonia = []  # Phase 2 — Symphonia-backed file decoders
-# Phase 2.2 — ORT 2.0 (load-dynamic) + ndarray. The ONNX Runtime shared
-# library is supplied out of band via `ORT_DYLIB_PATH`; we deliberately
-# avoid the `download-binaries` feature because it has no iOS/Android
-# coverage (RESEARCH-REPORT.md §7) and would create a bait-and-switch
-# between desktop dev and the eventual mobile path.
-#
-# `rubato` is referenced by the CrepeTinyEstimator's *future* internal
-# resampler (Phase 2.5). Until that lands we keep the dep declaration
-# below `optional = true` but do NOT include it in this feature set:
-# pulling an unused crate into every `neural` build is a hygiene
-# regression and inflates compile time for zero functional contribution.
+# ORT 2.0 (load-dynamic) + ndarray. The ONNX Runtime shared library is
+# supplied out of band via `ORT_DYLIB_PATH`; we deliberately avoid the
+# `download-binaries` feature.
 neural            = ["dep:ort", "dep:ndarray"]
-# Phase 2.1 — pYIN offline backend (Sytronik/pyin = "1.2"). Pulls in the
-# pure-Rust pyin crate plus claxon for the FLAC decode path used by
+# pYIN offline backend (Sytronik/pyin = "1.2"). Pulls in the pure-Rust
+# pyin crate plus claxon for the FLAC decode path used by
 # `analysis::contour::analyze_contour`.
 pyin              = ["dep:pyin", "dep:claxon"]
-dataset           = []  # Phase 2/Tier-3 dataset-gated tests
-debug-overlay     = []  # Phase 1+ — diagnostic overlays for desktop shell
-# Phase 2.0 — pure-Rust FLAC encoder for the recording pipeline.
+# Pure-Rust FLAC encoder for the recording pipeline.
 flac              = ["dep:flacenc"]
-# Phase 2.0 — exposes MockRecordingSink to downstream test crates.
+# Exposes MockRecordingSink to downstream test crates.
 test-utils        = []
 
 [dependencies]
@@ -44,10 +33,10 @@ serde_json  = { workspace = true }
 rtrb        = "0.3"
 tokio-util  = { version = "0.7", default-features = false }
 cpal        = { version = "0.17", optional = true }
-# Phase 2.0 — gated behind the `flac` feature, so production binaries that
-# disable recording (e.g. minimal CI builds) do not pull in the encoder.
+# Gated behind the `flac` feature, so production binaries that disable
+# recording (e.g. minimal CI builds) do not pull in the encoder.
 flacenc     = { version = "0.5", default-features = false, optional = true }
-# Phase 2.0 persistence layer (`store::RecordingsLibrary`). `bundled` ships a
+# Persistence layer (`store::RecordingsLibrary`). `bundled` ships a
 # vendored SQLite so consumers do not need a system libsqlite3. Migrations are
 # managed by `refinery` (file-based, append-only). UUIDv7 row keys come from
 # the `uuid` crate. `directories` resolves the per-platform user-data dir for
@@ -56,83 +45,72 @@ rusqlite    = { version = "0.31", features = ["bundled"] }
 refinery    = { version = "0.8", features = ["rusqlite"] }
 uuid        = { version = "1", features = ["v7"] }
 directories = "5"
-# `parking_lot::Mutex` (non-poisoning, ADR-0014) is used by
+# `parking_lot::Mutex` (non-poisoning) is used by
 # `store::RecordingsLibrary` so the connection guard cannot be poisoned by a
 # panic in another thread. Also surfaces consistently with `src-tauri/`'s
 # pattern.
 parking_lot = { workspace = true }
-# Phase 2.1 — `postcard` is the on-the-wire serialiser for the
-# `analysis_cache.result_blob` column. Pure-Rust, ~5-10× smaller than
+# `postcard` is the on-the-wire serialiser for the
+# `analysis_cache.result_blob` column. Pure-Rust, ~5-10x smaller than
 # `serde_json` for the dense `Vec<F0Frame>` payload.
 postcard    = { workspace = true }
-# Phase 2.1 — Sytronik/pyin v1.2.0. Pure-Rust pYIN (Mauch & Dixon 2014)
-# implementation matching librosa 0.9.1. MIT licensed. Gated behind
-# `feature = "pyin"`. The crate is offline-only (global Viterbi); the live
-# DspWorker never touches it.
+# Sytronik/pyin v1.2.0. Pure-Rust pYIN (Mauch & Dixon 2014) implementation
+# matching librosa 0.9.1. MIT licensed. Gated behind `feature = "pyin"`.
+# The crate is offline-only (global Viterbi); the live DspWorker never
+# touches it.
 pyin        = { version = "1.2", optional = true }
-# Phase 2.1 — Pure-Rust FLAC decoder used by the `analyze_contour` FLAC
-# path. Promoted from `dev-dependencies` to an optional dep behind
-# `feature = "pyin"` so `analysis::contour` can decode recordings stored
-# by Phase 2.0's flac sink. Still available to dev tests via the dev-dep
-# alias below.
+# Pure-Rust FLAC decoder used by the `analyze_contour` FLAC path. Promoted
+# from `dev-dependencies` to an optional dep behind `feature = "pyin"` so
+# `analysis::contour` can decode recordings stored by the flac sink. Still
+# available to dev tests via the dev-dep alias below.
 claxon      = { version = "0.4", optional = true }
-# Phase 2.2 — ORT 2.0 rc.12 (RESEARCH-REPORT.md §7). `load-dynamic` only:
-# the shared library is supplied via `ORT_DYLIB_PATH` at runtime; no binary
-# download. Pinning to a specific rc and budgeting one API migration before
-# stable 2.0 is explicit per the architecture spec.
+# ORT 2.0 rc.12. `load-dynamic` only: the shared library is supplied via
+# `ORT_DYLIB_PATH` at runtime; no binary download.
 # `api-18` is required because `ort`'s `ep/vitis.rs` references the
 # `SessionOptionsAppendExecutionProvider_VitisAI` symbol whenever
 # `load-dynamic` is on, but the symbol itself is `#[cfg(feature = "api-18")]`-
 # gated in `ort-sys`. This is an upstream rc.12 mismatch; we pick the lowest
 # api version that satisfies the symbol so we don't drag in newer api
-# surface unnecessarily. The migration to stable 2.0 is budgeted.
+# surface unnecessarily.
 ort         = { version = "=2.0.0-rc.12", default-features = false, features = ["load-dynamic", "api-18"], optional = true }
-# Phase 2.2 — `ndarray` is the host-side tensor staging buffer for the
-# PESTO state-cache and CREPE input. Pre-allocated in the constructor and
-# re-used across `process` calls so the hot path stays alloc-free.
+# `ndarray` is the host-side tensor staging buffer for the PESTO
+# state-cache and CREPE input. Pre-allocated in the constructor and re-used
+# across `process` calls so the hot path stays alloc-free.
 ndarray     = { version = "0.16", optional = true }
-# Phase 2.5 (deferred) — `rubato` will resample 48 kHz capture audio to
-# 16 kHz for CREPE-tiny (PESTO is native 48 kHz). The dependency is not
-# declared here today: under Phase 2.2 the CREPE estimator's stub backend
-# operates on the raw 48 kHz buffer (no resample required), and the
-# real-ONNX path is gated behind a "not yet wired" error. Adding an unused
-# optional dep that no source file imports would inflate compile time and
-# trip clippy's `unused-crate-dependencies` heuristic for zero functional
-# contribution. When Phase 2.5 lands the CrepeTinyEstimator's real
-# resample path, re-introduce the dep and add it to the `neural` feature.
-# Phase 2.2 — `toml` parses the workspace `models.toml` manifest used by
-# the model resolver. `parse` only — we never re-serialise the manifest
-# from Rust. Always-on (the resolver itself is not feature-gated; its
-# `NotConfigured` short-circuit is the safe default for builds without
-# the `neural` feature, where neural-backed `make_estimator` arms are
-# disabled but `get_model_status` may still report manifest state).
+# `toml` parses the workspace `models.toml` manifest used by the model
+# resolver. `parse` only — we never re-serialise the manifest from Rust.
+# Always-on (the resolver itself is not feature-gated; its `NotConfigured`
+# short-circuit is the safe default for builds without the `neural`
+# feature, where neural-backed `make_estimator` arms are disabled but
+# `get_model_status` may still report manifest state).
 toml        = { version = "0.8", default-features = false, features = ["parse"] }
-# Phase 2.2 — `sha2` provides the streaming SHA-256 used by the model
-# resolver to verify on-disk ONNX blobs against the manifest hash. Pure-
-# Rust, MIT/Apache-2.0.
+# `sha2` provides the streaming SHA-256 used by the model resolver to
+# verify on-disk ONNX blobs against the manifest hash. Pure-Rust,
+# MIT/Apache-2.0.
 sha2        = "0.10"
-# Phase 2.3 — `realfft` powers the residual-FFT vibrato detector
-# (`analysis::vibrato`). Pure-Rust, MIT/Apache-2.0; already pulled in
-# transitively via the `pyin` crate (see workspace lockfile), promoted
-# here to a first-class dep so the analysis module can build under
-# `--no-default-features` (i.e. without the `pyin` feature).
+# `realfft` powers the residual-FFT vibrato detector (`analysis::vibrato`).
+# Pure-Rust, MIT/Apache-2.0; already pulled in transitively via the `pyin`
+# crate (see workspace lockfile), promoted here to a first-class dep so
+# the analysis module can build under `--no-default-features` (i.e.
+# without the `pyin` feature).
 realfft     = "3.5"
 
 [dev-dependencies]
 proptest    = "1"
 approx      = "0.5"
-# Phase 1.4 Tier-2 voice-fixture builder. Pure-Rust FLAC encoder; pulled in
-# only as a dev-dependency so production binaries do not see it.
-# `default-features = false` drops the `par`, `log`, and `serde` features
-# we do not need for one-shot CLI usage in `examples/build_voice_fixtures`.
+# Voice-fixture builder. Pure-Rust FLAC encoder; pulled in only as a
+# dev-dependency so production binaries do not see it. `default-features =
+# false` drops the `par`, `log`, and `serde` features we do not need for
+# one-shot CLI usage in `examples/build_voice_fixtures`.
 flacenc     = { version = "0.5", default-features = false }
 # Pure-Rust FLAC decoder used by `acceptance_voice.rs` to round-trip the
-# Tier-2 fixtures back into PCM at test time. The `pyin` feature also
-# pulls claxon as an optional dep above; the dev-dep alias keeps it
-# available to tests that do not set the feature flag.
+# voice fixtures back into PCM at test time. The `pyin` feature also pulls
+# claxon as an optional dep above; the dev-dep alias keeps it available
+# to tests that do not set the feature flag.
 claxon      = "0.4"
-# Parses `tests/fixtures/voice/MANIFEST.toml` at test time so the Tier-2
-# acceptance harness can iterate every fixture with its expected MIDI binding.
+# Parses `tests/fixtures/voice/MANIFEST.toml` at test time so the voice
+# acceptance harness can iterate every fixture with its expected MIDI
+# binding.
 toml        = { version = "0.8", default-features = false, features = ["parse"] }
 
 # Cancellation, sample-pacing, and DSP-worker tests need the integration tests

@@ -14,16 +14,13 @@
 //      settings — used by `PermissionNotice` after the user has granted
 //      microphone access.
 //
-// Per ADR-0003 the rAF readers in `CentsMeter` / `HistoryStrip` read the ring
+// The rAF readers in `CentsMeter` / `HistoryStrip` read the ring
 // directly — no setState on per-frame updates.
 //
 // Test surface: when running under the Tier-5 E2E mock, the helper exposes
 // `window.__neuralPitchTestHooks.pushPitchUpdate(frame)` which routes through
 // the same Channel callback wiring.
 //
-// Cross-references:
-//   docs/design/DESIGN.md §7 (Tauri channel wiring)
-//   docs/design/DESIGN.md §9.3 (audio backend errors / recovery)
 //   tests/e2e/helpers/tauri-mock.ts (synthetic Channel)
 
 import { useCallback, useEffect, useRef } from "react";

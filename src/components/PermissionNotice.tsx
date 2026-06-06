@@ -6,8 +6,6 @@
 // Body text branches on `navigator.userAgent` so macOS users see the
 // platform-specific guidance.
 //
-// Cross-references:
-//   docs/design/DESIGN.md §9.3 (audio backend events)
 //   tests/e2e/permission.spec.ts
 
 import { useEffect, useRef, useState, type ReactNode } from "react";

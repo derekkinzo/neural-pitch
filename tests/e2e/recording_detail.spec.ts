@@ -14,10 +14,6 @@
 //
 // All payloads come from the Phase-2.1 mocks; no real IPC fires.
 //
-// Cross-references:
-//   docs/design/DESIGN.md §7.5 (Phase-2 frontend additions)
-//   docs/design/DESIGN.md §8.3 (analysis_cache schema)
-//   docs/adr/0006-visual-only-feedback-prefers-reduced-motion.md
 //   src/components/CentsMeter.tsx (canonical canvas + DPR + reduced-motion pattern)
 
 import { expect, test } from "./fixtures";

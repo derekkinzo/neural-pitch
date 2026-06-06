@@ -6,9 +6,6 @@
 //   3. CentsMeter aria-valuenow + data-state track smoothed_cents.
 //   4. The CentsMeter shifts to data-state="sharp" / "flat" appropriately.
 //
-// Cross-references:
-//   docs/design/TEST-PLAN.md §6.2 (user-flow specs)
-//   docs/design/DESIGN.md §8 (test plan — tuner.spec.ts)
 
 import { expect, test } from "./fixtures";
 import { makePitchUpdate, pushPitchUpdate } from "./helpers/tauri-mock";

@@ -1,9 +1,6 @@
 // DeviceDisconnectToast — auto-render on Disconnected, dismiss on Connected,
 // and reconnect via configure({ device: "default" }).
 //
-// Cross-references:
-//   docs/design/TEST-PLAN.md §6.2 (user flows / a11y)
-//   docs/design/DESIGN.md §9.3 (audio backend events — recovery path)
 
 import { test, expect } from "./fixtures";
 import { getInvokeCalls, pushDeviceEvent } from "./helpers/tauri-mock";
@@ -27,7 +24,7 @@ test.describe("disconnect — toast + reconnect", () => {
     await expect(toast).toBeVisible();
     // The toast is announced immediately via role="alert" (which implies
     // aria-live="assertive") so screen-reader users hear the disconnect
-    // before any in-progress speech finishes — see DESIGN.md §9.3.
+    // before any in-progress speech finishes.
     await expect(toast).toHaveAttribute("role", "alert");
     await expect(toast).toContainText(/Audio device disconnected/);
 

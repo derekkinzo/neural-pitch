@@ -1,14 +1,12 @@
-//! Phase 2.1 — Tauri-facing analysis surface.
+//! Tauri-facing analysis surface.
 //!
 //! The shapes here are the wire format shared between the Tauri shell, the
-//! `RecordingsLibrary` cache, and downstream consumers (CLI, tests). The
-//! Tauri commands in `src-tauri/src/commands.rs` are thin async wrappers
-//! around [`analyze_recording_blocking`] (they `spawn_blocking` it onto a
-//! pool worker because `RecordingsLibrary` is connection-mutex-bound).
-//!
-//! See `docs/design/PHASE_2_1_PERSISTENCE.md` for the full plan; the doc
-//! comments below restate only the contract that affects the wire format
-//! or the cache layer.
+//! `RecordingsLibrary` cache, and downstream consumers (tests). The Tauri
+//! commands in `src-tauri/src/commands.rs` are thin async wrappers around
+//! [`analyze_recording_blocking`] (they `spawn_blocking` it onto a pool
+//! worker because `RecordingsLibrary` is connection-mutex-bound). The doc
+//! comments below state the contract that affects the wire format or the
+//! cache layer.
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -59,16 +57,16 @@ pub struct AnalysisSummary {
     /// `true` when this summary came from the `analysis_cache` table; the
     /// PYIN run was skipped.
     pub was_cached: bool,
-    /// Phase 2.3 — vocal-range histogram report. `Option<T>` so existing
-    /// 0.1 blobs (no range/vibrato) decode cleanly as `None`, and so
-    /// future analyses that legitimately skip range detection (e.g. an
-    /// instrumental backend) stay honest. The analyzer-version cache
-    /// key is bumped to `"0.2"` in lock-step with the contour-blob
-    /// version, so any 0.1 cache row misses on first re-open and gets
-    /// recomputed without a destructive migration.
+    /// Vocal-range histogram report. `Option<T>` so existing 0.1 blobs
+    /// (no range/vibrato) decode cleanly as `None`, and so analyses that
+    /// legitimately skip range detection (e.g. an instrumental backend)
+    /// stay honest. The analyzer-version cache key is bumped to `"0.2"`
+    /// in lock-step with the contour-blob version, so any 0.1 cache row
+    /// misses on first re-open and gets recomputed without a destructive
+    /// migration.
     pub range: Option<RangeReport>,
-    /// Phase 2.3 — vibrato detector report. Same `Option<T>` rationale
-    /// as [`Self::range`].
+    /// Vibrato detector report. Same `Option<T>` rationale as
+    /// [`Self::range`].
     pub vibrato: Option<VibratoReport>,
 }
 
@@ -135,11 +133,10 @@ pub struct ContourResult {
     pub voiced: Vec<bool>,
 }
 
-/// Errors raised by the Phase 2.1 analysis surface.
+/// Errors raised by the offline analysis surface.
 ///
-/// Mirrors the spec error variants 1:1; the Tauri command surface maps
-/// every variant via `format!("{e:#}")` per ADR-0015, identical to
-/// `start_capture` / `stop_recording`.
+/// The Tauri command surface maps every variant via
+/// `format!("{e:#}")`, identical to `start_capture` / `stop_recording`.
 #[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum AnalysisError {
@@ -176,7 +173,7 @@ pub enum AnalysisError {
 ///
 /// The Tauri shell wraps a `tauri::ipc::Channel<AnalysisProgress>`; tests
 /// pass a `Vec`-collecting mock. Keeping the trait core-side keeps Tauri
-/// types out of `neural-pitch-core` (P2, ADR-0002).
+/// types out of `neural-pitch-core`.
 pub trait ProgressSink: Send + Sync {
     /// Deliver one progress tick. Implementations MUST be cheap and MUST
     /// NOT block the calling thread; a slow sink will stall the
@@ -384,7 +381,7 @@ pub fn get_contour_blocking(
         return Ok(None);
     };
     tracing::Span::current().record("blob_bytes", blob.len() as u64);
-    // Phase 2.3 cache-bump back-compat (ADR-0021): pre-`0.2` blobs use an
+    // Phase 2.3 cache-bump back-compat: pre-`0.2` blobs use an
     // older `ContourResult` field set that the current postcard schema can
     // no longer round-trip. Rather than treating them as hard
     // [`AnalysisError::CacheCorrupted`] (which would force the front-end
@@ -409,7 +406,7 @@ pub fn get_contour_blocking(
                     blob_len = blob.len(),
                     error = %e,
                     "legacy pre-0.2 cache row could not decode under the live schema; \
-                     surfacing back-compat placeholder per ADR-0021",
+                     surfacing back-compat placeholder",
                 );
                 return Ok(Some(legacy_placeholder_contour(
                     analyzer_name,
@@ -458,8 +455,8 @@ pub fn get_contour_blocking(
     )))
 }
 
-/// Identify analyzer-version strings that predate the Phase 2.3 cache
-/// bump. Today only `"0.1"` qualifies; the helper exists so a future
+/// Identify analyzer-version strings that predate the cache bump.
+/// Today only `"0.1"` qualifies; the helper exists so a future
 /// version-introduction bump (e.g. `"0.1.1"`) can extend the set without
 /// re-touching the decoder.
 fn is_pre_0_2_legacy_version(analyzer_version: &str) -> bool {
@@ -474,7 +471,7 @@ fn is_pre_0_2_legacy_version(analyzer_version: &str) -> bool {
 /// All numeric fields (`sample_rate_hz`, `hop_size`, `window_size`) are
 /// pinned to `0` and the per-frame vectors are empty. Front-end callers
 /// can detect the placeholder via either `sample_rate_hz == 0` or
-/// `f0_hz.is_empty()` (ADR-0021 documents the latter; the all-zero
+/// `f0_hz.is_empty()` (the all-zero
 /// numeric invariant is the stronger guard and `get_contour_blocking`'s
 /// fallback path preserves it by skipping the live-tuner default
 /// fallback when `frames.is_empty()`).
@@ -505,7 +502,7 @@ fn legacy_placeholder_contour(analyzer_name: &str, analyzer_version: &str) -> Co
 ///   * `Err(AnalysisError::CacheCorrupted)` — row exists but the blob
 ///     fails postcard decode (and the version is not a recognised pre-0.2
 ///     legacy — those surface a `Some(insufficient)` placeholder per
-///     ADR-0021).
+///     case is the back-compat placeholder).
 ///
 /// Returns `Ok(None)` when no row matches `(id, name, version)`. The Tauri
 /// command surfaces that as `Err("not found")` to mirror `get_contour`.
@@ -531,7 +528,7 @@ pub fn get_range_report_blocking(
         Ok(c) => c,
         Err(_) if is_pre_0_2_legacy_version(analyzer_version) => {
             // Legacy 0.1 row predates the range/vibrato fields; surface
-            // the insufficient-data sentinel per ADR-0021. The front-end
+            // the insufficient-data sentinel. The front-end
             // can detect this (zero voiced_frame_count + None hint) and
             // trigger a `force_refresh` analyze.
             return Ok(Some(crate::analysis::range::RangeReport::insufficient()));
@@ -570,7 +567,7 @@ pub fn get_vibrato_report_blocking(
         Ok(c) => c,
         Err(_) if is_pre_0_2_legacy_version(analyzer_version) => {
             // Legacy 0.1 row predates the report; surface an empty report
-            // (no detected windows, vibrato_ratio = 0) per ADR-0021.
+            // (no detected windows, vibrato_ratio = 0).
             return Ok(Some(crate::analysis::vibrato::VibratoReport {
                 per_window: Vec::new(),
                 median_rate_hz: 0.0,

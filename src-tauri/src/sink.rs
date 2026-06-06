@@ -2,7 +2,7 @@
 //! `tauri::ipc::Channel`.
 //!
 //! `TauriChannelFrameSink` implements [`FrameSink`] from `neural-pitch-core`,
-//! keeping `tauri::*` out of the core crate (P2, ADR-0002). See ADR-0014.
+//! keeping `tauri::*` out of the core crate.
 //!
 //! ## RT-safety caveat
 //!
@@ -15,9 +15,6 @@
 //! Tauri/tokio runtime. At 48 kHz / hop=512 we send ~93 frames/sec, which
 //! is well within the budget even with the per-call allocation, but
 //! reviewers should not assume the worker's hot loop is allocation-free.
-//! Phase 1.3 may interpose a `crossbeam_channel` + tokio forwarder to
-//! lift serialisation off the DSP worker entirely (option (b) of ADR-0014
-//! follow-up review).
 //!
 //! `tauri::ipc::Channel<T: Serialize + Clone + Send + 'static>` is `Send`,
 //! so the sink trivially satisfies the [`FrameSink: Send`] bound.

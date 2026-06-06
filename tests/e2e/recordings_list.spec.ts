@@ -5,9 +5,6 @@
 // itself is the existing `<Drawer>` primitive; this spec only exercises
 // the list contents.
 //
-// Cross-references:
-//   docs/design/DESIGN.md §7.5 / §8.3 (recordings DB schema)
-//   docs/design/TEST-PLAN.md §6.2 (recordings_list.spec)
 
 import { expect, test } from "./fixtures";
 import { installRecordingsMock, type MockRecording } from "./helpers/tauri-mock";

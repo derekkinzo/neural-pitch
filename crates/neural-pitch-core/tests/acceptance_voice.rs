@@ -1,4 +1,4 @@
-//! Phase 1.4 — Tier-2 voice-fixture acceptance harness.
+//! Voice-fixture acceptance harness.
 //!
 //! Runs the same DSP path the live tuner uses (window=2048, hop=512,
 //! `YinMpmEstimator` + `AutoPrior` + `ContourSmoother` + `VoiceActivityGate`)
@@ -11,8 +11,6 @@
 //! `(fmin, fmax)`. This is the same call the live shell makes in
 //! `src-tauri/commands.rs::build_controller`, so any drift between the two
 //! is a single-table change rather than two divergent literals.
-//!
-//! See `docs/PHASE-1.4-TIER-2-ACCEPTANCE.md` for the binding spec.
 //!
 //! Per-fixture pass criterion: `|round(m_est) - m_truth| < 1` on the **mode**
 //! of `target_midi` over voiced frames (deterministic tiebreak: lower MIDI
@@ -107,7 +105,7 @@ fn load_manifest() -> Vec<FixtureSpec> {
 ///
 /// `claxon` yields `Vec<i32>` PCM. We divide by `2^(bits-1)` to land on the
 /// canonical analyzer scale. The fixtures are 48 kHz / 24-bit / mono per
-/// ADR-0011; the harness asserts the sample-rate match because feeding 44.1 k
+/// The harness asserts the sample-rate match because feeding 44.1 k
 /// audio into a 48 k window would silently bias every cents-error estimate
 /// by `1200 * log2(48000/44100) ≈ 150` cents.
 fn decode_flac(path: &Path) -> (u32, Vec<f32>) {
@@ -400,7 +398,7 @@ fn render_aggregate_json(
     )
 }
 
-/// Count Tier-1 unit tests. The test pyramid (DESIGN §10.1, ADR-0016) has
+/// Count Tier-1 unit tests. The test pyramid (Tier-1 unit / Tier-2 fixture / Tier-3 acceptance) has
 /// Tier 1 wired and gating CI; the harness is the right place to surface
 /// the count because it owns the closeout-report generation. We report a
 /// conservative count of *integration test files* under `tests/` other

@@ -1,13 +1,10 @@
 // Button — minimal accessible button primitive.
 //
-// Vendored under `components/ui/` per ADR-0003 ("copy shadcn primitives
+// Vendored under `components/ui/` ("copy shadcn primitives
 // rather than depend on the package"). Day 1 we don't need slot/asChild
 // composition — the surface is `<button {...props}>` with sensible defaults
 // for focus ring, disabled state, and the dark theme.
 //
-// Cross-references:
-//   docs/design/DESIGN.md §1 (visual language)
-//   docs/adr/0006-visual-only-when-required.md (no idle animation)
 
 import { forwardRef, type ButtonHTMLAttributes } from "react";
 

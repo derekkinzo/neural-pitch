@@ -13,9 +13,6 @@
 // approach is robust against StrictMode and against the cleanup-then-mount
 // invocation order.
 //
-// Cross-references:
-//   docs/design/TEST-PLAN.md §6.2 (a11y category)
-//   docs/design/DESIGN.md §9.3 (permission denied recovery)
 
 import { test, expect } from "./fixtures";
 import { getInvokeCalls } from "./helpers/tauri-mock";

@@ -4,7 +4,7 @@
 //   - device name (or "—" before start_capture resolves)
 //   - sample rate (Hz) once the audio params are known, suffixed with the
 //     channel count and a `±` glyph if the negotiated rate differs from the
-//     requested one (DESIGN.md §6.5)
+//     requested one)
 //   - capture state (idle / live / error) with a small color dot
 //   - active auto-prior range with two visual variants:
 //       * Auto (instrumentHint === "Generic"): magic-wand glyph, sky border
@@ -12,10 +12,6 @@
 //
 // All come from Zustand selectors, NOT the rAF ring. No animation.
 //
-// Cross-references:
-//   docs/design/DESIGN.md §1 (header row)
-//   docs/design/DESIGN.md §6.5 (sample-rate negotiation)
-//   docs/adr/0007-instrument-hint-auto-prior.md (auto-prior visibility)
 
 import { useId, type ReactNode } from "react";
 import { useSettingsStore } from "@/stores/settingsStore";

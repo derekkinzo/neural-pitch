@@ -8,11 +8,6 @@
 // fields (auto-prior range, permission/disconnect status, negotiated
 // audio format).
 //
-// Cross-references:
-//   docs/design/DESIGN.md §7 (state model)
-//   docs/design/DESIGN.md §6.5 (sample-rate negotiation)
-//   docs/design/DESIGN.md §9.3 (audio backend events)
-//   docs/adr/0007-instrument-hint-auto-prior.md (priorRange surface)
 
 import { create } from "zustand";
 

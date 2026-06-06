@@ -6,10 +6,6 @@
 // one-shot `invoke("get_audio_params")` after `start_capture` resolves and
 // are surfaced read-only in the settings drawer.
 //
-// Cross-references:
-//   docs/design/DESIGN.md §7 (Phase 1.2 frontend design)
-//   docs/adr/0005-default-a4-440hz-with-user-override.md (A4 default)
-//   docs/adr/0007-instrument-hint-auto-prior.md (instrument hint)
 
 export type InstrumentHint = "Generic" | "Voice" | "Guitar" | "Bass" | "Piano" | "Violin";
 
@@ -23,7 +19,7 @@ export const INSTRUMENT_HINTS: ReadonlyArray<InstrumentHint> = [
 ];
 
 /** Static Phase-1 prior ranges per InstrumentHint, sourced from
- *  ADR-0007 §"Staged Phase-1 ranges". Used by the StatusPill explicit-prior
+ *  Staged Phase-1 instrument ranges. Used by the StatusPill explicit-prior
  *  badge so the user can see the active search window without waiting for
  *  the first PriorNarrowed event from the engine. The "Generic" entry is the
  *  *fallback* shown before the auto-prior narrows; once a real range arrives
@@ -42,7 +38,7 @@ export const INSTRUMENT_RANGE_TABLE: Readonly<Record<InstrumentHint, readonly [n
 /** Fallback range used by the auto-prior badge before `priorRange` is set. */
 export const FALLBACK_GENERIC: readonly [number, number] = INSTRUMENT_RANGE_TABLE.Generic;
 
-/** A4 reference presets in Hz. 440 is the default per ADR-0005. */
+/** A4 reference presets in Hz. 440 is the default. */
 export const A4_PRESETS: ReadonlyArray<number> = [415, 430, 435, 440, 442, 443, 466];
 
 /** Range guard for the numeric A4 input. Out-of-range values are clamped at

@@ -12,9 +12,6 @@
 // `tunerStore.isCapturing` so an in-flight capture pickup does not silently
 // drop the user's edits.
 //
-// Cross-references:
-//   docs/design/DESIGN.md §6 (Settings drawer)
-//   docs/adr/0005-default-a4-440hz-with-user-override.md
 
 import { useCallback, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";

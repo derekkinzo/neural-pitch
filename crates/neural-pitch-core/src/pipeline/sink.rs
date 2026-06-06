@@ -1,7 +1,7 @@
 //! Backend-agnostic frame-sink trait and the [`PitchUpdate`] data shape.
 //!
 //! The [`FrameSink`] trait keeps `tauri::*` out of `neural-pitch-core` (P2,
-//! ADR-0002): the day-1 implementation [`ChannelFrameSink`] wraps a
+//! the day-1 implementation [`ChannelFrameSink`] wraps a
 //! `std::sync::mpsc::Sender<PitchUpdate>`, which every Tier-2 test uses. The
 //! Tauri-side `TauriChannelFrameSink` lives in `src-tauri/src/ipc/` (Phase
 //! 1.2 work) and adapts `tauri::ipc::Channel<PitchUpdate>` against this same

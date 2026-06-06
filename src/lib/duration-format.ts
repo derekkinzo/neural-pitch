@@ -5,8 +5,6 @@
 //      a recording is active (also the reduced-motion visual cue).
 //   2. The "Saved 1m23s recording" toast surfaced on stop.
 //
-// Cross-references:
-//   docs/design/DESIGN.md §7.5 (Phase 2.0 frontend additions)
 
 const MS_PER_SECOND = 1000;
 const SECONDS_PER_MINUTE = 60;

@@ -1,6 +1,6 @@
 // Drawer — right-side slide-in dialog with focus trap and Escape-to-close.
 //
-// Vendored under `components/ui/` per ADR-0003. The shadcn `Drawer` primitive
+// Vendored under `components/ui/`. The shadcn `Drawer` primitive
 // wraps Radix Dialog; we implement the same surface in ~80 lines because the
 // Phase 1.2 use case is exactly one drawer, exactly one trigger, exactly one
 // modal pattern. Phase 1.4 polish may switch to Radix once we add a second
@@ -13,8 +13,6 @@
 //   - Tab cycles within the panel (focus trap).
 //   - Escape closes; clicking the backdrop also closes.
 //
-// Cross-references:
-//   docs/design/DESIGN.md §6 (right-side sheet, focus-trapped)
 
 import { useCallback, useEffect, useId, useRef, type ReactNode } from "react";
 

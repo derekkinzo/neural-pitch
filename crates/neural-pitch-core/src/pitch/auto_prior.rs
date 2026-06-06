@@ -1,16 +1,14 @@
 //! AutoPrior: running F0-median + hint-intersection range estimator.
 //!
-//! Implements Stage 2 of the three-stage pipeline described in
-//! `MODULAR-PITCH-RESEARCH.md` §3.1: a running median of recent voiced f0
-//! samples that tightens the second-pass search range without relying on a
-//! neural vocal-detection front end (which is deferred to Phase 2 behind
-//! `feature = "neural"`, per ADR-0007).
+//! A running median of recent voiced f0 samples that tightens the
+//! second-pass search range without relying on a neural vocal-detection
+//! front end — the running-median heuristic is sufficient for the live
+//! path.
 //!
 //! # Lifecycle
 //!
-//! `AutoPrior` is owned by [`crate::pipeline::DspWorker`] (and, in future, by
-//! the `LiveTunerPipeline` and `SongAnalysisPipeline` per DESIGN.md §5.2). It
-//! lives in `neural-pitch-core` so all pipelines can reuse the same type.
+//! `AutoPrior` is owned by [`crate::pipeline::DspWorker`]. It lives in
+//! `neural-pitch-core` so all pipelines can reuse the same type.
 //!
 //! Per-iteration contract from the worker:
 //!
@@ -30,7 +28,7 @@
 //! All buffers are allocated in [`AutoPrior::new`]. [`AutoPrior::update`] is
 //! `O(1)`; [`AutoPrior::current_range`] is `O(N)` (a single
 //! `select_nth_unstable_by` median on a stack-resident scratch slice owned
-//! by the struct), satisfying DESIGN.md §5.6 invariant 3.
+//! by the struct).
 //!
 //! # Hint precedence
 //!
@@ -73,7 +71,7 @@ use crate::pitch::{F0Frame, InstrumentHint};
 pub const GENERIC_RANGE: (f32, f32) = (60.0, 2000.0);
 
 /// Voice-specific range, in Hertz. Lower bound covers low male speaking voice,
-/// upper bound covers Soprano top C6 ≈ 1047 Hz with margin (DESIGN.md §5.3).
+/// upper bound covers Soprano top C6 ≈ 1047 Hz with margin.
 pub const VOICE_RANGE: (f32, f32) = (75.0, 1100.0);
 
 /// Six-string guitar range, in Hertz. E2 (≈ 82 Hz) up through the high E

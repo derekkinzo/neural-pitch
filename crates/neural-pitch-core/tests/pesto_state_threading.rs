@@ -1,7 +1,7 @@
 //! Phase 2.2 RED — PESTO threads the `cache_in` / `cache_out` tensor
 //! pair across consecutive `process` calls.
 //!
-//! `StatelessPESTO` (`MODULAR-PITCH-RESEARCH.md` §8.2) surfaces its
+//! `StatelessPESTO` surfaces its
 //! temporal receptive field as an explicit state tensor: the previous
 //! call's `cache_out` MUST be fed as the next call's `cache_in`. Without
 //! that thread, every window starts cold and the estimator returns

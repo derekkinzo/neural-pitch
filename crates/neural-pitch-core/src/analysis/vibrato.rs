@@ -40,7 +40,7 @@ use crate::analysis::contour::ContourResult;
 fn shared_r2c() -> Arc<dyn RealToComplex<f32>> {
     static PLANNER: OnceLock<Mutex<RealFftPlanner<f32>>> = OnceLock::new();
     let planner_mutex = PLANNER.get_or_init(|| Mutex::new(RealFftPlanner::<f32>::new()));
-    // `parking_lot::Mutex` does not poison on panic (ADR-0014), so a single
+    // `parking_lot::Mutex` does not poison on panic, so a single
     // `lock()` call suffices.
     let mut planner = planner_mutex.lock();
     planner.plan_fft_forward(FFT_LEN)
@@ -85,7 +85,7 @@ pub struct VibratoWindow {
 /// Whole-recording vibrato report.
 ///
 /// Field order is fixed for postcard byte-equal round-trips — do not
-/// reorder without bumping the analyzer-version cache key (ADR-0012).
+/// reorder without bumping the analyzer-version cache key.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct VibratoReport {
     /// One entry per detected vibrato window. Skipped windows
@@ -106,7 +106,7 @@ pub struct VibratoReport {
 
 /// Compute the vibrato report for one contour.
 ///
-/// `a4_hz` is the caller-supplied reference pitch (per ADR-0005). The
+/// `a4_hz` is the caller-supplied reference pitch. The
 /// vibrato analysis itself operates on `smoothed_cents` (already
 /// relative to `a4_hz`) but the parameter is kept on the public
 /// signature for API symmetry with [`crate::analysis::range::compute_range`]

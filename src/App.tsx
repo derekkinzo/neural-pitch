@@ -1,7 +1,4 @@
-// App root — Phase 1.2 mounts the live tuner.
-//
-// Cross-references:
-//   docs/design/DESIGN.md §7 (Phase 1.2 frontend design)
+// App root — mounts the live tuner.
 
 import { type ReactNode } from "react";
 import { Tuner } from "@/components/Tuner";

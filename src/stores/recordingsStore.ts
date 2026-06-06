@@ -1,6 +1,6 @@
 // Recordings store — slow-path Zustand state for the Phase 2.0 recorder.
 //
-// Per ADR-0003 and the Phase 1.2 RingBuffer contract, hot-path frames
+// Per the RingBuffer contract, hot-path frames
 // (`PitchUpdate`) DO NOT pass through Zustand. Recording state is intrinsically
 // slow (≤5 Hz progress ticks, single-take lifecycle, drawer mounts) so the
 // store is the right home for the elapsed-counter, list, and current-recording
@@ -17,9 +17,6 @@
 // at ~5 Hz; we register a single listener that writes only `elapsedMs`
 // so subscribers reading `(s) => s.elapsedMs` re-render in isolation.
 //
-// Cross-references:
-//   docs/design/DESIGN.md §7.5 (Phase 2.0 frontend additions)
-//   docs/design/DESIGN.md §8.3 (recordings DB schema)
 
 import { create } from "zustand";
 import { invoke } from "@tauri-apps/api/core";

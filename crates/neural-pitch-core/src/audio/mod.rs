@@ -1,12 +1,11 @@
 //! Audio I/O abstractions.
 //!
-//! Phase 1.0 defined only the [`AudioBlock`] data shape and the
-//! [`AudioDecoder`] trait. Phase 1.1 adds the live-capture surface:
-//! [`AudioBackend`], [`AudioBackendConfig`], [`AudioBackendEvent`], and the
-//! always-on [`MockAudioBackend`] used by Tier-2 deterministic tests. The
-//! cpal-backed [`CpalAudioBackend`] is gated behind `#[cfg(feature = "cpal")]`.
-//! Concrete file decoder/encoder implementations (Symphonia, FLAC, WAV) land
-//! in Phase 2 behind feature gates; see `docs/design/DESIGN.md` §5.2.
+//! Defines the [`AudioBlock`] data shape, the [`AudioDecoder`] trait, and
+//! the live-capture surface: [`AudioBackend`], [`AudioBackendConfig`],
+//! [`AudioBackendEvent`], and the always-on [`MockAudioBackend`] used by
+//! deterministic tests. The cpal-backed [`CpalAudioBackend`] is gated
+//! behind `#[cfg(feature = "cpal")]`. Concrete file decoder/encoder
+//! implementations (FLAC) sit behind their own feature gates.
 
 use std::io;
 

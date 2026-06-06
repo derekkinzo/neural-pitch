@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Runs the Phase-1 acceptance harness and writes
-# docs/reports/phase-1-acceptance.json.
+# Runs the voice-fixture acceptance harness and writes a JSON report
+# under .acceptance-reports/ (gitignored).
 #
 # Wire-format contract with the Rust harness (test target
 # `acceptance_voice` in crates/neural-pitch-core):
@@ -21,40 +21,21 @@
 #   { aggregate, fixtures[], tier_1_count, tier_2_count,
 #     latency_p50_ms, latency_p99_ms, timestamp, commit_sha }
 #
-# When invoked with `--write-closeout`, the script also substitutes
-# the literal `<SHA>` placeholder in DESIGN.md §13.2 and
-# PHASE-1-CLOSEOUT.md Status with the actual commit SHA, so the
-# closeout text and the JSON cannot drift. The substitution is
-# **off** by default — the pre-push gate is a verification step and
-# must not mutate tracked files in the working tree (a hidden rewrite
-# would surface as an unexpected `git status` after `git push`).
-#
-# Exit non-zero if aggregate < 0.95 (the §13.2 acceptance floor).
+# Exit non-zero if aggregate < 0.95 (the acceptance floor).
 
 set -euo pipefail
 
 # --- argument parsing ----------------------------------------------
-WRITE_CLOSEOUT=0
 for arg in "$@"; do
   case "${arg}" in
-    --write-closeout)
-      WRITE_CLOSEOUT=1
-      ;;
     -h|--help)
       cat <<'EOF'
-Usage: scripts/run-acceptance.sh [--write-closeout]
+Usage: scripts/run-acceptance.sh
 
-Runs the Phase-1 acceptance harness and writes
-docs/reports/phase-1-acceptance.json.
+Runs the voice-fixture acceptance harness and writes
+.acceptance-reports/voice-acceptance.json.
 
-Options:
-  --write-closeout   substitute the literal `<SHA>` placeholder in
-                     docs/design/DESIGN.md and
-                     docs/design/PHASE-1-CLOSEOUT.md with the current
-                     commit SHA. OFF by default — the pre-push gate
-                     never mutates tracked files. Use this flag only
-                     when you are intentionally finalising the
-                     closeout doc.
+The script never mutates tracked files.
 EOF
       exit 0
       ;;
@@ -67,8 +48,8 @@ EOF
 done
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-REPORT_DIR="${REPO_ROOT}/docs/reports"
-REPORT_PATH="${REPORT_DIR}/phase-1-acceptance.json"
+REPORT_DIR="${REPO_ROOT}/.acceptance-reports"
+REPORT_PATH="${REPORT_DIR}/voice-acceptance.json"
 
 mkdir -p "${REPORT_DIR}"
 
@@ -231,42 +212,7 @@ echo
 echo "==> wrote ${REPORT_PATH}"
 echo "    aggregate=${AGGREGATE} tier_1=${TIER1} tier_2=${TIER2} p50=${P50}ms p99=${P99}ms"
 
-# --- substitute `<SHA>` placeholder in closeout markdown -----------
-# DESIGN.md §13.2 Status and PHASE-1-CLOSEOUT.md Status both carry a
-# literal `<SHA>` placeholder. We rewrite both atomically in-place.
-# This step is idempotent: a second run with the same SHA writes the
-# same string. If git was unavailable above (`COMMIT_SHA == unknown`)
-# we skip the rewrite — it is safer to leave the placeholder than to
-# stamp a misleading "unknown" into the closeout text.
-#
-# We use awk -v to avoid shell-quoting hell around the backtick chars,
-# and write to a tmp file then mv-replace so the substitution is
-# atomic on the filesystem.
-substitute_sha() {
-  local md="$1"
-  local sha="$2"
-  if [ ! -f "${md}" ]; then
-    return 0
-  fi
-  local tmp
-  tmp="$(mktemp)"
-  awk -v sha="${sha}" '
-    {
-      gsub(/`<SHA>`/, "`" sha "`")
-      print
-    }
-  ' "${md}" > "${tmp}"
-  mv "${tmp}" "${md}"
-}
-if [ "${WRITE_CLOSEOUT}" -eq 1 ] && [ "${COMMIT_SHA}" != "unknown" ]; then
-  substitute_sha "${REPO_ROOT}/docs/design/DESIGN.md" "${COMMIT_SHA}"
-  substitute_sha "${REPO_ROOT}/docs/design/PHASE-1-CLOSEOUT.md" "${COMMIT_SHA}"
-  echo "==> substituted <SHA> placeholder with ${COMMIT_SHA} in closeout markdown"
-elif [ "${WRITE_CLOSEOUT}" -eq 0 ]; then
-  echo "==> closeout SHA substitution skipped (pass --write-closeout to enable)"
-fi
-
-# --- enforce the §13.2 floor ---------------------------------------
+# --- enforce the floor ---------------------------------------------
 # awk handles the float compare without depending on bc(1).
 if ! awk -v a="${AGGREGATE}" 'BEGIN { exit !(a + 0 >= 0.95) }'; then
   echo "error: aggregate ${AGGREGATE} is below the 0.95 acceptance floor" >&2

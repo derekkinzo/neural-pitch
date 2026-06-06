@@ -9,9 +9,9 @@ cargo run --example build_voice_fixtures --release
 from `crates/neural-pitch-core/examples/build_voice_fixtures.rs`, which
 calls `neural_pitch_core::test_utils::voice::synth_voice`. Synthesis is
 closed-form deterministic — identical inputs always produce
-byte-identical output — so the committed FLAC bytes here are exactly
-what `cargo run --example build_voice_fixtures --release` will produce
-from a clean checkout.
+byte-identical output — so the committed FLAC bytes here are
+identical to what `cargo run --example build_voice_fixtures --release`
+produces from a clean checkout.
 
 ## What they contain
 
@@ -27,12 +27,6 @@ These files contain **no third-party audio**. They are first-party
 synthetic output and are covered by the workspace dual licence
 (MIT OR Apache-2.0); see `LICENSE-MIT` and `LICENSE-APACHE` at the
 repo root.
-
-If a future contributor adds real human-vocal samples (e.g. from the
-Philharmonia Orchestra Sound Samples set), they MUST land alongside an
-attribution + licence-compatibility note in this README, and the
-`instrument` field in `MANIFEST.toml` MUST be updated so the harness
-can distinguish synthetic from real-source fixtures.
 
 ## Re-generating
 

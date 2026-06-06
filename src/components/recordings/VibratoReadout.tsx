@@ -15,7 +15,7 @@
 // The 4–7 Hz typical band is a fixed `<rect data-testid="typical-band">`
 // at x=40%/width=30%; the indicator is a static `<line>`.
 //
-// Reduced-motion contract (ADR-0006):
+// Reduced-motion contract:
 //   The indicator's x-position is driven by the SVG `x1` / `x2`
 //   geometric attributes, not a CSS-animatable property — Tailwind
 //   `transition-all` therefore does NOT animate the indicator's position
@@ -36,9 +36,6 @@
 //   else   → emerald (high)
 // The strip is informational; not focusable.
 //
-// Cross-references:
-//   docs/design/DESIGN.md §7.5 (Phase 2.3 frontend additions)
-//   docs/adr/0006-visual-only-feedback-prefers-reduced-motion.md
 //   src/components/CentsMeter.tsx (canonical reduced-motion pattern)
 
 import { useEffect, useState, type ReactNode } from "react";
@@ -130,7 +127,7 @@ export function VibratoReadout({ summary }: VibratoReadoutProps): ReactNode {
   const ratioPct = `${Math.round(v.vibratoRatio * 100)}%`;
 
   // Reduced-motion → suppress the transform/width transition on the
-  // indicator. ADR-0006: visual-only feedback honours prefers-reduced-
+  // indicator. Visual-only feedback honours prefers-reduced-
   // motion. The class string is explicit so Playwright can match
   // `[class*="transition-none"]`. The class is applied both to the
   // indicator <line> (for the visual transition suppression) and to the
