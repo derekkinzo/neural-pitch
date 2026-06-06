@@ -51,17 +51,15 @@ impl AudioBackendConfig {
     /// Returns `next_pow2(3 * window)` so the producer never has to wrap
     /// inside a single analysis frame. This matches DESIGN §6.4.
     pub fn ring_capacity(&self) -> usize {
-        let target = self.window.saturating_mul(3).max(1);
-        let mut cap: usize = 1;
-        while cap < target {
-            // `next_pow2` saturates at `usize::MAX / 2 + 1`; in practice we
-            // never come close to that, but defend the math anyway.
-            match cap.checked_mul(2) {
-                Some(v) => cap = v,
-                None => return cap,
-            }
-        }
-        cap
+        // `checked_next_power_of_two` returns `None` only on overflow at the
+        // very top of the `usize` range, which we never approach in practice.
+        // Fall back to the largest representable power of two to keep the
+        // function total without unwrap.
+        self.window
+            .saturating_mul(3)
+            .max(1)
+            .checked_next_power_of_two()
+            .unwrap_or(usize::MAX / 2 + 1)
     }
 }
 

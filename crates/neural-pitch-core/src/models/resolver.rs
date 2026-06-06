@@ -19,24 +19,30 @@ use super::manifest::{Manifest, ManifestEntry};
 /// The variants intentionally match the resolver spec 1:1 so callers (the
 /// Tauri `get_model_status` command, the future Settings UI) can pattern-match
 /// without grepping the implementation.
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum ResolverError {
     /// `models.toml` was not found at the resolved path.
+    #[error("manifest not found: {0}")]
     ManifestNotFound(PathBuf),
     /// `models.toml` exists but failed to parse (malformed TOML or unsupported
     /// `schema_version`).
+    #[error("manifest parse error: {0}")]
     ManifestParse(String),
     /// The requested model name is absent from the manifest.
+    #[error("unknown model: {0}")]
     UnknownModel(String),
     /// The manifest entry is a placeholder: empty URL or the all-zeros
     /// dummy sha256. The model cannot be fetched until Phase 2.5/3 fills
     /// the fields in.
+    #[error("model {name} is not configured (placeholder manifest entry)")]
     NotConfigured {
         /// Name of the un-configured model.
         name: String,
     },
     /// The on-disk blob's sha256 did not match the manifest. The corrupted
     /// file is deleted before this error is surfaced.
+    #[error("sha256 mismatch: expected {expected}, got {actual}")]
     HashMismatch {
         /// Manifest-declared hex sha256.
         expected: String,
@@ -44,38 +50,11 @@ pub enum ResolverError {
         actual: String,
     },
     /// Network fetch failed (only reachable under `live-fetch`).
+    #[error("fetch failed: {0}")]
     Fetch(String),
     /// Filesystem error during verification, locking, or atomic rename.
-    Io(std::io::Error),
-}
-
-impl std::fmt::Display for ResolverError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::ManifestNotFound(p) => write!(f, "manifest not found: {}", p.display()),
-            Self::ManifestParse(e) => write!(f, "manifest parse error: {e}"),
-            Self::UnknownModel(n) => write!(f, "unknown model: {n}"),
-            Self::NotConfigured { name } => {
-                write!(
-                    f,
-                    "model {name} is not configured (placeholder manifest entry)"
-                )
-            }
-            Self::HashMismatch { expected, actual } => {
-                write!(f, "sha256 mismatch: expected {expected}, got {actual}")
-            }
-            Self::Fetch(e) => write!(f, "fetch failed: {e}"),
-            Self::Io(e) => write!(f, "io error: {e}"),
-        }
-    }
-}
-
-impl std::error::Error for ResolverError {}
-
-impl From<std::io::Error> for ResolverError {
-    fn from(e: std::io::Error) -> Self {
-        Self::Io(e)
-    }
+    #[error("io error: {0}")]
+    Io(#[from] std::io::Error),
 }
 
 /// Resolve the canonical workspace `models.toml` path.

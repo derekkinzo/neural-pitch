@@ -115,10 +115,6 @@ pub struct FlacRecordingSink {
     partial_path: PathBuf,
     /// Recording sample rate (locked to 48 000 by ADR-0011).
     sample_rate_hz: u32,
-    /// Channel count — always `1` (mono per ADR-0011).
-    channels: u16,
-    /// Bit depth — always `24` (per ADR-0011).
-    bit_depth: u8,
     /// Running tally of mono samples written through `write()`.
     samples_written: u64,
     /// Master sample buffer (24-bit PCM packed in `i32`). Grows on demand;
@@ -174,8 +170,6 @@ impl FlacRecordingSink {
             path,
             partial_path,
             sample_rate_hz,
-            channels: 1,
-            bit_depth: 24,
             samples_written: 0,
             samples_i32: Vec::new(),
             finalized: false,
@@ -204,14 +198,10 @@ impl FlacRecordingSink {
     }
 
     /// Channel count — `1` (mono per ADR-0011).
-    pub fn channels(&self) -> u16 {
-        self.channels
-    }
+    pub const CHANNELS: u16 = 1;
 
     /// Bit depth — `24` (per ADR-0011).
-    pub fn bit_depth(&self) -> u8 {
-        self.bit_depth
-    }
+    pub const BIT_DEPTH: u8 = 24;
 }
 
 /// Convert one `f32` sample in `[-1.0, 1.0]` to a 24-bit signed integer
@@ -268,7 +258,7 @@ impl RecordingSink for FlacRecordingSink {
         let bytes = encode_flac_bytes(
             &self.samples_i32,
             self.sample_rate_hz,
-            usize::from(self.bit_depth),
+            usize::from(Self::BIT_DEPTH),
         )?;
 
         // Open the partial file in truncate mode and write the encoded
@@ -731,14 +721,11 @@ impl RecordingWorker {
             }
             match self.rx.recv_timeout(poll) {
                 Ok(window) => {
-                    if let Err(e) = self.sink.write(&window) {
-                        // Sink error mid-recording — drop the sink so its
-                        // Drop impl removes the partial file, surface the
-                        // typed error to the caller (with ENOSPC mapped to
-                        // the typed `DiskFull` variant for the front-end).
-                        drop(self.sink);
-                        return Err(map_sink_err(e));
-                    }
+                    // Sink errors mid-recording propagate via `?`; the worker
+                    // owns `self.sink` so the `Drop` impl runs as the function
+                    // unwinds, removing the partial file. ENOSPC is mapped to
+                    // the typed `DiskFull` variant for the front-end.
+                    self.sink.write(&window).map_err(map_sink_err)?;
                     // Drain any extra windows that piled up behind this
                     // one. This is a recv-batching optimisation; it does
                     // NOT count as backpressure (those windows were not
@@ -746,10 +733,7 @@ impl RecordingWorker {
                     // producer side accounts for genuine backpressure on
                     // `TrySendError::Full`.
                     while let Ok(extra) = self.rx.try_recv() {
-                        if let Err(e) = self.sink.write(&extra) {
-                            drop(self.sink);
-                            return Err(map_sink_err(e));
-                        }
+                        self.sink.write(&extra).map_err(map_sink_err)?;
                     }
                 }
                 Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
@@ -760,10 +744,7 @@ impl RecordingWorker {
         // Drain anything still buffered in the channel after cancel — keeps
         // happy-path tests that send-then-cancel from losing the tail.
         while let Ok(window) = self.rx.try_recv() {
-            if let Err(e) = self.sink.write(&window) {
-                drop(self.sink);
-                return Err(map_sink_err(e));
-            }
+            self.sink.write(&window).map_err(map_sink_err)?;
         }
 
         let artifact = self.sink.finalize().map_err(map_sink_err)?;
@@ -809,10 +790,8 @@ mod tests {
 
     #[test]
     fn mock_sink_round_trips_samples_and_artifact() {
-        let mut sink = Box::new(MockRecordingSink::new(
-            PathBuf::from("/tmp/mock_unit.flac"),
-            48_000,
-        ));
+        let path = std::env::temp_dir().join("mock_unit.flac");
+        let mut sink = Box::new(MockRecordingSink::new(path, 48_000));
         sink.write(&[0.0, 0.5, -0.5]).expect("write");
         let artifact = sink.finalize().expect("finalize");
         assert_eq!(artifact.sample_count, 3);
@@ -821,13 +800,11 @@ mod tests {
 
     #[test]
     fn mock_sink_double_finalize_errors() {
-        let mut sink = Box::new(MockRecordingSink::new(
-            PathBuf::from("/tmp/mock_double.flac"),
-            48_000,
-        ));
+        let tmp = std::env::temp_dir();
+        let mut sink = Box::new(MockRecordingSink::new(tmp.join("mock_double.flac"), 48_000));
         sink.write(&[0.0]).expect("write");
         let _artifact = Box::new(MockRecordingSink::new(
-            PathBuf::from("/tmp/mock_double_other.flac"),
+            tmp.join("mock_double_other.flac"),
             48_000,
         ))
         .finalize()
@@ -835,7 +812,7 @@ mod tests {
         // Single-shot finalize is enforced by `Box<Self>` consuming the box;
         // there is no way to call `finalize` twice on the same instance from
         // safe code. Double-finalize is therefore covered by the type system.
-        let mut sink2 = MockRecordingSink::new(PathBuf::from("/tmp/mock_double2.flac"), 48_000);
+        let mut sink2 = MockRecordingSink::new(tmp.join("mock_double2.flac"), 48_000);
         sink2.finalized = true;
         let res = Box::new(sink2).finalize();
         assert!(matches!(res, Err(RecordingSinkError::AlreadyFinalized)));
@@ -844,7 +821,8 @@ mod tests {
     #[cfg(feature = "flac")]
     #[test]
     fn flac_sink_rejects_non_48k() {
-        let res = FlacRecordingSink::create(PathBuf::from("/tmp/should_not_create.flac"), 44_100);
+        let res =
+            FlacRecordingSink::create(std::env::temp_dir().join("should_not_create.flac"), 44_100);
         assert!(matches!(res, Err(RecordingSinkError::InvalidConfig(_))));
     }
 }

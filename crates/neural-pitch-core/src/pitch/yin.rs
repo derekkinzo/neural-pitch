@@ -595,12 +595,8 @@ impl PitchEstimator for YinMpmEstimator {
     }
 
     fn reset(&mut self) {
-        for v in &mut self.scratch {
-            *v = 0.0;
-        }
-        for v in &mut self.cmnd {
-            *v = 0.0;
-        }
+        self.scratch.fill(0.0);
+        self.cmnd.fill(0.0);
         self.timestamp_samples = 0;
         // Restore the lag range to the constructor-time budget so
         // `process` after `reset` behaves as a freshly-constructed

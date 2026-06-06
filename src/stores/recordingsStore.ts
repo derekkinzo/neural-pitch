@@ -23,6 +23,7 @@
 
 import { create } from "zustand";
 import { invoke } from "@tauri-apps/api/core";
+import { formatDurationToast } from "@/lib/duration-format";
 import type { Recording, RecordingId, RecordingProgress } from "@/types/recording";
 
 /** Snake_case wire-format mirroring the Rust serde output. The Rust shell
@@ -178,8 +179,8 @@ export const useRecordingsStore = create<RecordingsStore>((set, get) => ({
       await get().refresh();
       const message =
         final !== null
-          ? `Saved ${formatToastDuration(final.durationMs)} recording`
-          : `Saved ${formatToastDuration(get().elapsedMs)} recording`;
+          ? `Saved ${formatDurationToast(final.durationMs)} recording`
+          : `Saved ${formatDurationToast(get().elapsedMs)} recording`;
       set({
         isRecording: false,
         saving: false,
@@ -206,14 +207,3 @@ export const useRecordingsStore = create<RecordingsStore>((set, get) => ({
 
   __setItemsForTest: (items) => set({ items: sortDescByCreatedAt(items) }),
 }));
-
-/** Local copy of `formatDurationShort` to avoid a circular import at the
- *  module-load layer (the store is imported from many components). */
-function formatToastDuration(ms: number): string {
-  const totalSeconds = Math.max(0, Math.floor((Number.isFinite(ms) ? ms : 0) / 1000));
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  if (minutes === 0) return `${seconds}s`;
-  const ss = seconds < 10 ? `0${seconds}` : String(seconds);
-  return `${minutes}m${ss}s`;
-}

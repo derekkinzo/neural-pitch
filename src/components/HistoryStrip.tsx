@@ -9,6 +9,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { SILENT_PITCH, type PitchUpdate } from "@/types/pitch";
+import { scaleForDpr } from "@/lib/canvas-dpr";
 import type { RingBuffer } from "@/lib/ring";
 
 export interface HistoryStripProps {
@@ -17,15 +18,6 @@ export interface HistoryStripProps {
 
 const HISTORY_FRAMES = 256;
 const RANGE = 50;
-
-function scaleForDpr(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D): void {
-  const dpr = window.devicePixelRatio || 1;
-  const cssW = canvas.clientWidth;
-  const cssH = canvas.clientHeight;
-  canvas.width = Math.max(1, Math.round(cssW * dpr));
-  canvas.height = Math.max(1, Math.round(cssH * dpr));
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-}
 
 function paint(
   ctx: CanvasRenderingContext2D,

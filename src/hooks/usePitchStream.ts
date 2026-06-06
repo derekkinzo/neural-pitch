@@ -30,6 +30,7 @@ import { useCallback, useEffect, useRef } from "react";
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { RingBuffer } from "@/lib/ring";
 import { hzToNote, formatNoteShort } from "@/lib/note-format";
+import { registerTestListener } from "@/lib/test-hooks";
 import { snapshotSettingsForIpc, useSettingsStore } from "@/stores/settingsStore";
 import { useTunerStore } from "@/stores/tunerStore";
 import type { PitchUpdate } from "@/types/pitch";
@@ -169,29 +170,9 @@ export function usePitchStream(): UsePitchStreamApi {
     const ring = ringRef.current;
 
     // Expose a raw push hook for the E2E mock harness.
-    type WindowWithHooks = Window & {
-      __neuralPitchTestHooks?: {
-        listeners: Map<string, Array<(payload: unknown) => void>>;
-      };
-    };
-    const w = window as WindowWithHooks;
-    const hooks = w.__neuralPitchTestHooks;
-    let unregisterTestListener: (() => void) | null = null;
-    if (hooks !== undefined) {
-      const fn = (payload: unknown): void => {
-        handleMessage(payload as PitchUpdate);
-      };
-      const list = hooks.listeners.get("pitch-update") ?? [];
-      list.push(fn);
-      hooks.listeners.set("pitch-update", list);
-      unregisterTestListener = () => {
-        const cur = hooks.listeners.get("pitch-update") ?? [];
-        hooks.listeners.set(
-          "pitch-update",
-          cur.filter((f) => f !== fn),
-        );
-      };
-    }
+    const unregisterTestListener = registerTestListener("pitch-update", (payload) => {
+      handleMessage(payload as PitchUpdate);
+    });
 
     void startCapture().then(() => {
       if (cancelled) {
@@ -202,7 +183,7 @@ export function usePitchStream(): UsePitchStreamApi {
 
     return () => {
       cancelled = true;
-      unregisterTestListener?.();
+      unregisterTestListener();
       void invoke("stop_capture").catch(() => {
         /* swallow: the shell handles repeated stops idempotently. */
       });

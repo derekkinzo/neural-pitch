@@ -12,6 +12,7 @@
 
 import { useEffect } from "react";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { getTestHooks, registerTestListener } from "@/lib/test-hooks";
 import { useRecordingsStore } from "@/stores/recordingsStore";
 import type { RecordingProgress } from "@/types/recording";
 
@@ -58,30 +59,10 @@ export function useRecordingProgress(): void {
     let unlisten: UnlistenFn | null = null;
     let cancelled = false;
 
-    type Listener = (payload: unknown) => void;
-    type WindowWithHooks = Window & {
-      __neuralPitchTestHooks?: {
-        listeners: Map<string, Listener[]>;
-      };
-    };
-    const w = window as WindowWithHooks;
-    const hooks = w.__neuralPitchTestHooks;
-    let unregisterTestListener: (() => void) | null = null;
-    if (hooks !== undefined) {
-      const fn: Listener = (payload) => {
-        useRecordingsStore.getState().applyProgress(normalise(payload as WireProgress));
-      };
-      const list = hooks.listeners.get(CHANNEL) ?? [];
-      list.push(fn);
-      hooks.listeners.set(CHANNEL, list);
-      unregisterTestListener = () => {
-        const cur = hooks.listeners.get(CHANNEL) ?? [];
-        hooks.listeners.set(
-          CHANNEL,
-          cur.filter((f) => f !== fn),
-        );
-      };
-    } else {
+    const unregister = registerTestListener(CHANNEL, (payload) => {
+      useRecordingsStore.getState().applyProgress(normalise(payload as WireProgress));
+    });
+    if (getTestHooks() === undefined) {
       void listen<WireProgress>(CHANNEL, (event) => {
         useRecordingsStore.getState().applyProgress(normalise(event.payload));
       })
@@ -100,7 +81,7 @@ export function useRecordingProgress(): void {
 
     return () => {
       cancelled = true;
-      unregisterTestListener?.();
+      unregister();
       if (unlisten !== null) unlisten();
     };
   }, []);

@@ -30,6 +30,7 @@
 //   src/components/CentsMeter.tsx (canonical canvas + DPR + reduced-motion pattern)
 
 import { useEffect, useMemo, useRef, type ReactNode } from "react";
+import { scaleForDpr } from "@/lib/canvas-dpr";
 import type { AnalysisSummary, ContourFrame, ContourResult } from "@/types/analysis";
 
 export interface ContourLineProps {
@@ -134,15 +135,6 @@ function downsample(frames: readonly ContourFrame[], durationMs: number): readon
   const seconds = Math.max(1, Math.ceil(durationMs / 1000));
   const target = Math.min(frames.length, FRAMES_PER_SECOND_CAP * seconds);
   return lttb(frames, target);
-}
-
-function scaleForDpr(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D): void {
-  const dpr = window.devicePixelRatio || 1;
-  const cssW = canvas.clientWidth;
-  const cssH = canvas.clientHeight;
-  canvas.width = Math.max(1, Math.round(cssW * dpr));
-  canvas.height = Math.max(1, Math.round(cssH * dpr));
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
 
 interface PaintBounds {

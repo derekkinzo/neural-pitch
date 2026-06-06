@@ -169,7 +169,7 @@ The five tiers cover different cross-sections of category space. This table show
 Pinned versions (exact, not range — see "Failure Policy" §11 for why):
 
 - **`@playwright/test` 1.60.0** — published 2026-05-11. Runs the deterministic suite. `expect(page).toHaveScreenshot` is the visual-regression workhorse.
-- **`@playwright/mcp` 0.0.75** — published 2026-05-07, Apache-2.0, ~33.4k stars. Pinned exact: the package has cycled through ~12 releases in the first half of 2026 (v0.0.64 → v0.0.75 between Feb and May), and `@latest` in CI is unsafe. Used out-of-band (not in the deterministic gate) for Claude-driven exploratory flows; configured in `tests/mcp/.mcp/config.json` with `--caps testing,storage --browser chromium --headless --isolated`.
+- **`@playwright/mcp` 0.0.75** — published 2026-05-07, Apache-2.0, ~33.4k stars. Pinned exact: the package has cycled through ~12 releases in the first half of 2026 (v0.0.64 → v0.0.75 between Feb and May), and `@latest` in CI is unsafe. Used out-of-band (not in the deterministic gate) for AI-agent-driven exploratory flows; configured in `tests/mcp/.mcp/config.json` with `--caps testing,storage --browser chromium --headless --isolated`.
 - **`@axe-core/playwright`** — pinned to a known axe-core major.minor (the package tracks axe-core's major.minor, not SemVer; minor bumps can introduce new rules). Pin both `axe-core` and `@axe-core/playwright`.
 - **`@tauri-apps/api` 2.11.0** — already a dep; the `/mocks` subpath exposes `mockIPC`, `mockWindows`, `clearMocks`, `mockConvertFileSrc`. `shouldMockEvents` (2.7.0+) is required for our event-driven tuner state model.
 - **`tauri-driver` 2.0.6** — installed via `cargo install tauri-driver --locked --version 2.0.6` in the nightly job. License Apache-2.0 OR MIT, MSRV 1.77.2. Versioned independently from `tauri` itself (Tauri docs explicitly warn this) — do not couple bumps.
@@ -385,6 +385,6 @@ Exact-version pinning (no `^`, no `~`) for all of: `@playwright/test`, `@playwri
 
 - **Argos-CI adoption** — defer until reviewing PNG diffs in GitHub's diff viewer becomes painful. Free Hobby tier (5,000 screenshots/month) is sufficient at our 5-state scale.
 - **Firefox in the per-PR matrix vs nightly** — start nightly only; promote to per-PR if a Firefox-specific regression is observed.
-- **MCP-driven exploratory runs in CI** — explicitly out of scope for the deterministic gate. Whether to schedule a weekly MCP-driven Claude run that posts findings to a `.github/discussions` thread is open.
+- **MCP-driven exploratory runs in CI** — explicitly out of scope for the deterministic gate. Whether to schedule a weekly AI-agent-driven MCP run that posts findings to a `.github/discussions` thread is open.
 - **Performance budgets** — the values quoted (LCP < 2.0 s, CLS < 0.05, p95 FPS > 55, longtask < 50 ms) are starting points anchored to typical 60 Hz desktop targets. Tighten or relax after the first 30 days of measurement.
 - **Locale set** — {en-US, de-DE, ja-JP, ar-EG} is the working list; final set follows the localisation roadmap (not yet ADR'd).

@@ -36,6 +36,7 @@
 
 import { useEffect, useRef, type ReactNode } from "react";
 import { SILENT_PITCH, type PitchUpdate } from "@/types/pitch";
+import { scaleForDpr } from "@/lib/canvas-dpr";
 import { hzToNote, formatNoteShort } from "@/lib/note-format";
 import { useSettingsStore } from "@/stores/settingsStore";
 import type { RingBuffer } from "@/lib/ring";
@@ -57,15 +58,6 @@ const COLORS = {
   sharp: "#fbbf24", // amber-400
   flat: "#fb923c", // orange-400
 } as const;
-
-function scaleForDpr(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D): void {
-  const dpr = window.devicePixelRatio || 1;
-  const cssW = canvas.clientWidth;
-  const cssH = canvas.clientHeight;
-  canvas.width = Math.max(1, Math.round(cssW * dpr));
-  canvas.height = Math.max(1, Math.round(cssH * dpr));
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-}
 
 function paint(
   ctx: CanvasRenderingContext2D,

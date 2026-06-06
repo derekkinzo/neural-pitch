@@ -18,8 +18,9 @@
 //! Per-window output is preserved on the wire so downstream UIs can
 //! visualise vibrato rate over time without re-analysis.
 
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, OnceLock};
 
+use parking_lot::Mutex;
 use realfft::{RealFftPlanner, RealToComplex};
 use serde::{Deserialize, Serialize};
 
@@ -39,14 +40,9 @@ use crate::analysis::contour::ContourResult;
 fn shared_r2c() -> Arc<dyn RealToComplex<f32>> {
     static PLANNER: OnceLock<Mutex<RealFftPlanner<f32>>> = OnceLock::new();
     let planner_mutex = PLANNER.get_or_init(|| Mutex::new(RealFftPlanner::<f32>::new()));
-    let mut planner = match planner_mutex.lock() {
-        Ok(g) => g,
-        // Lock poisoning indicates an earlier panic on another thread
-        // mid-`plan_fft_forward`. The planner's invariants are simple
-        // (it owns only twiddle tables and a length-keyed cache); recover
-        // and continue rather than escalating.
-        Err(poisoned) => poisoned.into_inner(),
-    };
+    // `parking_lot::Mutex` does not poison on panic (ADR-0014), so a single
+    // `lock()` call suffices.
+    let mut planner = planner_mutex.lock();
     planner.plan_fft_forward(FFT_LEN)
 }
 
@@ -418,8 +414,8 @@ fn aggregate(per_window: Vec<VibratoWindow>, total_windows: u32) -> VibratoRepor
     } else {
         let mut rates: Vec<f32> = per_window.iter().map(|w| w.rate_hz).collect();
         let mut extents: Vec<f32> = per_window.iter().map(|w| w.extent_cents).collect();
-        rates.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
-        extents.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+        rates.sort_by(f32::total_cmp);
+        extents.sort_by(f32::total_cmp);
         (median_of_sorted(&rates), median_of_sorted(&extents))
     };
     VibratoReport {
@@ -456,7 +452,7 @@ fn median_filter(input: &[f32], kernel: usize) -> Vec<f32> {
             let idx = reflect_index(i, k, half, n);
             buf.push(input[idx]);
         }
-        buf.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+        buf.sort_by(f32::total_cmp);
         out.push(buf[buf.len() / 2]);
     }
     out

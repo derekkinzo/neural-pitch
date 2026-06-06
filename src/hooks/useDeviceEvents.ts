@@ -20,6 +20,7 @@
 
 import { useEffect } from "react";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { getTestHooks, registerTestListener } from "@/lib/test-hooks";
 import { useTunerStore } from "@/stores/tunerStore";
 
 /** Wire-format AudioBackendEvent. Field names mirror the Rust `serde`
@@ -69,30 +70,10 @@ export function useDeviceEvents(): void {
     // the page-side helper does not implement `plugin:event|listen`, so we
     // ALSO register through `__neuralPitchTestHooks.listeners` so specs
     // can drive synthetic events without needing the real listen wiring.
-    type Listener = (payload: unknown) => void;
-    type WindowWithHooks = Window & {
-      __neuralPitchTestHooks?: {
-        listeners: Map<string, Listener[]>;
-      };
-    };
-    const w = window as WindowWithHooks;
-    const hooks = w.__neuralPitchTestHooks;
-    let unregisterTestListener: (() => void) | null = null;
-    if (hooks !== undefined) {
-      const fn: Listener = (payload) => {
-        applyEvent(payload as AudioBackendEvent);
-      };
-      const list = hooks.listeners.get(CHANNEL) ?? [];
-      list.push(fn);
-      hooks.listeners.set(CHANNEL, list);
-      unregisterTestListener = () => {
-        const cur = hooks.listeners.get(CHANNEL) ?? [];
-        hooks.listeners.set(
-          CHANNEL,
-          cur.filter((f) => f !== fn),
-        );
-      };
-    } else {
+    const unregister = registerTestListener(CHANNEL, (payload) => {
+      applyEvent(payload as AudioBackendEvent);
+    });
+    if (getTestHooks() === undefined) {
       void listen<AudioBackendEvent>(CHANNEL, (event) => {
         applyEvent(event.payload);
       })
@@ -111,7 +92,7 @@ export function useDeviceEvents(): void {
 
     return () => {
       cancelled = true;
-      unregisterTestListener?.();
+      unregister();
       if (unlisten !== null) unlisten();
     };
   }, []);

@@ -31,15 +31,9 @@ import { ContourLine } from "@/components/recordings/ContourLine";
 import { RangeReadout } from "@/components/recordings/RangeReadout";
 import { VibratoReadout } from "@/components/recordings/VibratoReadout";
 import { formatDurationShort, formatRelative } from "@/lib/duration-format";
-import { formatNoteShort, hzToNote, midiToHz } from "@/lib/note-format";
+import { formatMidiNote } from "@/lib/note-format";
 import { useAnalysisStore, selectLatestContour } from "@/stores/analysisStore";
 import { useRecordingsStore } from "@/stores/recordingsStore";
-
-/** MIDI → "A4" / "C#5" formatter via the existing equal-tempered helper. */
-function formatMidiNote(midi: number, a4Hz: number): string {
-  const hz = midiToHz(midi, a4Hz);
-  return formatNoteShort(hzToNote(hz, a4Hz));
-}
 
 function formatSignedCents(cents: number): string {
   const sign = cents >= 0 ? "+" : "";

@@ -31,7 +31,7 @@
 
 import type { ReactNode } from "react";
 import type { AnalysisSummary } from "@/types/analysis";
-import { formatNoteShort, hzToNote, midiToHz } from "@/lib/note-format";
+import { formatMidiNote } from "@/lib/note-format";
 
 export interface RangeReadoutProps {
   summary: AnalysisSummary | undefined;
@@ -49,12 +49,6 @@ const VOICE_TYPE_DISCLAIMER =
  *  it via `aria-describedby` so AT engines announce the disclaimer exactly
  *  once when focus enters the group. */
 const VOICE_HINT_DISCLAIMER_ID = "range-readout-voice-hint-disclaimer";
-
-/** MIDI → "A4" / "C#5" formatter via the existing equal-tempered helper. */
-function formatMidiNote(midi: number, a4Hz: number): string {
-  const hz = midiToHz(midi, a4Hz);
-  return formatNoteShort(hzToNote(hz, a4Hz));
-}
 
 export function RangeReadout({ summary, a4Hz }: RangeReadoutProps): ReactNode {
   const range = summary?.range;

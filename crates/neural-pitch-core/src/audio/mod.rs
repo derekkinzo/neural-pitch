@@ -67,8 +67,4 @@ pub trait AudioDecoder: Send {
     /// the leading dot. Used by the format-detection dispatcher to pick a
     /// concrete decoder for a given file.
     fn supported_extensions(&self) -> &'static [&'static str];
-
-    // TODO(phase-2): add `decode_block(&mut self) -> Result<Option<AudioBlock>, AudioError>`
-    // for streaming decode. Implementations will hold an internal Symphonia
-    // reader and yield ~1024-sample blocks.
 }

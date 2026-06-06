@@ -46,6 +46,22 @@ export function formatDurationShort(durationMs: number): string {
   return `${minutes}:${ss}`;
 }
 
+/**
+ * Toast-flavoured duration renderer used by the "Saved 1m23s recording"
+ * toast on stop. Sub-minute takes render as `13s`; longer takes use the
+ * compact `1m23s` shape (matching the in-flight elapsed counter's spoken
+ * cadence rather than the row's `1:23` shape, so screen readers don't
+ * announce it as a clock value).
+ */
+export function formatDurationToast(durationMs: number): string {
+  const totalSeconds = Math.floor(clampNonNegative(durationMs) / MS_PER_SECOND);
+  const minutes = Math.floor(totalSeconds / SECONDS_PER_MINUTE);
+  const seconds = totalSeconds % SECONDS_PER_MINUTE;
+  if (minutes === 0) return `${seconds}s`;
+  const ss = seconds < 10 ? `0${seconds}` : String(seconds);
+  return `${minutes}m${ss}s`;
+}
+
 /** Relative-time renderer used in RecordingsList. Resolves to "just now",
  *  "5m ago", "2h ago", or a YYYY-MM-DD date for older takes. Pure — the
  *  caller passes the reference `now` so tests can pin time. */

@@ -52,3 +52,9 @@ export function formatNoteShort(note: NoteName): string {
   if (note.letter === "—") return "—";
   return `${note.letter}${note.accidental}${note.octave}`;
 }
+
+/** Stable display string for a MIDI number at the given `a4Hz`, e.g. "A4". */
+export function formatMidiNote(midi: number, a4Hz: number): string {
+  const hz = midiToHz(midi, a4Hz);
+  return formatNoteShort(hzToNote(hz, a4Hz));
+}

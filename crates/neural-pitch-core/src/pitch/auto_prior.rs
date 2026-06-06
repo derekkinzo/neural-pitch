@@ -358,13 +358,13 @@ impl AutoPrior {
             // After `select_nth_unstable_by`, `scratch[..mid]` holds
             // the lower half; its max is the (n/2 - 1)-th order
             // statistic.
-            let lower = &scratch[..mid];
-            let mut lower_max = f32::NEG_INFINITY;
-            for &v in lower {
-                if v > lower_max {
-                    lower_max = v;
-                }
-            }
+            // After `select_nth_unstable_by`, `scratch[..mid]` holds the
+            // lower half; its max is the (n/2 - 1)-th order statistic. Use
+            // the same total-ordering fold pattern as `pitch::yin::pick_mpm_tau`.
+            let lower_max = scratch[..mid]
+                .iter()
+                .copied()
+                .fold(f32::NEG_INFINITY, f32::max);
             if lower_max.is_finite() {
                 0.5 * (mid_val + lower_max)
             } else {

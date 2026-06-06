@@ -835,8 +835,7 @@ fn summarize_cached(
         sample_rate_hz / 256.0
     };
     let voiced_ratio = f64::from(contour.voiced_ratio).clamp(0.0, 1.0);
-    let (median_hz_voiced, median_cents_off) =
-        compute_medians(&contour.frames, &contour.smoothed_cents, a4_hz);
+    let (median_hz_voiced, median_cents_off) = compute_medians(&contour.frames, a4_hz);
     // median_midi is derived from median_hz_voiced via the equal-tempered
     // mapping in `crate::music`. The front-end summary card renders this
     // as the human-readable note name (e.g. "A4"); without it, the TS
@@ -885,16 +884,13 @@ fn summarize_cached(
     }
 }
 
-fn compute_medians(
-    frames: &[crate::pitch::F0Frame],
-    smoothed_cents: &[f32],
-    a4_hz: f64,
-) -> (Option<f64>, Option<f64>) {
-    let _ = smoothed_cents; // legacy: smoothed cents are relative to a4_hz,
-    // not to the nearest equal-tempered note, so they are
-    // unsuitable for the wire summary's `median_cents_off`
-    // field. Kept in the signature for back-compat with the
-    // older callsite.
+fn compute_medians(frames: &[crate::pitch::F0Frame], a4_hz: f64) -> (Option<f64>, Option<f64>) {
+    // `median_cents_off` is the cents-off-from-nearest-equal-tempered-note
+    // (range `(-50.0, 50.0]`), independent of `a4_hz`. We deliberately do
+    // NOT use the smoothed cents-relative-to-a4_hz track because it spans
+    // the whole signal domain, which would put values outside the
+    // half-semitone band that the front-end card (and the TS wire format)
+    // expects. Always derive cents-off via `frequency_to_note`.
     let mut hz: Vec<f64> = frames
         .iter()
         .filter(|f| f.voiced && f.f0_hz.is_finite() && f.f0_hz > 0.0)
@@ -903,15 +899,9 @@ fn compute_medians(
     if hz.is_empty() {
         return (None, None);
     }
-    hz.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    hz.sort_by(f64::total_cmp);
     let median_hz = median_of_sorted_f64(&hz);
 
-    // `median_cents_off` is the cents-off-from-nearest-equal-tempered-note
-    // (range `(-50.0, 50.0]`), independent of `a4_hz`. The smoothed_cents
-    // track is cents-relative-to-a4_hz which spans the whole signal
-    // domain; using its median would put values outside the half-semitone
-    // band the front-end card (and the TS wire format) expects. Always
-    // derive cents-off via `frequency_to_note`.
     let mut cents: Vec<f64> = frames
         .iter()
         .filter(|f| f.voiced && f.f0_hz.is_finite() && f.f0_hz > 0.0)
@@ -923,7 +913,7 @@ fn compute_medians(
     let median_cents = if cents.is_empty() {
         None
     } else {
-        cents.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+        cents.sort_by(f64::total_cmp);
         Some(median_of_sorted_f64(&cents))
     };
     (Some(median_hz), median_cents)

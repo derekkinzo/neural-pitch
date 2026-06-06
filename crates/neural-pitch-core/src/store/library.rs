@@ -151,16 +151,13 @@ impl RecordingsLibrary {
         let rows = stmt
             .query_map([], |row| {
                 let id_blob: Vec<u8> = row.get(0)?;
-                let mut id_bytes = [0u8; 16];
-                if id_blob.len() == 16 {
-                    id_bytes.copy_from_slice(&id_blob);
-                } else {
-                    return Err(rusqlite::Error::FromSqlConversionFailure(
+                let id_bytes: [u8; 16] = id_blob.as_slice().try_into().map_err(|_| {
+                    rusqlite::Error::FromSqlConversionFailure(
                         0,
                         rusqlite::types::Type::Blob,
-                        format!("expected 16-byte UUID id, got {} bytes", id_blob.len()).into(),
-                    ));
-                }
+                        "expected 16-byte UUID id".into(),
+                    )
+                })?;
                 Ok(Recording {
                     id: RecordingId(id_bytes),
                     filename: row.get(1)?,
