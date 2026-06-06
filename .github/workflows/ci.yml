@@ -234,6 +234,21 @@ jobs:
       - name: cargo build --release
         run: cargo build --release --workspace
 
+  voice-acceptance:
+    # §13.2 acceptance floor (aggregate >= 0.95) — release gate, runs
+    # the same harness the local pre-push gate does. CI is
+    # authoritative here; the local step is a fast-fail mirror so
+    # contributors discover regressions before push, not after.
+    name: voice-acceptance
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Run acceptance harness
+        run: bash scripts/run-acceptance.sh
+
   e2e-mock:
     name: e2e-mock
     runs-on: ubuntu-latest
@@ -264,3 +279,34 @@ jobs:
             playwright-report/
             test-results/
           retention-days: 14
+
+  no-leak:
+    # Hard-rule gate: every tracked file must be free of internal
+    # references and personal-machine paths. The local pre-push gate
+    # (scripts/ci-local.sh) runs the same check, but a contributor
+    # who pushes with --no-verify (or a fork PR with hooks not
+    # installed) would otherwise bypass it. CI is authoritative.
+    name: no-leak
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: no-leak grep
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The pattern below intentionally contains the very
+          # substrings it forbids; tag this script and the harness
+          # with the literal sentinel `# no-leak: regex-source` and
+          # filter those tagged lines out of the input.
+          PATTERN='amazon|amzn|asbx|midway|brazil|claude|/home/ANT' # no-leak: regex-source
+          hits="$(git ls-files \
+            | xargs grep -InE "${PATTERN}" 2>/dev/null \
+            | grep -vE '# no-leak: regex-source' \
+            | cut -d: -f1 \
+            | sort -u || true)"
+          if [ -n "${hits}" ]; then
+            echo "::error::no-leak grep found forbidden references in:"
+            echo "${hits}"
+            exit 1
+          fi
+          echo "no-leak: clean"

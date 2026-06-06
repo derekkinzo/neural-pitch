@@ -1182,9 +1182,14 @@ Signed-off-by: Real Name <email@example.org>
 
 The `commit-msg` script flags non-imperative first words (`*ed|*ing`) as a **fail**, accepting the false-positive cost on legitimate words like `feed`/`speed`. This is harder than a warn-only check and resolves the earlier mixed-signals on enforcement.
 
-### 12.3 Pre-commit hooks
+### 12.3 Pre-commit hooks and the three-tier local-CI harness
 
-Installed via `scripts/install-hooks.sh`:
+Installed via `scripts/install-hooks.sh` (which wires up the
+`pre-commit`, `commit-msg`, and `pre-push` stages). The
+`pre-commit` stage runs the fast in-tree linters; the `pre-push`
+stage runs `scripts/ci-local.sh quick`, the canonical pre-push gate.
+
+`pre-commit` stage:
 
 - `cargo fmt --check`
 - `cargo clippy -D warnings`
@@ -1195,19 +1200,38 @@ Installed via `scripts/install-hooks.sh`:
 - trailing-whitespace, EOF-newline, large-file rejection
 - `commit-msg` script (subject + DCO validation)
 
+`pre-push` stage — `scripts/ci-local.sh`:
+
+| Tier     | Command                      | Wall-clock | Catches                                                                                                                                                                                                                           |
+| -------- | ---------------------------- | ---------: | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `quick`  | `scripts/ci-local.sh quick`  |     ~3 min | fmt, clippy `-D warnings`, `--all-features` + `--no-default-features` build/test, `cargo +beta test`, `cargo deny`, release build, voice-acceptance harness, tsc app + e2e, eslint, prettier, no-leak grep (internal-ref / paths) |
+| `visual` | `scripts/ci-local.sh visual` |      ~90 s | Playwright visual baselines (Chromium + WebKit) inside the official Docker image (font/render determinism)                                                                                                                        |
+| `full`   | `scripts/ci-local.sh full`   |     ~10 m. | Full `ci.yml` emulation via `act` — every Linux-runnable job. Test matrix (macOS / Windows legs) defers to remote CI                                                                                                              |
+
+The pre-push hook runs `quick`; developers escalate to `visual` or
+`full` when their change touches UI or CI configuration.
+[ADR-0022](../adr/0022-local-ci-harness.md) records the rationale.
+`git push --no-verify` is the only documented bypass — for genuine
+emergencies only; CI will catch you anyway.
+
 ### 12.4 CI
 
 GitHub Actions `ci.yml`:
 
-- `commit-lint`
+- `commit-lint` (pull_request only)
 - `fmt`
-- `lint` (clippy)
-- `typecheck` (tsc)
-- `test-matrix` (Linux/macOS/Windows × stable/beta)
-- `deny` (`cargo-deny`; required only when `deny.toml` is populated, Phase 2+)
-- `build` (Tauri bundle, smoke)
+- `clippy`
+- `clippy-no-default-features` (core crate; guards feature-gating regressions)
+- `typecheck` (tsc app + tests/e2e)
+- `lint` (eslint)
+- `test` matrix (Linux / macOS / Windows × stable / beta)
+- `deny` (`cargo-deny`)
+- `build` (release build, Tauri smoke)
+- `voice-acceptance` (§13.2 floor, aggregate ≥ 0.95)
+- `e2e-mock` (Playwright Chromium + WebKit)
+- `no-leak` (forbidden internal-ref / personal-path grep)
 
-Branch protection requires `commit-lint`, `fmt`, `lint`, `typecheck`, all `test-matrix` cells, and `build`. `deny` is required only when `deny.toml` is populated (Phase 2+); branch protection is updated at that time.
+Branch protection requires `commit-lint`, `fmt`, `clippy`, `clippy-no-default-features`, `typecheck`, `lint`, all `test` cells, `deny`, `build`, `voice-acceptance`, `e2e-mock`, and `no-leak`. The `commit-lint` gate is `if: github.event_name == 'pull_request'` and is non-required on direct pushes to `main`.
 
 ### 12.5 DCO
 
@@ -1341,3 +1365,4 @@ The full ADR index lives at [`../adr/README.md`](../adr/README.md). The locked d
 | [ADR-0016](../adr/0016-test-pyramid-tier-1-day-1.md)                             | Test pyramid: Tier 1 day 1; Tiers 2–4 phased                                           |
 | [ADR-0017](../adr/0017-observability-tracing-tauri-plugin-log-no-telemetry.md)   | Observability: tracing + tauri-plugin-log; per-frame analysis cache; no telemetry      |
 | [ADR-0018](../adr/0018-triple-layer-enforcement-convention-pre-commit-ci.md)     | Triple-layer enforcement: convention + pre-commit + CI                                 |
+| [ADR-0022](../adr/0022-local-ci-harness.md)                                      | Local CI harness (three-tier pre-push gate)                                            |

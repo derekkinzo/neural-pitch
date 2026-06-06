@@ -17,6 +17,10 @@ Cargo.lock.bak
 # Tooling
 .pre-commit-cache
 
+# scripts/ci-local.sh per-step logs (cleaned on green, preserved on red)
+/.ci-local-logs/
+/.ci-local-last-failure.log
+
 # Models / datasets (always fetched, never committed)
 /models/
 /tests/data/

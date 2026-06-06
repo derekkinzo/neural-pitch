@@ -1,0 +1,4 @@
+-P ubuntu-latest=catthehacker/ubuntu:act-latest
+--reuse
+--artifact-server-path /tmp/act-artifacts
+--container-architecture linux/amd64

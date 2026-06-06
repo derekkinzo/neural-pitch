@@ -21,14 +21,50 @@
 #   { aggregate, fixtures[], tier_1_count, tier_2_count,
 #     latency_p50_ms, latency_p99_ms, timestamp, commit_sha }
 #
-# After the JSON is emitted, the script substitutes the literal
-# `<SHA>` placeholder in DESIGN.md §13.2 and PHASE-1-CLOSEOUT.md
-# Status with the actual commit SHA, so the closeout text and the
-# JSON cannot drift.
+# When invoked with `--write-closeout`, the script also substitutes
+# the literal `<SHA>` placeholder in DESIGN.md §13.2 and
+# PHASE-1-CLOSEOUT.md Status with the actual commit SHA, so the
+# closeout text and the JSON cannot drift. The substitution is
+# **off** by default — the pre-push gate is a verification step and
+# must not mutate tracked files in the working tree (a hidden rewrite
+# would surface as an unexpected `git status` after `git push`).
 #
 # Exit non-zero if aggregate < 0.95 (the §13.2 acceptance floor).
 
 set -euo pipefail
+
+# --- argument parsing ----------------------------------------------
+WRITE_CLOSEOUT=0
+for arg in "$@"; do
+  case "${arg}" in
+    --write-closeout)
+      WRITE_CLOSEOUT=1
+      ;;
+    -h|--help)
+      cat <<'EOF'
+Usage: scripts/run-acceptance.sh [--write-closeout]
+
+Runs the Phase-1 acceptance harness and writes
+docs/reports/phase-1-acceptance.json.
+
+Options:
+  --write-closeout   substitute the literal `<SHA>` placeholder in
+                     docs/design/DESIGN.md and
+                     docs/design/PHASE-1-CLOSEOUT.md with the current
+                     commit SHA. OFF by default — the pre-push gate
+                     never mutates tracked files. Use this flag only
+                     when you are intentionally finalising the
+                     closeout doc.
+EOF
+      exit 0
+      ;;
+    *)
+      echo "error: unknown argument: ${arg}" >&2
+      echo "  run with --help for usage" >&2
+      exit 2
+      ;;
+  esac
+done
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 REPORT_DIR="${REPO_ROOT}/docs/reports"
@@ -222,10 +258,12 @@ substitute_sha() {
   ' "${md}" > "${tmp}"
   mv "${tmp}" "${md}"
 }
-if [ "${COMMIT_SHA}" != "unknown" ]; then
+if [ "${WRITE_CLOSEOUT}" -eq 1 ] && [ "${COMMIT_SHA}" != "unknown" ]; then
   substitute_sha "${REPO_ROOT}/docs/design/DESIGN.md" "${COMMIT_SHA}"
   substitute_sha "${REPO_ROOT}/docs/design/PHASE-1-CLOSEOUT.md" "${COMMIT_SHA}"
   echo "==> substituted <SHA> placeholder with ${COMMIT_SHA} in closeout markdown"
+elif [ "${WRITE_CLOSEOUT}" -eq 0 ]; then
+  echo "==> closeout SHA substitution skipped (pass --write-closeout to enable)"
 fi
 
 # --- enforce the §13.2 floor ---------------------------------------

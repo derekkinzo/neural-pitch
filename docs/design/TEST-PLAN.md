@@ -38,6 +38,40 @@ Tier 5 sits between Tier 2 and Tier 3 in the pyramid because, like Tier 2, it ga
 | 4    | Full benchmark suites                                 | MAESTRO v3, MUSDB18-HQ                                            | rel.  | Manual / self-hosted; results recorded in CHANGELOG           |
 | 5    | UI E2E: visual / a11y / flows / perf / x-browser/i18n | React app via Vite dev server (mock-Tauri) + nightly tauri-driver | 1.5   | Browser-mode every PR; tauri-driver nightly Linux + Windows   |
 
+## 1.5 Pre-push gate
+
+The canonical local-CI entrypoint is `scripts/ci-local.sh`. It is wired
+as the `pre-push` hook (see `.pre-commit-config.yaml`) and exists so
+that red CI is impossible. ADR-0022 records the rationale.
+
+| Tier     | Command                      | Wall-clock | Catches                                                                                                                                                                                                                           |
+| -------- | ---------------------------- | ---------: | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `quick`  | `scripts/ci-local.sh quick`  |     ~3 min | fmt, clippy `-D warnings`, `--all-features` + `--no-default-features` build/test, `cargo +beta test`, `cargo deny`, release build, voice-acceptance harness, tsc app + e2e, eslint, prettier, no-leak grep (internal-ref / paths) |
+| `visual` | `scripts/ci-local.sh visual` |      ~90 s | Playwright visual baselines (Chromium + WebKit) inside the official Docker image (font/render determinism)                                                                                                                        |
+| `full`   | `scripts/ci-local.sh full`   |     ~10 m. | Full `ci.yml` emulation via `act` — every Linux-runnable job. Test matrix (macOS / Windows legs) defers to remote CI                                                                                                              |
+
+The exact step list and CI-job coverage map lives at the top of
+`scripts/ci-local.sh` and is the single source of truth — the table
+above is a summary.
+
+The hard rule (committed by the project owner; non-negotiable):
+
+- CI must always be green. ZERO warnings. ZERO errors.
+- Both `--all-features` AND `--no-default-features` MUST build clean
+  and pass tests.
+- Test files using feature-gated symbols MUST start with
+  `#![allow(missing_docs)]` then `#![cfg(feature = "...")]`.
+- Channel-based test patterns MUST tolerate the receiver closing early
+  (Windows scheduling).
+- Visual baselines are regenerated inside the official Playwright
+  Docker image — never on a developer laptop.
+
+`quick` runs automatically on every `git push`. Escalate to `visual`
+when your change touches the React UI; escalate to `full` when your
+change touches `.github/workflows/`, the workspace `Cargo.toml`, or
+`package.json`. `git push --no-verify` is the only escape hatch — for
+genuine emergencies only; CI will catch you anyway.
+
 ## 2. Tier 1 — Synthesized Signals (status: shipped Phase 0)
 
 Tier 1 is the fast inner loop. It runs in seconds, on every `cargo test`, on every push, and on every PR across {Linux, macOS, Windows} × {stable, beta}. It is the only tier that gates merges in Phase 0.
@@ -121,6 +155,13 @@ Failures dump the offending file path + expected/actual into the panic message; 
 This is the new tier. Locked by [ADR-0019](../adr/0019-tier-5-e2e-playwright-mcp.md).
 
 ### 6.1 Two tracks
+
+Visual determinism is guaranteed by running every visual-regression
+spec inside the official Playwright Docker image — the same image CI
+uses, the same image the local `scripts/ci-local.sh visual` tier uses
+(see §1.5 and ADR-0022). Baselines therefore never drift due to host
+font, OS, or renderer differences; a developer's laptop is never an
+authority on visual truth.
 
 - **Track A — Browser-mode every PR.** `@playwright/test` against `vite preview` (or `vite dev` locally) with `@tauri-apps/api/mocks.mockIPC` injected via `page.addInitScript` before React mounts. Three browser projects (Chromium, WebKit, Firefox), with the latter two as cross-engine guardrails. Runs in under 2 minutes per PR.
 - **Track B — Nightly tauri-driver smoke.** `tauri-driver` 2.0.6 driving the actually-built Tauri 2.x binary on `ubuntu-latest` (WebKitGTK via `xvfb-run`) and `windows-latest` (msedgedriver). Smoke-only: launches the app, asserts the React root mounts, exercises one canonical user flow, asserts no console errors, exits clean. **No macOS coverage** — `tauri-driver` does not support macOS WKWebView and the upstream issue (`tauri-apps/tauri#7068`) has been open since 2023 with no PR activity. macOS coverage is delivered through Track A's WebKit project, which is the closest cross-platform analog to WKWebView (Playwright's WebKit is upstream-WebKit-main with automation patches; not the same binary as macOS WKWebView, but the closest viable approximation).
@@ -340,7 +381,7 @@ Nightly failures open an issue via `peter-evans/create-issue-from-file` (or post
 
 ### 11.3 Visual baseline update process
 
-Updating `*.png` baselines on a developer's local machine is **not allowed**: Playwright issue #13873 ("not planned") confirms even identical official Docker images render differently across host CPU architectures, so a developer's M-series Mac produces baselines that the Linux CI cannot reproduce. The supported workflow is:
+Updating `*.png` baselines from a developer's **host renderer** is **not allowed**: Playwright issue #13873 ("not planned") confirms even identical official Docker images render differently across host CPU architectures, so a developer's M-series Mac produces baselines that the Linux CI cannot reproduce. Local regeneration **is** permitted via `scripts/update-visual-baselines.sh`, which runs `npx playwright test --update-snapshots --project=chromium` **inside** the same `mcr.microsoft.com/playwright:v<pinned>-noble` Docker image that CI and `scripts/ci-local.sh visual` use — that path is byte-deterministic across host CPU architectures and is the recommended workflow when iterating on UI changes. The fallback (CI-artifact replay) workflow is:
 
 1. Make the UI change in a PR.
 2. CI fails the visual regression spec; the diff PNG is uploaded as an artifact.

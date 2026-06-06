@@ -1,4 +1,4 @@
-default_install_hook_types: [pre-commit, commit-msg]
+default_install_hook_types: [pre-commit, commit-msg, pre-push]
 default_stages: [pre-commit]
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -49,3 +49,17 @@ repos:
         entry: scripts/check-commit-msg.sh
         stages: [commit-msg]
         always_run: true
+      # Pre-push gate: runs the three-tier local-CI harness's `quick` tier
+      # before any push reaches the remote. ZERO warnings, ZERO errors,
+      # both --all-features AND --no-default-features clean. The gate
+      # exists so red CI is impossible. `git push --no-verify` is the only
+      # bypass — for genuine emergencies only; CI will catch you anyway.
+      # See ADR-0022 and CONTRIBUTING.md.
+      - id: ci-local-quick
+        name: ci-local quick (pre-push gate)
+        entry: scripts/ci-local.sh quick
+        language: system
+        stages: [pre-push]
+        pass_filenames: false
+        always_run: true
+        verbose: true

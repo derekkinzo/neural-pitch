@@ -25,3 +25,4 @@ This directory contains the locked architecture decisions for `neural-pitch`. Ea
 | [ADR-0019](0019-tier-5-e2e-playwright-mcp.md)                             | Tier 5 UI E2E: Playwright MCP browser-mode per-PR + tauri-driver nightly Linux/Windows                          |
 | [ADR-0020](0020-neural-feature-gate.md)                                   | Neural backends gated behind `feature = "neural"` (off by default); ONNX weights as runtime assets, not bundled |
 | [ADR-0021](0021-range-vibrato-cache-version.md)                           | Phase 2.3 cache-version bump (`pyin` 0.1 → 0.2) for range + vibrato fields                                      |
+| [ADR-0022](0022-local-ci-harness.md)                                      | Local CI harness (three-tier pre-push gate)                                                                     |
