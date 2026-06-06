@@ -1,3 +1,6 @@
+#![allow(missing_docs)]
+#![cfg(feature = "pyin")]
+
 //! Phase 2.1 — sub-window input for `analyze_contour`.
 //!
 //! `analysis::contour::analyze_contour` documents that "a degenerate
@@ -9,7 +12,6 @@
 //! window) and asserts the analyzer returns Ok with a non-empty frame
 //! buffer, a finite voiced_ratio, and a smoothed_cents vector aligned
 //! with frames.len().
-#![cfg(feature = "pyin")]
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 
 use neural_pitch_core::analysis::contour::analyze_contour;

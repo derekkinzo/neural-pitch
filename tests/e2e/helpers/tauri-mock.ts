@@ -142,14 +142,19 @@ export async function installTauriMock(
         currentWebview: { windowLabel: string; label: string };
       };
     };
+    // Allow the merge path below to preserve fields seeded by other init
+    // scripts (e.g. `installPlaybackRoutes`'s `convertFileSrc`). Index
+    // signature for unknown extras keeps them through the spread.
+    type Hooks = {
+      handlers: Map<string, Handler | unknown>;
+      listeners: Map<string, Array<(payload: unknown) => void>>;
+      invokeCalls: Array<{ cmd: string; args: Record<string, unknown> }>;
+      [extra: string]: unknown;
+    };
     type WindowWithHooks = Window & {
       __E2E__?: boolean;
       __TAURI_INTERNALS__?: Internals;
-      __neuralPitchTestHooks?: {
-        handlers: Map<string, Handler | unknown>;
-        listeners: Map<string, Array<(payload: unknown) => void>>;
-        invokeCalls: Array<{ cmd: string; args: Record<string, unknown> }>;
-      };
+      __neuralPitchTestHooks?: Partial<Hooks>;
     };
     const w = window as WindowWithHooks;
     w.__E2E__ = true;
@@ -165,10 +170,17 @@ export async function installTauriMock(
       }
     }
 
+    // Merge into any pre-existing hook object so init-script registration
+    // order does not silently lose fields (e.g. `convertFileSrc` seeded by
+    // `installPlaybackRoutes` if it runs before this script). Replacing
+    // wholesale would clobber the resolver and yield a hard-to-debug
+    // asset 404 in CI.
+    const existing: Partial<Hooks> = w.__neuralPitchTestHooks ?? {};
     w.__neuralPitchTestHooks = {
+      ...existing,
       handlers,
-      listeners: new Map(),
-      invokeCalls: [],
+      listeners: existing.listeners ?? new Map(),
+      invokeCalls: existing.invokeCalls ?? [],
     };
 
     const internals: Internals = w.__TAURI_INTERNALS__ ?? {};
@@ -191,7 +203,7 @@ export async function installTauriMock(
     };
     internals.invoke = async (cmd, args) => {
       const a = args ?? {};
-      w.__neuralPitchTestHooks?.invokeCalls.push({ cmd, args: a });
+      w.__neuralPitchTestHooks?.invokeCalls?.push({ cmd, args: a });
       const handler = handlers.get(cmd);
       if (handler === undefined) {
         throw new Error(`unmocked Tauri command: ${cmd}`);
@@ -720,6 +732,111 @@ export function installAnalysisMockWithVibrato(
     merged[id] = vibrato !== undefined ? { ...summary, vibrato } : { ...summary };
   }
   return installAnalysisMock(merged as Record<string, MockAnalysisSummary>, contoursByKey);
+}
+
+/**
+ * Phase-2.4 playback fixture.
+ *
+ * `installPlaybackMock()` returns a `TauriMockResponses` patch that
+ * overrides `get_recording_path` to return a sentinel string, plus an
+ * adjacent `installPlaybackRoutes(page)` helper that:
+ *
+ *   1. Synthesises a 1 s, 440 Hz, mono 16-bit PCM WAV in the page itself
+ *      (no big base64 blob in the helper source).
+ *   2. Overrides `convertFileSrc` so the sentinel resolves to a stable
+ *      page-relative URL, bypassing Tauri's `tauri://` bridge.
+ *   3. Routes that URL through `page.route()` to deliver the WAV bytes
+ *      with `Content-Type: audio/wav`.
+ *
+ * No real Tauri filesystem, no external network: the bytes never leave
+ * the test process.
+ */
+export const PLAYBACK_FIXTURE_SENTINEL = "e2e:fixture-1khz-1s.wav";
+export const PLAYBACK_FIXTURE_URL = "/__e2e/fixture-1khz-1s.wav";
+
+export function installPlaybackMock(): TauriMockResponses {
+  // The sentinel is a literal string; the `serialise()` pipeline already
+  // routes literal values through the `kind: "value"` branch, so we
+  // don't need a `new Function(...)` wrapper here.
+  return {
+    get_recording_path: PLAYBACK_FIXTURE_SENTINEL,
+  };
+}
+
+/**
+ * Build the 1 s, 440 Hz, mono 16-bit PCM WAV at 8 kHz on the Node side.
+ * Small (~16 KB) so a single `Buffer.from` round-trip per spec is cheap.
+ */
+function buildFixtureWav(): Buffer {
+  const sampleRate = 8000;
+  const durationS = 1;
+  const freqHz = 440;
+  const totalSamples = sampleRate * durationS;
+  const dataBytes = totalSamples * 2;
+  const totalSize = 44 + dataBytes;
+  const buf = Buffer.alloc(totalSize);
+  buf.write("RIFF", 0, "ascii");
+  buf.writeUInt32LE(totalSize - 8, 4);
+  buf.write("WAVE", 8, "ascii");
+  buf.write("fmt ", 12, "ascii");
+  buf.writeUInt32LE(16, 16); // PCM fmt chunk size
+  buf.writeUInt16LE(1, 20); // PCM
+  buf.writeUInt16LE(1, 22); // mono
+  buf.writeUInt32LE(sampleRate, 24);
+  buf.writeUInt32LE(sampleRate * 2, 28); // byte rate
+  buf.writeUInt16LE(2, 32); // block align
+  buf.writeUInt16LE(16, 34); // bits per sample
+  buf.write("data", 36, "ascii");
+  buf.writeUInt32LE(dataBytes, 40);
+  for (let i = 0; i < totalSamples; i++) {
+    const v = Math.round(Math.sin((2 * Math.PI * freqHz * i) / sampleRate) * 0.5 * 32767);
+    buf.writeInt16LE(v, 44 + i * 2);
+  }
+  return buf;
+}
+
+/**
+ * Page-side wiring: route the sentinel URL to the synthetic WAV bytes
+ * AND override `convertFileSrc` so the page resolves the sentinel string
+ * to that route. Call AFTER `installTauriMock` (the init-script chain is
+ * append-only), and BEFORE `page.goto("/")`.
+ */
+export async function installPlaybackRoutes(page: Page): Promise<void> {
+  const wav = buildFixtureWav();
+  await page.route(`**${PLAYBACK_FIXTURE_URL}`, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "audio/wav",
+      body: wav,
+    });
+  });
+  await page.addInitScript(
+    (cfg: { sentinel: string; url: string }) => {
+      type Hooks = {
+        handlers?: Map<string, unknown>;
+        listeners?: Map<string, Array<(payload: unknown) => void>>;
+        invokeCalls?: Array<{ cmd: string; args: Record<string, unknown> }>;
+        convertFileSrc?: (path: string) => string;
+      };
+      type WindowWithHooks = Window & { __neuralPitchTestHooks?: Hooks };
+      const w = window as WindowWithHooks;
+      const hooks: Hooks = w.__neuralPitchTestHooks ?? {
+        handlers: new Map(),
+        listeners: new Map(),
+        invokeCalls: [],
+      };
+      // The page-side `convertFileSrc()` import is consulted by
+      // PlaybackPanel via a thin shim that prefers this hook when set,
+      // mirroring how `usePitchStream` consults `__neuralPitchTestHooks
+      // .listeners` instead of the real Tauri channel API.
+      hooks.convertFileSrc = (path: string): string => {
+        if (path === cfg.sentinel) return cfg.url;
+        return path;
+      };
+      w.__neuralPitchTestHooks = hooks;
+    },
+    { sentinel: PLAYBACK_FIXTURE_SENTINEL, url: PLAYBACK_FIXTURE_URL },
+  );
 }
 
 /** Recorded invoke calls for assertion. */

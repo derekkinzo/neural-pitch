@@ -1,3 +1,6 @@
+#![allow(missing_docs)]
+#![cfg(feature = "neural")]
+
 //! Phase 2.2 RED — Viterbi over single-peak-per-frame emissions.
 //!
 //! When every frame's emission distribution is sharply unimodal, Viterbi
@@ -12,7 +15,6 @@
 //! green by wiring the log-domain forward pass and back-pointer walk.
 
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
-#![cfg(feature = "neural")]
 
 use neural_pitch_core::analysis::viterbi::{TransitionModel, decode};
 

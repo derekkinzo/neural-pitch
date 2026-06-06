@@ -1,3 +1,6 @@
+#![allow(missing_docs)]
+#![cfg(feature = "neural")]
+
 //! Phase 2.2 RED — CREPE-tiny end-to-end with a synthetic stub ONNX.
 //!
 //! Same shape as `pesto_synthetic_onnx.rs` — push a 960-sample @ 48 kHz
@@ -15,7 +18,6 @@
 //! path inside `process`.
 
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
-#![cfg(feature = "neural")]
 
 use neural_pitch_core::pitch::crepe::CrepeTinyEstimator;
 use neural_pitch_core::pitch::{EstimatorConfig, InstrumentHint, PitchEstimator};

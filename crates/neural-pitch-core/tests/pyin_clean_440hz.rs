@@ -1,10 +1,12 @@
+#![allow(missing_docs)]
+#![cfg(feature = "pyin")]
+
 //! Phase 2.1 TDD-RED: clean-tone pYIN sanity test.
 //!
 //! Synthesise 1 s of 440 Hz at 48 kHz, run `analyze_contour`, and assert
 //! the median voiced-frame F0 is within 1 cent of 440 with a high voiced
 //! ratio. Until `analyze_contour` is implemented this test panics with
 //! `todo!`, which is the red signal.
-#![cfg(feature = "pyin")]
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 
 use neural_pitch_core::analysis::contour::{ContourResult, analyze_contour};

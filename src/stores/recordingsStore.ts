@@ -100,6 +100,19 @@ export interface RecordingsState {
   lastError: string | null;
   /** Transient toast text — set on stop, cleared by `dismissSavedToast`. */
   savedToastMessage: string | null;
+  /** Slow-path mirror of the playback head — written ~30 Hz from
+   *  PlaybackPanel's rAF-throttled publisher. Drives the `mm:ss` readout
+   *  next to the transport controls. The hot path (ContourLine) reads
+   *  `playbackHeadRef` directly and never re-renders for this. */
+  playbackTimeMs: number;
+  /** Reflects wavesurfer's `play` / `pause` / `finish` events. */
+  isPlaying: boolean;
+  /** Spectrogram visibility — false by default so the heavy plugin import
+   *  stays out of first paint. */
+  showSpectrogram: boolean;
+  /** In-memory mapping from recording id to last-known playback position.
+   *  Lives only for the session; no IPC, no localStorage. */
+  persistedPlaybackPositionByRecording: ReadonlyMap<RecordingId, number>;
 }
 
 export interface RecordingsActions {
@@ -110,6 +123,10 @@ export interface RecordingsActions {
   applyProgress: (p: RecordingProgress) => void;
   setError: (msg: string | null) => void;
   dismissSavedToast: () => void;
+  /** Throttled writer (~30 Hz) for the visible mm:ss readout. */
+  setPlaybackTimeMs: (ms: number) => void;
+  setIsPlaying: (v: boolean) => void;
+  toggleSpectrogram: () => void;
   /** Test-only helper to seed deterministic state. Production code paths
    *  go through the IPC actions. */
   __setItemsForTest: (items: readonly Recording[]) => void;
@@ -126,6 +143,10 @@ export const useRecordingsStore = create<RecordingsStore>((set, get) => ({
   saving: false,
   lastError: null,
   savedToastMessage: null,
+  playbackTimeMs: 0,
+  isPlaying: false,
+  showSpectrogram: false,
+  persistedPlaybackPositionByRecording: new Map<RecordingId, number>(),
 
   refresh: async (): Promise<void> => {
     try {
@@ -190,7 +211,32 @@ export const useRecordingsStore = create<RecordingsStore>((set, get) => ({
     }
   },
 
-  select: (id) => set({ currentRecordingId: id }),
+  select: (id) => {
+    const prev = get();
+    // Same-id click is a no-op: the selection invariants (id, isPlaying,
+    // playbackTimeMs, persisted map) all already hold, so re-running the
+    // restore-from-map path would clobber a live mid-playback offset.
+    if (prev.currentRecordingId === id) return;
+    // Stash the outgoing recording's playhead so a re-selection of the
+    // same id resumes from the parked position. The map persists across
+    // drawer collapse for the lifetime of the page session — selecting
+    // `null` does NOT evict entries, so reopening the drawer and picking
+    // the same row resumes from the parked offset.
+    let nextMap: ReadonlyMap<RecordingId, number> | undefined;
+    if (prev.currentRecordingId !== null) {
+      const m = new Map(prev.persistedPlaybackPositionByRecording);
+      m.set(prev.currentRecordingId, prev.playbackTimeMs);
+      nextMap = m;
+    }
+    const restored =
+      id !== null ? ((nextMap ?? prev.persistedPlaybackPositionByRecording).get(id) ?? 0) : 0;
+    set({
+      currentRecordingId: id,
+      playbackTimeMs: restored,
+      isPlaying: false,
+      ...(nextMap !== undefined ? { persistedPlaybackPositionByRecording: nextMap } : {}),
+    });
+  },
 
   applyProgress: (p) => {
     // Only `elapsedMs` actually drives the view; ignoring the rest keeps
@@ -201,6 +247,12 @@ export const useRecordingsStore = create<RecordingsStore>((set, get) => ({
   setError: (msg) => set({ lastError: msg }),
 
   dismissSavedToast: () => set({ savedToastMessage: null }),
+
+  setPlaybackTimeMs: (ms) => set({ playbackTimeMs: ms }),
+
+  setIsPlaying: (v) => set({ isPlaying: v }),
+
+  toggleSpectrogram: () => set((s) => ({ showSpectrogram: !s.showSpectrogram })),
 
   __setItemsForTest: (items) => set({ items: sortDescByCreatedAt(items) }),
 }));

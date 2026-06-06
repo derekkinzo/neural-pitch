@@ -1,3 +1,6 @@
+#![allow(missing_docs)]
+#![cfg(feature = "neural")]
+
 //! Phase 2.2 RED — PESTO threads the `cache_in` / `cache_out` tensor
 //! pair across consecutive `process` calls.
 //!
@@ -27,7 +30,6 @@
     clippy::panic,
     clippy::float_cmp
 )]
-#![cfg(feature = "neural")]
 
 use neural_pitch_core::pitch::pesto::PestoEstimator;
 use neural_pitch_core::pitch::{EstimatorConfig, InstrumentHint, PitchEstimator};

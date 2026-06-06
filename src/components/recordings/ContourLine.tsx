@@ -28,6 +28,13 @@
 
 import { useEffect, useMemo, useRef, type ReactNode } from "react";
 import { scaleForDpr } from "@/lib/canvas-dpr";
+import { playbackHeadRef, subscribe as subscribePlaybackHead } from "@/lib/playback-head";
+import {
+  COLOR_CYAN_400,
+  COLOR_SLATE_600,
+  COLOR_SLATE_900,
+  COLOR_VOICED_FILL,
+} from "@/lib/theme-tokens";
 import type { AnalysisSummary, ContourFrame, ContourResult } from "@/types/analysis";
 
 export interface ContourLineProps {
@@ -38,12 +45,15 @@ export interface ContourLineProps {
 const DEFAULT_RANGE = 100; // ± cents — y-axis half-range
 const FRAMES_PER_SECOND_CAP = 500;
 
+// The hex literals live in `lib/theme-tokens.ts`; re-export under the
+// existing names so the paint paths stay readable while the tokens are
+// centralised for future theming work.
 const COLORS = {
-  bg: "#0f172a", // slate-900
-  axis: "#475569", // slate-600
-  zero: "#22d3ee", // cyan-400
-  voiced: "#22d3ee", // cyan-400 — primary contour
-  voicedFill: "rgba(34, 211, 238, 0.12)",
+  bg: COLOR_SLATE_900,
+  axis: COLOR_SLATE_600,
+  zero: COLOR_CYAN_400,
+  voiced: COLOR_CYAN_400,
+  voicedFill: COLOR_VOICED_FILL,
 } as const;
 
 interface DrawableSegment {
@@ -303,8 +313,32 @@ export function ContourLine({ summary, contour }: ContourLineProps): ReactNode {
     const ctx = canvas.getContext("2d");
     if (ctx === null) return undefined;
 
+    const paintHead = (): void => {
+      const w = canvas.clientWidth;
+      const h = canvas.clientHeight;
+      const padX = 8;
+      const padY = 8;
+      const plotW = Math.max(1, w - padX * 2);
+      const b = boundsRef.current;
+      const tMs = playbackHeadRef.current.tMs;
+      // Skip the head when there's no meaningful time range — avoids
+      // drawing a stale cursor at the left edge for unloaded panels.
+      if (b.tMax <= b.tMin) return;
+      const ratio = Math.max(0, Math.min(1, (tMs - b.tMin) / (b.tMax - b.tMin)));
+      const x = padX + ratio * plotW;
+      ctx.save();
+      ctx.strokeStyle = COLORS.zero;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(x, padY);
+      ctx.lineTo(x, padY + Math.max(1, h - padY * 2));
+      ctx.stroke();
+      ctx.restore();
+    };
+
     const repaint = (): void => {
       paint(ctx, canvas.clientWidth, canvas.clientHeight, segmentsRef.current, boundsRef.current);
+      paintHead();
     };
 
     const scaleAndPaint = (): void => {
@@ -347,8 +381,42 @@ export function ContourLine({ summary, contour }: ContourLineProps): ReactNode {
       });
     }
 
+    // Playback-head subscription. While `isPlaying` we drive a perpetual
+    // rAF loop that re-reads `playbackHeadRef` and repaints. While
+    // paused the head is drawn once at its parked position by the
+    // one-shot publish notification. ContourLine never reads the time
+    // through React state — props/state remain `(summary, contour)`.
+    let headRaf = 0;
+    const stopHeadLoop = (): void => {
+      if (headRaf !== 0) {
+        window.cancelAnimationFrame(headRaf);
+        headRaf = 0;
+      }
+    };
+    const headTick = (): void => {
+      repaint();
+      if (playbackHeadRef.current.isPlaying) {
+        headRaf = window.requestAnimationFrame(headTick);
+      } else {
+        headRaf = 0;
+      }
+    };
+    const unsubHead = subscribePlaybackHead((head) => {
+      if (head.isPlaying) {
+        if (headRaf === 0) headRaf = window.requestAnimationFrame(headTick);
+      } else {
+        stopHeadLoop();
+        // One-shot redraw at the parked position so the cursor lands
+        // where the user paused, even if the perpetual loop already
+        // exited.
+        repaint();
+      }
+    });
+
     return () => {
       if (raf !== 0) window.cancelAnimationFrame(raf);
+      stopHeadLoop();
+      unsubHead();
       ro.disconnect();
       if (mql !== null && mqlListener !== null) mql.removeEventListener("change", mqlListener);
     };

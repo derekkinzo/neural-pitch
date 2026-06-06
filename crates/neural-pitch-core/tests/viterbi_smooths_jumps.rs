@@ -1,3 +1,6 @@
+#![allow(missing_docs)]
+#![cfg(feature = "neural")]
+
 //! Phase 2.2 RED — Viterbi rejects high-frequency state jumps under a
 //! Gaussian transition prior.
 //!
@@ -14,7 +17,6 @@
 //! Gaussian transition kernel.
 
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
-#![cfg(feature = "neural")]
 
 use neural_pitch_core::analysis::viterbi::{TransitionModel, decode};
 

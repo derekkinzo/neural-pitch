@@ -1,3 +1,6 @@
+#![allow(missing_docs)]
+#![cfg(feature = "neural")]
+
 //! Phase 2.2 RED — PESTO end-to-end with a synthetic stub ONNX.
 //!
 //! Wires a 960-sample @ 48 kHz 440 Hz sine through
@@ -13,7 +16,6 @@
 //! path inside `process`.
 
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
-#![cfg(feature = "neural")]
 
 use neural_pitch_core::pitch::pesto::PestoEstimator;
 use neural_pitch_core::pitch::{EstimatorConfig, InstrumentHint, PitchEstimator};

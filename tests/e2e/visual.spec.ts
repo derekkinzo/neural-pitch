@@ -14,6 +14,8 @@ import { test, expect } from "./fixtures";
 import {
   installAnalysisMock,
   installAnalysisMockWithRange,
+  installPlaybackMock,
+  installPlaybackRoutes,
   installRecordingsMock,
   makePitchUpdate,
   pushPitchUpdate,
@@ -227,6 +229,46 @@ test.describe("visual — Phase 2.1 RecordingDetail", () => {
     // varied between Docker and CI runner heights when readout pills wrapped
     // differently.
     await expect(page).toHaveScreenshot("recording-detail-with-range-vibrato.png", {
+      fullPage: true,
+    });
+  });
+
+  // Phase 2.4 — RecordingDetail + PlaybackPanel mounted together. The
+  // wavesurfer waveform `<canvas>` is gated on the `ready` event landing
+  // before the snapshot. Spectrogram stays hidden so the layout matches
+  // the steady-state first-paint case.
+  test("recording-detail-with-playback — waveform + transport steady", async ({
+    page,
+    mockTauri,
+  }) => {
+    await mockTauri.install({
+      ...installRecordingsMock(SEED),
+      ...installAnalysisMock(SUMMARY, CONTOUR),
+      ...installPlaybackMock(),
+    });
+    await installPlaybackRoutes(page);
+
+    await page.goto("/");
+    await expect(page.getByTestId("status-pill")).toHaveAttribute("data-state", "live");
+
+    await page.getByTestId("library-trigger").click();
+    await page.getByTestId("recording-row").first().click();
+
+    // Gate the snapshot on the wavesurfer canvas being mounted (the
+    // `ready` event has fired) and the spectrogram being collapsed.
+    const panel = page.getByTestId("playback-panel");
+    await expect(panel).toBeVisible();
+    await expect(panel.locator("canvas").first()).toBeVisible({ timeout: 4000 });
+    await expect(page.locator("#spectrogram-host")).toHaveAttribute("hidden", "");
+
+    // Use the project-wide `maxDiffPixelRatio: 0.08` baked into
+    // `playwright.config.ts` (no per-test override). The wavesurfer
+    // canvas is sensitive to glibc/freetype/cairo drift, so the strict
+    // pixel gate the previous revision used did not survive the move
+    // from local Playwright runner to the official Microsoft Playwright
+    // Docker image. Aligning on the project-wide ratio keeps the visual
+    // contract uniform with the other Phase-2 snapshots.
+    await expect(page).toHaveScreenshot("recording-detail-with-playback.png", {
       fullPage: true,
     });
   });

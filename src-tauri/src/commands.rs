@@ -470,15 +470,25 @@ pub async fn get_recording_path(
     .await
     .map_err(|e| format!("recording lookup task panicked: {e}"))?
     .map_err(|e| format!("list recordings: {e:#}"))?;
-    let row = recording
-        .into_iter()
-        .find(|r| r.id == parsed)
-        .ok_or_else(|| format!("recording {id} not found"))?;
+    let Some(row) = recording.into_iter().find(|r| r.id == parsed) else {
+        tracing::warn!(
+            target: "neural_pitch::commands",
+            id = %parsed,
+            "recording id not found"
+        );
+        return Err(format!("recording {id} not found"));
+    };
     let path = state.recordings_dir.join(&row.filename);
     let abs = path
         .to_str()
         .ok_or_else(|| format!("recording path not utf-8: {}", path.display()))?
         .to_string();
+    tracing::debug!(
+        target: "neural_pitch::commands",
+        id = %parsed,
+        path = %abs,
+        "resolved recording path"
+    );
     Ok(abs)
 }
 

@@ -13,6 +13,11 @@ type Listener = (payload: unknown) => void;
 
 interface TestHooks {
   listeners: Map<string, Listener[]>;
+  /** Optional override for Tauri's `convertFileSrc()`. The Phase-2.4
+   *  PlaybackPanel consults this via `getTestHooks()?.convertFileSrc` so
+   *  the E2E mock can resolve a sentinel path to a `page.route`-served
+   *  URL without invoking the real `tauri://` bridge. */
+  convertFileSrc?: (path: string) => string;
 }
 
 interface WindowWithHooks extends Window {

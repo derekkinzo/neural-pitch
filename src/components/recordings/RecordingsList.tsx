@@ -128,8 +128,10 @@ export function RecordingsList({ open, onOpenChange }: RecordingsListProps): Rea
           </div>
         ) : null}
 
-        <RecordingDetail />
-        <PlaybackPanel />
+        <div data-testid="recording-detail-host" className="flex flex-col gap-3">
+          <RecordingDetail />
+          <PlaybackPanel />
+        </div>
       </div>
     </Drawer>
   );

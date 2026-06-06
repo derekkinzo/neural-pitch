@@ -1,3 +1,6 @@
+#![allow(missing_docs)]
+#![cfg(feature = "pyin")]
+
 //! Phase 2.1 TDD-RED: bumping `PYIN_ANALYZER_VERSION` invalidates old rows.
 //!
 //! Schema invariant: `analysis_cache` rows are keyed on
@@ -16,7 +19,6 @@
 //!
 //! `analyze_contour` is `todo!()` until Phase 2.1 implementation lands; the
 //! first call here panics, which is the red signal.
-#![cfg(feature = "pyin")]
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 
 use std::path::Path;
