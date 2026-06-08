@@ -1,14 +1,11 @@
 //! Tier-1 migration-upgrade test for `store::RecordingsLibrary`.
 //!
 //! The other `store_*` tests open a fresh `:memory:` DB so refinery only
-//! ever runs V0001 against an empty schema. This test exercises the path
-//! that production hits on every app launch after the first: open an
-//! existing on-disk DB, confirm `migrations::run` is a no-op (no extra
-//! `refinery_schema_history` rows), and that subsequent inserts/lists
-//! succeed.
-//!
-//! When V0002+ migrations land, this file is the canonical home for
-//! "upgrades from V0001-only DB do not lose data" coverage.
+//! ever runs every migration against an empty schema. This test exercises
+//! the path that production hits on every app launch after the first:
+//! open an existing on-disk DB, confirm `migrations::run` is a no-op
+//! when nothing new has been added, AND confirm the V0001 → V0002 upgrade
+//! is non-destructive against pre-Phase-4 row state.
 
 #![allow(
     clippy::expect_used,
@@ -16,9 +13,7 @@
     clippy::panic,
     clippy::cast_precision_loss,
     clippy::cast_possible_truncation,
-    clippy::cast_sign_loss,
-    dead_code,
-    unused_imports
+    clippy::cast_sign_loss
 )]
 
 use std::path::PathBuf;
@@ -52,7 +47,8 @@ fn refinery_history_count(path: &std::path::Path) -> i64 {
 
 #[test]
 fn reopen_already_migrated_db_is_a_noop() {
-    // First open: refinery applies V0001 against the empty schema.
+    // First open: refinery applies V0001 + V0002 against the empty
+    // schema.
     let path = temp_db_path("reopen");
     {
         let lib = RecordingsLibrary::new(&path).expect("first open creates schema");
@@ -78,8 +74,8 @@ fn reopen_already_migrated_db_is_a_noop() {
     );
 
     // Re-open: refinery sees the same migration set already applied and
-    // must not insert a duplicate row in `refinery_schema_history`. The
-    // existing row remains visible.
+    // must not insert duplicate rows in `refinery_schema_history`. The
+    // existing recordings row remains visible.
     {
         let lib = RecordingsLibrary::new(&path).expect("re-open of migrated db must succeed");
         let rows = lib
@@ -123,4 +119,72 @@ fn reopen_already_migrated_db_is_a_noop() {
             .expect("list after third open");
         assert_eq!(rows.len(), 2, "third open must accumulate, not overwrite");
     }
+}
+
+#[test]
+fn pre_phase4_db_picks_up_v0002_cleanly() {
+    // Stage a "pre-Phase-4" SQLite file by:
+    //   1. Opening through the production `RecordingsLibrary::new` so
+    //      both V0001 and V0002 apply with the right refinery checksums.
+    //   2. Manually dropping the V0002 row from
+    //      `refinery_schema_history` AND the `drill_attempts` table /
+    //      its index so the next open looks like a database that
+    //      shipped before V0002 existed.
+    //   3. Re-opening and asserting V0002 re-applies cleanly — the
+    //      `recordings` row from step 1 must survive.
+    let path = temp_db_path("pre_phase4");
+    {
+        let lib = RecordingsLibrary::new(&path).expect("first open creates schema");
+        let _id = lib
+            .insert_recording(NewRecording {
+                filename: "legacy.flac".into(),
+                created_at_unix_ms: 1_700_000_000_000,
+                duration_ms: 500,
+                sample_rate_hz: 48_000,
+                channels: 1,
+                bit_depth: 24,
+                format: "flac".into(),
+                a4_hz: 440.0,
+                instrument_profile: "Voice".into(),
+                user_label: None,
+            })
+            .expect("seed legacy row");
+    }
+
+    // Snip V0002 out of the refinery history + drop the drill_attempts
+    // surface so the database matches the on-disk state of an
+    // app installed before V0002 existed. The pragmas survive (they
+    // are per-connection; refinery does not touch them).
+    {
+        let conn = rusqlite::Connection::open(&path).expect("open raw conn");
+        conn.execute_batch(
+            r"
+            DROP INDEX IF EXISTS idx_drill_attempts_history;
+            DROP TABLE IF EXISTS drill_attempts;
+            DELETE FROM refinery_schema_history WHERE version = 2;
+            ",
+        )
+        .expect("snip V0002 state");
+    }
+
+    let history_before = refinery_history_count(&path);
+    assert_eq!(
+        history_before, 1,
+        "pre-condition: only V0001 should be in refinery_schema_history; got {history_before}",
+    );
+
+    // Open through the production codepath. V0002 must apply cleanly.
+    let lib = RecordingsLibrary::new(&path).expect("V0001 → V0002 upgrade succeeds");
+    let rows = lib
+        .list_recordings(ListFilter::ActiveOnly)
+        .expect("list after upgrade");
+    assert_eq!(rows.len(), 1, "legacy row must survive the upgrade");
+    assert_eq!(rows[0].filename, "legacy.flac");
+
+    let history_after = refinery_history_count(&path);
+    assert_eq!(
+        history_after,
+        history_before + 1,
+        "exactly one new entry (V0002) must land in refinery_schema_history; was {history_before}, now {history_after}",
+    );
 }

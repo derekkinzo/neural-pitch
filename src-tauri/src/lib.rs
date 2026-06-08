@@ -8,6 +8,7 @@
 #![warn(missing_docs)]
 
 pub mod commands;
+pub mod commands_drill;
 pub mod sink;
 pub mod state;
 // Phase 3 — file-import / Basic Pitch transcribe / MIDI export.
@@ -113,6 +114,10 @@ pub fn run() {
             commands::transcribe_recording,
             #[cfg(feature = "neural")]
             commands::export_midi,
+            commands_drill::start_drill,
+            commands_drill::submit_drill_attempt,
+            commands_drill::list_drill_history,
+            commands_drill::synthesize_prompt,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

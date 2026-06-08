@@ -11,6 +11,7 @@
 
 pub mod recording;
 pub mod sink;
+pub mod target_match;
 pub mod worker;
 
 #[cfg(feature = "flac")]
@@ -20,4 +21,5 @@ pub use recording::{
     RecordingProgress, RecordingSink, RecordingSinkError, RecordingWorker,
 };
 pub use sink::{ChannelFrameSink, FrameSink, FrameSinkError, PitchUpdate};
+pub use target_match::{DEFAULT_IN_WINDOW_CENTS, MatchEmitter, MatchUpdate, TargetMatcher};
 pub use worker::{DspError, DspWorker, RecordingFanout};

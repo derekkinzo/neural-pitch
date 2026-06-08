@@ -321,6 +321,223 @@ impl RecordingsLibrary {
     fn lock_conn(&self) -> MutexGuard<'_, Connection> {
         self.conn.lock()
     }
+
+    /// Insert one row into `drill_attempts`. The row's UUIDv7 is minted
+    /// here so callers do not have to plumb `uuid::Uuid` themselves;
+    /// the returned 16-byte id is the row's primary key.
+    ///
+    /// `correct` is persisted as `0`/`1` to match the SQLite STRICT
+    /// INTEGER schema; `recording_id` may be `None` for live drills
+    /// that do not stash an audio recording.
+    pub fn insert_drill_attempt(&self, row: &NewDrillAttempt) -> Result<[u8; 16], StoreError> {
+        let id = *uuid::Uuid::now_v7().as_bytes();
+        let conn = self.lock_conn();
+        let recording_blob: Option<Vec<u8>> = row.recording_id.map(|r| r.0.to_vec());
+        conn.execute(
+            "INSERT INTO drill_attempts (
+                 id, drill_kind, drill_payload, correct,
+                 mean_cents_error, time_on_pitch_ratio,
+                 started_at_unix_ms, finished_at_unix_ms,
+                 recording_id
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            params![
+                &id[..],
+                row.drill_kind,
+                row.drill_payload,
+                i64::from(row.correct),
+                row.mean_cents_error,
+                row.time_on_pitch_ratio,
+                row.started_at_unix_ms,
+                row.finished_at_unix_ms,
+                recording_blob,
+            ],
+        )?;
+        Ok(id)
+    }
+
+    /// Page over `drill_attempts` ordered by
+    /// `(drill_kind, finished_at_unix_ms DESC)`. The supplied `limit`
+    /// is treated as-is — clamping to a server-side cap is the
+    /// caller's responsibility (the IPC layer enforces
+    /// `HISTORY_LIMIT_CAP` so a stray UI bug cannot starve the
+    /// connection).
+    pub fn list_drill_attempts(
+        &self,
+        kind: Option<&str>,
+        since_unix_ms: Option<i64>,
+        limit: u32,
+        offset: u32,
+    ) -> Result<Vec<DrillAttemptRow>, StoreError> {
+        let conn = self.lock_conn();
+
+        // Build a single SQL string for each (kind, since) combination
+        // so the index `idx_drill_attempts_history` is preserved.
+        let sql = match (kind.is_some(), since_unix_ms.is_some()) {
+            (true, true) => {
+                "SELECT id, drill_kind, correct, mean_cents_error,
+                        time_on_pitch_ratio, started_at_unix_ms,
+                        finished_at_unix_ms, recording_id
+                 FROM drill_attempts
+                 WHERE drill_kind = ?1 AND finished_at_unix_ms >= ?2
+                 ORDER BY finished_at_unix_ms DESC
+                 LIMIT ?3 OFFSET ?4"
+            }
+            (true, false) => {
+                "SELECT id, drill_kind, correct, mean_cents_error,
+                        time_on_pitch_ratio, started_at_unix_ms,
+                        finished_at_unix_ms, recording_id
+                 FROM drill_attempts
+                 WHERE drill_kind = ?1
+                 ORDER BY finished_at_unix_ms DESC
+                 LIMIT ?2 OFFSET ?3"
+            }
+            (false, true) => {
+                "SELECT id, drill_kind, correct, mean_cents_error,
+                        time_on_pitch_ratio, started_at_unix_ms,
+                        finished_at_unix_ms, recording_id
+                 FROM drill_attempts
+                 WHERE finished_at_unix_ms >= ?1
+                 ORDER BY finished_at_unix_ms DESC
+                 LIMIT ?2 OFFSET ?3"
+            }
+            (false, false) => {
+                "SELECT id, drill_kind, correct, mean_cents_error,
+                        time_on_pitch_ratio, started_at_unix_ms,
+                        finished_at_unix_ms, recording_id
+                 FROM drill_attempts
+                 ORDER BY finished_at_unix_ms DESC
+                 LIMIT ?1 OFFSET ?2"
+            }
+        };
+
+        let mut stmt = conn.prepare(sql)?;
+        let mapper = |row: &rusqlite::Row<'_>| -> rusqlite::Result<DrillAttemptRow> {
+            let id_blob: Vec<u8> = row.get(0)?;
+            let id_bytes: [u8; 16] = id_blob.as_slice().try_into().map_err(|_| {
+                rusqlite::Error::FromSqlConversionFailure(
+                    0,
+                    rusqlite::types::Type::Blob,
+                    "expected 16-byte UUID id".into(),
+                )
+            })?;
+            let recording_blob: Option<Vec<u8>> = row.get(7)?;
+            let recording_id: Option<RecordingId> = match recording_blob {
+                Some(b) => {
+                    let arr: [u8; 16] = b.as_slice().try_into().map_err(|_| {
+                        rusqlite::Error::FromSqlConversionFailure(
+                            7,
+                            rusqlite::types::Type::Blob,
+                            "expected 16-byte recording id".into(),
+                        )
+                    })?;
+                    Some(RecordingId(arr))
+                }
+                None => None,
+            };
+            let correct_int: i64 = row.get(2)?;
+            Ok(DrillAttemptRow {
+                id: id_bytes,
+                drill_kind: row.get(1)?,
+                correct: correct_int != 0,
+                mean_cents_error: row.get(3)?,
+                time_on_pitch_ratio: row.get(4)?,
+                started_at_unix_ms: row.get(5)?,
+                finished_at_unix_ms: row.get(6)?,
+                recording_id,
+            })
+        };
+
+        let rows = match (kind, since_unix_ms) {
+            (Some(k), Some(s)) => stmt
+                .query_map(params![k, s, limit, offset], mapper)?
+                .collect::<Result<Vec<_>, _>>()?,
+            (Some(k), None) => stmt
+                .query_map(params![k, limit, offset], mapper)?
+                .collect::<Result<Vec<_>, _>>()?,
+            (None, Some(s)) => stmt
+                .query_map(params![s, limit, offset], mapper)?
+                .collect::<Result<Vec<_>, _>>()?,
+            (None, None) => stmt
+                .query_map(params![limit, offset], mapper)?
+                .collect::<Result<Vec<_>, _>>()?,
+        };
+        Ok(rows)
+    }
+
+    /// Count rows in `drill_attempts` for one drill kind whose
+    /// `mean_cents_error` is strictly less than the supplied value.
+    /// Used by the IPC layer to compute a per-kind percentile.
+    pub fn count_drill_attempts_below(
+        &self,
+        kind: &str,
+        mean_cents_error: f64,
+    ) -> Result<i64, StoreError> {
+        let conn = self.lock_conn();
+        let count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM drill_attempts
+             WHERE drill_kind = ?1 AND mean_cents_error < ?2",
+            params![kind, mean_cents_error],
+            |row| row.get::<_, i64>(0),
+        )?;
+        Ok(count)
+    }
+
+    /// Count all rows in `drill_attempts` for one drill kind. Used as
+    /// the denominator of the per-kind percentile calculation.
+    pub fn count_drill_attempts(&self, kind: &str) -> Result<i64, StoreError> {
+        let conn = self.lock_conn();
+        let count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM drill_attempts WHERE drill_kind = ?1",
+            params![kind],
+            |row| row.get::<_, i64>(0),
+        )?;
+        Ok(count)
+    }
+}
+
+/// Input row for [`RecordingsLibrary::insert_drill_attempt`]. Mirrors
+/// the schema columns minus the surrogate `id` (minted by the insert
+/// helper) and `drill_payload` which is taken by ref.
+#[derive(Debug, Clone)]
+pub struct NewDrillAttempt<'a> {
+    /// Drill-kind discriminator string. Free-form so future drills
+    /// can be added without a schema migration.
+    pub drill_kind: &'a str,
+    /// Postcard-encoded snapshot of the IPC drill spec.
+    pub drill_payload: &'a [u8],
+    /// Whether the scorer judged the attempt correct.
+    pub correct: bool,
+    /// Mean cents error across voiced frames.
+    pub mean_cents_error: f64,
+    /// Fraction of voiced frames in the in-window tolerance.
+    pub time_on_pitch_ratio: f64,
+    /// Wall-clock attempt-start timestamp in Unix milliseconds.
+    pub started_at_unix_ms: i64,
+    /// Wall-clock attempt-finish timestamp in Unix milliseconds.
+    pub finished_at_unix_ms: i64,
+    /// Optional recording the attempt was paired with.
+    pub recording_id: Option<RecordingId>,
+}
+
+/// One row in the `drill_attempts` table, hydrated for the IPC layer.
+#[derive(Debug, Clone)]
+pub struct DrillAttemptRow {
+    /// 16-byte UUIDv7.
+    pub id: [u8; 16],
+    /// Drill-kind discriminator string.
+    pub drill_kind: String,
+    /// Whether the scorer judged the attempt correct.
+    pub correct: bool,
+    /// Mean cents error across voiced frames.
+    pub mean_cents_error: f64,
+    /// Fraction of voiced frames in the in-window tolerance.
+    pub time_on_pitch_ratio: f64,
+    /// Wall-clock attempt-start timestamp in Unix milliseconds.
+    pub started_at_unix_ms: i64,
+    /// Wall-clock attempt-finish timestamp in Unix milliseconds.
+    pub finished_at_unix_ms: i64,
+    /// Optional recording id this attempt was paired with.
+    pub recording_id: Option<RecordingId>,
 }
 
 /// Wall-clock now in Unix milliseconds.

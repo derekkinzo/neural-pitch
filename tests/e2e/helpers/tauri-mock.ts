@@ -1133,6 +1133,178 @@ export async function pushTranscribeProgress(
   }, progress);
 }
 
+/**
+ * Phase-4 ear-training drills — wire-format mirrors `src/types/training.ts`
+ * (planned). Field names are camelCase on the TS side; the Rust IPC
+ * boundary maps from snake_case per the existing `transcription.ts`
+ * convention.
+ *
+ * The drill subsystem is opt-in: a "Practice" header button flips
+ * `tunerStore.view` to `"training"` and the `Training` screen renders the
+ * drill cards. Each card mounts a single-screen drill component (Interval,
+ * Chord, Scale, Sight-singing, Tuning practice) that owns its own prompt
+ * loop and final-score toast.
+ */
+
+/** A single completed drill attempt — what feeds the "last attempt" stats. */
+export interface MockDrillAttempt {
+  id: string;
+  drillId: "intervals" | "chords" | "scales" | "sight-singing" | "tuning";
+  startedAt: number; // ms epoch
+  completedAt: number; // ms epoch
+  totalPrompts: number;
+  correctCount: number;
+  accuracy: number; // 0..1
+}
+
+/** A single note in the sight-singing target melody. */
+export interface MockMelodyNote {
+  midi: number; // 21..108
+  startMs: number;
+  durationMs: number;
+}
+
+export interface MockMelody {
+  id: string;
+  tonicMidi: number; // for movable-do solfege rendering
+  notes: MockMelodyNote[];
+}
+
+/**
+ * Per-frame match update emitted by `start_drill_match` over a
+ * `Channel<MatchUpdate>`. The page-side store writes incoming updates to
+ * `liveMatch` and the KaraokeRibbon repaints. Mirrors the Rust enum
+ * variants with snake_case discriminants for parity with PitchUpdate.
+ */
+export interface MockMatchUpdate {
+  t_ms: number;
+  target_midi: number;
+  current_midi: number;
+  cents_offset: number;
+  in_tune: boolean;
+  bar_index: number;
+  ended: boolean; // true on the final frame
+}
+
+/**
+ * Install mock responses for the Phase-4 ear-training IPC surface.
+ *
+ * Phase-4 contract:
+ *   - `start_drill_match({ melody })` → null (registers a Channel listener
+ *     on the page-side store; tests drive frames via `pushMatchUpdate`).
+ *   - `stop_drill_match()` → null (no-op; the receiver tear-down is
+ *     idempotent on the Rust side).
+ *
+ * The handler self-initialises `__neuralPitchTestHooks.training` from the
+ * embedded seed JSON on first call — same closure-survival pattern as
+ * `installRecordingsMock` and `installTranscribeMock`.
+ *
+ * @param seedHistory  Pre-seeded drill attempt history. The Training
+ *                     landing reads the latest entry per drillId for the
+ *                     "last attempt" copy on each card.
+ * @param seedMelody   Pre-seeded sight-singing melody — KaraokeRibbon
+ *                     paints these as target bars.
+ */
+export function installTrainingMock(
+  seedHistory: MockDrillAttempt[],
+  seedMelody: MockMelody,
+): TauriMockResponses {
+  const historyJson = JSON.stringify(seedHistory);
+  const melodyJson = JSON.stringify(seedMelody);
+
+  const seedHydrate = `
+    var w = window;
+    var hooks = w.__neuralPitchTestHooks || {};
+    if (!hooks.training) {
+      hooks.training = {
+        history: JSON.parse(${JSON.stringify(historyJson)}),
+        melody: JSON.parse(${JSON.stringify(melodyJson)}),
+        matchQueue: [],
+        audioPlayCount: 0
+      };
+    }
+    w.__neuralPitchTestHooks = hooks;
+  `;
+
+  // eslint-disable-next-line @typescript-eslint/no-implied-eval, no-new-func
+  const startHandler = new Function(
+    "args",
+    `${seedHydrate}
+     window.__neuralPitchTestHooks.training.activeMelody =
+       (args && args.melody) || window.__neuralPitchTestHooks.training.melody;
+     return null;`,
+  ) as (args: Record<string, unknown>) => unknown;
+
+  // eslint-disable-next-line @typescript-eslint/no-implied-eval, no-new-func
+  const stopHandler = new Function(
+    "args",
+    `${seedHydrate}
+     window.__neuralPitchTestHooks.training.activeMelody = undefined;
+     return null;`,
+  ) as (args: Record<string, unknown>) => unknown;
+
+  // List the seeded history. The Training landing invokes this on mount to
+  // hydrate the per-card "last attempt" copy. Mirrors the production
+  // `list_drill_history` IPC; the seed shape already matches the TS-side
+  // `DrillAttempt` so the response passes through unchanged.
+  // eslint-disable-next-line @typescript-eslint/no-implied-eval, no-new-func
+  const listHandler = new Function(
+    "args",
+    `${seedHydrate}
+     return (window.__neuralPitchTestHooks.training.history || []).slice();`,
+  ) as (args: Record<string, unknown>) => unknown;
+
+  return {
+    start_drill_match: startHandler,
+    stop_drill_match: stopHandler,
+    list_drill_history: listHandler,
+  };
+}
+
+/**
+ * Push a synthetic `match-update` event through the test bridge. Mirrors
+ * `pushPitchUpdate`: the page-side training store registers a listener on
+ * `__neuralPitchTestHooks.listeners.get("match-update")` and the helper
+ * walks that list to deliver the payload.
+ *
+ * MUST be a no-op when the listener list is empty — the React effect can
+ * tear down before the test pushes the final frame, and the Rust Channel
+ * tolerates the receiver closing early. Mirroring that contract here keeps
+ * the spec resilient to legitimate unmount races.
+ */
+export async function pushMatchUpdate(page: Page, update: MockMatchUpdate): Promise<void> {
+  await page.evaluate((frame) => {
+    type WindowWithHooks = Window & {
+      __neuralPitchTestHooks?: {
+        listeners: Map<string, Array<(payload: unknown) => void>>;
+      };
+    };
+    const w = window as WindowWithHooks;
+    const listeners = w.__neuralPitchTestHooks?.listeners.get("match-update") ?? [];
+    if (listeners.length === 0) return; // receiver-closed-early no-op
+    for (const fn of listeners) {
+      fn(frame);
+    }
+  }, update);
+}
+
+/**
+ * Build a deterministic 8-note ascending C-major melody for the
+ * sight-singing drill. Each note is 250 ms long; total melody is 2 s.
+ * Returned as a `MockMelody` with `tonicMidi = 60` (C4) so movable-do
+ * resolves to "Do, Re, Mi, Fa, Sol, La, Ti, Do".
+ */
+export function buildSyntheticMelody(): MockMelody {
+  const tonicMidi = 60; // C4
+  const stepsFromTonic = [0, 2, 4, 5, 7, 9, 11, 12];
+  const notes: MockMelodyNote[] = stepsFromTonic.map((step, i) => ({
+    midi: tonicMidi + step,
+    startMs: i * 250,
+    durationMs: 250,
+  }));
+  return { id: "melody-c-major-octave", tonicMidi, notes };
+}
+
 /** Recorded invoke calls for assertion. */
 export async function getInvokeCalls(
   page: Page,

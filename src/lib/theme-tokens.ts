@@ -6,6 +6,7 @@
 // future theming pass touches a single file rather than every component.
 
 export const COLOR_SLATE_600 = "#475569";
+export const COLOR_SLATE_700 = "#334155";
 export const COLOR_CYAN_400 = "#22d3ee";
 export const COLOR_SLATE_900 = "#0f172a";
 export const COLOR_VOICED_FILL = "rgba(34, 211, 238, 0.12)";

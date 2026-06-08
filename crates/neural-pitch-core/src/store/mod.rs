@@ -28,5 +28,5 @@ pub use analysis_runtime::{
     list_analyses_blocking,
 };
 pub use error::StoreError;
-pub use library::RecordingsLibrary;
+pub use library::{DrillAttemptRow, NewDrillAttempt, RecordingsLibrary};
 pub use model::{ListFilter, NewRecording, Recording, RecordingId};

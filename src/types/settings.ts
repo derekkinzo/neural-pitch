@@ -9,6 +9,15 @@
 
 export type InstrumentHint = "Generic" | "Voice" | "Guitar" | "Bass" | "Piano" | "Violin";
 
+/** Note-label rendering mode shared between the live tuner and the Phase 4
+ *  drill subsystem. Letter is the default (C, D, E, …); movable-do renders
+ *  solfege relative to the active drill's tonic; fixed-do anchors solfege
+ *  to C. Outside the drill subsystem the rest of the app keeps Letter
+ *  unconditionally — only the drill UI consults this setting today. */
+export type NoteLabelMode = "letter" | "movable-do" | "fixed-do";
+
+export const NOTE_LABEL_MODES: ReadonlyArray<NoteLabelMode> = ["letter", "movable-do", "fixed-do"];
+
 export const INSTRUMENT_HINTS: ReadonlyArray<InstrumentHint> = [
   "Generic",
   "Voice",
@@ -69,6 +78,9 @@ export interface TunerSettings {
   instrumentHint: InstrumentHint;
   /** Smoothing window in milliseconds (100–500). */
   smoothingMs: number;
+  /** Note-label rendering mode. Read by the Phase 4 drill UI; the rest of
+   *  the app ignores this and renders letter names unconditionally. */
+  noteLabelMode: NoteLabelMode;
   /** Read-only audio params populated after capture starts. */
   audioParams: AudioParams | null;
 }
@@ -77,6 +89,7 @@ export const DEFAULT_SETTINGS: TunerSettings = {
   a4Hz: 440,
   instrumentHint: "Generic",
   smoothingMs: SMOOTHING_DEFAULT_MS,
+  noteLabelMode: "letter",
   audioParams: null,
 };
 

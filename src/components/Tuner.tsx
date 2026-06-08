@@ -30,6 +30,7 @@ import { useTunerStore } from "@/stores/tunerStore";
 
 const GEAR_GLYPH = "⚙";
 const LIBRARY_GLYPH = "♫";
+const PRACTICE_GLYPH = "♪";
 
 export function Tuner(): ReactNode {
   const { ringRef, retry } = usePitchStream();
@@ -39,6 +40,7 @@ export function Tuner(): ReactNode {
   const [settingsOpen, setSettingsOpen] = useState<boolean>(false);
   const [libraryOpen, setLibraryOpen] = useState<boolean>(false);
   const deviceStatus = useTunerStore((s) => s.deviceStatus);
+  const setView = useTunerStore((s) => s.setView);
 
   // The Settings + Recordings drawers are rendered as SIBLINGS of <main>
   // (not children) so each drawer's focus-trap can apply `inert` /
@@ -77,6 +79,16 @@ export function Tuner(): ReactNode {
             >
               <span aria-hidden="true" className="text-lg">
                 {LIBRARY_GLYPH}
+              </span>
+            </Button>
+            <Button
+              variant="ghost"
+              aria-label="Open ear-training drills"
+              data-testid="practice-trigger"
+              onClick={() => setView("training")}
+            >
+              <span aria-hidden="true" className="text-lg">
+                {PRACTICE_GLYPH}
               </span>
             </Button>
             <Button

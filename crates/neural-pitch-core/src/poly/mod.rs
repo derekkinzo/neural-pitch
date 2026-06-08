@@ -1,4 +1,5 @@
-//! Polyphonic transcription surface (Phase 3 — TDD-RED stubs).
+//! Polyphonic transcription surface (Phase 3) and the Phase 4 prompt
+//! synth.
 //!
 //! This module sits parallel to [`crate::pitch`] so the existing monophonic
 //! [`crate::pitch::PitchEstimator`] surface stays untouched. Polyphonic
@@ -7,18 +8,22 @@
 //! curves — so it gets its own [`PolyEstimator`] trait instead of squeezing
 //! into the per-frame F0 contract.
 //!
-//! # TDD-RED status
+//! # Feature gating
 //!
-//! Every concrete entry point below currently panics with `todo!()`. The
-//! Phase 3 GREEN step wires Basic Pitch v1 (Spotify, Apache-2.0) through
-//! `ort` plus a `rubato` resampler, runs the per-bin Viterbi smoother from
-//! [`crate::analysis::viterbi`], assembles note events from the onset /
-//! note / contour heads, and emits SMF type-1 MIDI via `midly`.
+//! The Basic Pitch / MIDI surface (and the supporting [`NoteEvent`] /
+//! [`PolyResult`] / [`PolyEstimator`] types) is gated behind
+//! `feature = "neural"` because the GREEN implementation depends on `ort`
+//! and `ndarray`. The Phase 4 [`synth::PromptSynth`] surface is
+//! pure-Rust additive synthesis and ships unconditionally.
 
+#[cfg(feature = "neural")]
 use crate::pitch::EstimatorError;
 
+#[cfg(feature = "neural")]
 pub mod basic_pitch;
+#[cfg(feature = "neural")]
 pub mod midi;
+pub mod synth;
 
 /// One note event recovered from a polyphonic transcription pass.
 ///
@@ -28,6 +33,7 @@ pub mod midi;
 /// note-off masquerading as a note-on). `pitch_bend_curve`, when present,
 /// has exactly `end_frame - start_frame` samples in signed cents per
 /// analysis frame; the frame rate is reported in [`PolyResult::frame_rate_hz`].
+#[cfg(feature = "neural")]
 #[derive(Clone, Debug)]
 pub struct NoteEvent {
     /// MIDI note number (`0..=127`). Basic Pitch v1's effective range is
@@ -56,6 +62,7 @@ pub struct NoteEvent {
 ///
 /// `notes` is unsorted — callers that need a deterministic order
 /// (e.g. for snapshot tests) MUST sort by `(start_ms, midi)` themselves.
+#[cfg(feature = "neural")]
 #[derive(Clone, Debug)]
 pub struct PolyResult {
     /// Note events recovered from the input audio buffer.
@@ -80,6 +87,7 @@ pub struct PolyResult {
 /// (multi-pitch note events) does not fit the per-frame F0 contract. The
 /// `Send` bound mirrors the monophonic trait so pipelines can hand a boxed
 /// estimator to a dedicated worker thread.
+#[cfg(feature = "neural")]
 pub trait PolyEstimator: Send {
     /// Stable identifier for this backend, e.g. `"basic-pitch-v1"`.
     fn name(&self) -> &str;

@@ -13,6 +13,11 @@ import { create } from "zustand";
 
 export type DeviceStatus = "ok" | "permission_denied" | "disconnected" | "format_changed";
 
+/** Top-level view selector — flips between the live tuner and the Phase 4
+ *  ear-training landing. The Practice button in the header sets this; the
+ *  `/#training` URL hash exists only for Playwright deep-linking. */
+export type TunerView = "tuner" | "training";
+
 /** Default "requested" sample rate the shell asks the OS for. The negotiated
  *  rate may differ if the device cannot honour it; the engine resamples. */
 export const REQUESTED_RATE_HZ_DEFAULT = 48_000;
@@ -37,6 +42,8 @@ export interface TunerState {
   negotiatedChannels: number | null;
   /** Sample rate the shell asks for. Defaults to 48000. */
   requestedRateHz: number;
+  /** Active top-level view. Defaults to "tuner". */
+  view: TunerView;
 }
 
 export interface TunerActions {
@@ -48,6 +55,7 @@ export interface TunerActions {
   setDeviceStatus: (status: DeviceStatus) => void;
   setNegotiatedFormat: (params: { rateHz: number; channels: number }) => void;
   clearDeviceError: () => void;
+  setView: (view: TunerView) => void;
 }
 
 export type TunerStore = TunerState & TunerActions;
@@ -62,6 +70,7 @@ export const useTunerStore = create<TunerStore>((set) => ({
   negotiatedRateHz: null,
   negotiatedChannels: null,
   requestedRateHz: REQUESTED_RATE_HZ_DEFAULT,
+  view: "tuner",
   setCaptureStarted: (deviceName) =>
     set({ deviceName, isCapturing: true, startError: null, deviceStatus: "ok" }),
   setCaptureStopped: () => set({ isCapturing: false }),
@@ -72,4 +81,5 @@ export const useTunerStore = create<TunerStore>((set) => ({
   setNegotiatedFormat: ({ rateHz, channels }) =>
     set({ negotiatedRateHz: rateHz, negotiatedChannels: channels }),
   clearDeviceError: () => set({ deviceStatus: "ok", startError: null }),
+  setView: (view) => set({ view }),
 }));

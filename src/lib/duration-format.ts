@@ -60,6 +60,36 @@ export function formatDurationToast(durationMs: number): string {
   return `${minutes}m${ss}s`;
 }
 
+/** Verbose relative-time renderer used by the Phase 4 Training landing
+ *  cards. Mirrors `formatRelative` but expands the unit suffix to match the
+ *  natural-language copy on the cards (e.g. "2 days ago", "8 hours ago").
+ *  Returns "—" when the input is non-finite so empty cards render the
+ *  documented em-dash sentinel. */
+export function formatRelativeLong(timestampMs: number, nowMs: number): string {
+  const deltaMs = nowMs - timestampMs;
+  if (!Number.isFinite(deltaMs)) return "—";
+  const deltaSeconds = Math.max(0, Math.floor(deltaMs / MS_PER_SECOND));
+  if (deltaSeconds < 30) return "just now";
+  const minutes = Math.floor(deltaSeconds / SECONDS_PER_MINUTE);
+  if (minutes < 60) {
+    return minutes === 1 ? "1 minute ago" : `${minutes} minutes ago`;
+  }
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) {
+    return hours === 1 ? "1 hour ago" : `${hours} hours ago`;
+  }
+  const days = Math.floor(hours / 24);
+  if (days < 30) {
+    return days === 1 ? "1 day ago" : `${days} days ago`;
+  }
+  const months = Math.floor(days / 30);
+  if (months < 12) {
+    return months === 1 ? "1 month ago" : `${months} months ago`;
+  }
+  const years = Math.floor(months / 12);
+  return years === 1 ? "1 year ago" : `${years} years ago`;
+}
+
 /** Relative-time renderer used in RecordingsList. Resolves to "just now",
  *  "5m ago", "2h ago", or a YYYY-MM-DD date for older takes. Pure — the
  *  caller passes the reference `now` so tests can pin time. */

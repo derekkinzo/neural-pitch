@@ -17,10 +17,12 @@ import {
   A4_MIN_HZ,
   A4_PRESETS,
   INSTRUMENT_HINTS,
+  NOTE_LABEL_MODES,
   SMOOTHING_MAX_MS,
   SMOOTHING_MIN_MS,
   SMOOTHING_STEP_MS,
   type InstrumentHint,
+  type NoteLabelMode,
 } from "@/types/settings";
 
 export interface SettingsDrawerProps {
@@ -32,6 +34,8 @@ export function SettingsDrawer({ open, onOpenChange }: SettingsDrawerProps): Rea
   const a4Hz = useSettingsStore((s) => s.a4Hz);
   const instrumentHint = useSettingsStore((s) => s.instrumentHint);
   const smoothingMs = useSettingsStore((s) => s.smoothingMs);
+  const noteLabelMode = useSettingsStore((s) => s.noteLabelMode);
+  const setNoteLabelMode = useSettingsStore((s) => s.setNoteLabelMode);
   const audioParams = useSettingsStore((s) => s.audioParams);
 
   const { setA4Hz, setInstrumentHint, setSmoothingMs } = useSettings();
@@ -50,6 +54,7 @@ export function SettingsDrawer({ open, onOpenChange }: SettingsDrawerProps): Rea
   const a4PresetId = useId();
   const instrumentId = useId();
   const smoothingId = useId();
+  const noteLabelId = useId();
 
   const onA4Input = (e: ChangeEvent<HTMLInputElement>): void => {
     const raw = e.currentTarget.value;
@@ -114,6 +119,27 @@ export function SettingsDrawer({ open, onOpenChange }: SettingsDrawerProps): Rea
             {INSTRUMENT_HINTS.map((h) => (
               <option key={h} value={h}>
                 {h}
+              </option>
+            ))}
+          </Select>
+        </section>
+
+        <section className="flex flex-col gap-2">
+          <label htmlFor={noteLabelId} className="font-medium">
+            Note labels
+          </label>
+          <Select
+            id={noteLabelId}
+            value={noteLabelMode}
+            onValueChange={(v: string) => setNoteLabelMode(v as NoteLabelMode)}
+          >
+            {NOTE_LABEL_MODES.map((m) => (
+              <option key={m} value={m}>
+                {m === "letter"
+                  ? "Letter (C, D, E)"
+                  : m === "movable-do"
+                    ? "Movable do"
+                    : "Fixed do"}
               </option>
             ))}
           </Select>
