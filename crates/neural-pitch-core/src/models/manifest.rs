@@ -27,6 +27,12 @@ pub struct ManifestEntry {
     pub size_bytes: u64,
     /// SPDX license identifier, e.g. `"LGPL-3.0-or-later"`.
     pub license: String,
+    /// Models that ship in-tree under `crates/neural-pitch-core/assets/`
+    /// instead of being downloaded by the resolver. The resolver short-
+    /// circuits the URL/SHA pipeline for `bundled = true` entries; the
+    /// SHA is still recorded for provenance tracking.
+    #[serde(default)]
+    pub bundled: bool,
 }
 
 /// All-zeros placeholder sha256 used by the workspace `models.toml`
@@ -39,8 +45,13 @@ pub const PLACEHOLDER_SHA256: &str =
 impl ManifestEntry {
     /// `true` when the manifest entry is still a placeholder — empty URL
     /// or the all-zeros dummy sha256. The resolver maps this onto
-    /// [`super::resolver::ResolverError::NotConfigured`].
+    /// [`super::resolver::ResolverError::NotConfigured`]. Bundled
+    /// entries (`bundled = true`) are never placeholders even though
+    /// their URL field is informational only.
     pub fn is_placeholder(&self) -> bool {
+        if self.bundled {
+            return false;
+        }
         self.url.is_empty() || self.sha256 == PLACEHOLDER_SHA256
     }
 }

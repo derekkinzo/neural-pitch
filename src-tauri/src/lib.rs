@@ -10,6 +10,13 @@
 pub mod commands;
 pub mod sink;
 pub mod state;
+// Phase 3 — file-import / Basic Pitch transcribe / MIDI export.
+// Gated behind `feature = "neural"` because the GREEN path depends on
+// `neural-pitch-core/poly` (which itself only compiles under
+// `neural-pitch-core/neural`). Under `--no-default-features` the module
+// is compiled out entirely so the classical-only build stays clean.
+#[cfg(feature = "neural")]
+pub mod transcribe;
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -41,6 +48,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_log::Builder::default().build())
         .plugin(tauri_plugin_store::Builder::default().build())
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let store = app.store("settings.json")?;
             let settings = load_or_init_settings(&store);
@@ -99,6 +107,12 @@ pub fn run() {
             commands::cancel_analysis,
             commands::get_capabilities,
             commands::get_model_status,
+            #[cfg(feature = "neural")]
+            commands::import_audio_file,
+            #[cfg(feature = "neural")]
+            commands::transcribe_recording,
+            #[cfg(feature = "neural")]
+            commands::export_midi,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

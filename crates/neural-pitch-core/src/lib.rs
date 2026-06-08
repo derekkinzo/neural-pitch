@@ -12,6 +12,12 @@ pub mod models;
 pub mod music;
 pub mod pipeline;
 pub mod pitch;
+// Polyphonic transcription surface (Basic Pitch + MIDI export). Gated
+// behind `feature = "neural"` because the GREEN implementation depends on
+// `ort` and `ndarray`; under `--no-default-features` the module is
+// compiled out entirely so the classical-only build stays clean.
+#[cfg(feature = "neural")]
+pub mod poly;
 pub mod prelude;
 pub mod settings;
 pub mod smoothing;

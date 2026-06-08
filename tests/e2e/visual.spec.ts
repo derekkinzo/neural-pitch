@@ -12,17 +12,22 @@
 
 import { test, expect } from "./fixtures";
 import {
+  buildSyntheticPolyResult,
   installAnalysisMock,
   installAnalysisMockWithRange,
   installPlaybackMock,
   installPlaybackRoutes,
   installRecordingsMock,
+  installTranscribeMock,
   makePitchUpdate,
   pushPitchUpdate,
+  pushTranscribeProgress,
   type MockAnalysisSummary,
   type MockContourResult,
+  type MockPolyResult,
   type MockRangeReport,
   type MockRecording,
+  type MockTranscribeSummary,
   type MockVibratoReport,
 } from "./helpers/tauri-mock";
 
@@ -269,6 +274,56 @@ test.describe("visual — Phase 2.1 RecordingDetail", () => {
     // Docker image. Aligning on the project-wide ratio keeps the visual
     // contract uniform with the other Phase-2 snapshots.
     await expect(page).toHaveScreenshot("recording-detail-with-playback.png", {
+      fullPage: true,
+    });
+  });
+
+  // Phase 3 — RecordingDetail with TranscribePanel + PianoRoll mounted.
+  // The piano-roll canvas is painted statically (no rAF loop while
+  // paused) so the snapshot is byte-stable across runs once the panel
+  // settles into the complete branch.
+  test("recording-detail-with-piano-roll — transcribe + canvas steady", async ({
+    page,
+    mockTauri,
+  }) => {
+    const TRANSCRIBE: Record<string, MockTranscribeSummary> = {
+      "rec-vis-001": {
+        recordingId: "rec-vis-001",
+        noteCount: 3,
+        durationMs: 1200,
+        wasCached: true,
+        transcriberVersion: "basicpitch-0.1.0",
+      },
+    };
+    const POLY: Record<string, MockPolyResult> = {
+      "rec-vis-001:basicpitch-0.1.0": buildSyntheticPolyResult("rec-vis-001"),
+    };
+    await mockTauri.install({
+      ...installRecordingsMock(SEED),
+      ...installAnalysisMock(SUMMARY, CONTOUR),
+      ...installTranscribeMock(TRANSCRIBE, POLY),
+    });
+
+    await page.goto("/");
+    await expect(page.getByTestId("status-pill")).toHaveAttribute("data-state", "live");
+
+    await page.getByTestId("library-trigger").click();
+    await page.getByTestId("recording-row").first().click();
+
+    // Run the transcribe button so the panel settles into the complete
+    // branch (idle → in-progress → complete) before the screenshot.
+    await page.getByTestId("transcribe-button").click();
+    await pushTranscribeProgress(page, { recordingId: "rec-vis-001", percent: 100 });
+
+    // Gate on the steady-state piano-roll figure visibility and the
+    // contour canvas alongside it so the snapshot does not race a
+    // mid-paint frame.
+    await expect(
+      page.getByRole("img", { name: /Piano roll: 3 notes between MIDI 64 and 71/i }),
+    ).toBeVisible();
+    await expect(page.getByTestId("contour-canvas")).toBeVisible();
+
+    await expect(page).toHaveScreenshot("recording-detail-with-piano-roll.png", {
       fullPage: true,
     });
   });

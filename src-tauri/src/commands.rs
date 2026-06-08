@@ -1523,6 +1523,123 @@ fn validate_sample_format(fmt: SampleFormat) -> Result<SampleFormat, BuildError>
     }
 }
 
+// -- Phase 3 — file-import / Basic Pitch transcribe / MIDI export -----------
+//
+// Each command is a thin async wrapper over the matching `*_blocking` helper
+// in [`crate::transcribe`]: validate the IPC argument shape, hop onto a
+// `spawn_blocking` worker, flatten the typed error to `Result<T, String>`
+// at the boundary. Mirror the analyse / contour command shape from
+// Phase 2.1 so the IPC surface stays uniform.
+
+/// Adapter that adapts a `tauri::ipc::Channel<TranscribeProgress>` to the
+/// pure-Rust [`crate::transcribe::TranscribeProgressSink`] trait. Channel
+/// `send` is best-effort — a dropped consumer is logged at `debug!` and
+/// ignored, matching the `start_recording` progress channel contract and
+/// the [`crate::transcribe::TranscribeProgressSink::emit`] doc-comment.
+#[cfg(feature = "neural")]
+struct ChannelTranscribeSink {
+    channel: Channel<crate::transcribe::TranscribeProgress>,
+}
+
+#[cfg(feature = "neural")]
+impl crate::transcribe::TranscribeProgressSink for ChannelTranscribeSink {
+    fn emit(&self, progress: crate::transcribe::TranscribeProgress) {
+        if let Err(e) = self.channel.send(progress) {
+            tracing::debug!(error = %e, "transcribe-progress channel send failed");
+        }
+    }
+}
+
+/// Import an audio file from `source_path` into the recordings library.
+///
+/// Returns the canonical hyphenated UUID of the new recording row. The
+/// extension gate (`{wav, flac, mp3}`), 500 MiB stat cap, header probe,
+/// file copy, and row insert all happen inside
+/// [`crate::transcribe::import_audio_file_blocking`] under a
+/// `spawn_blocking` worker so the tokio runtime thread is not parked on
+/// disk I/O.
+#[cfg(feature = "neural")]
+#[tauri::command]
+#[tracing::instrument(skip(state), fields(source_path = %source_path))]
+pub async fn import_audio_file(
+    state: State<'_, AppState>,
+    source_path: String,
+) -> Result<String, String> {
+    let library = Arc::clone(&state.library);
+    let recordings_dir = state.recordings_dir.clone();
+    let source = PathBuf::from(source_path);
+    let id = tokio::task::spawn_blocking(move || {
+        crate::transcribe::import_audio_file_blocking(&library, &recordings_dir, &source)
+    })
+    .await
+    .map_err(|e| format!("import_audio_file task panicked: {e}"))?
+    .map_err(|e| format!("{e:#}"))?;
+    Ok(id.to_string())
+}
+
+/// Run polyphonic transcription on a previously-imported recording.
+///
+/// `force_refresh = false` is the cache-aware default: a postcard blob in
+/// `analysis_cache` keyed on `("basic-pitch", "1.0")` short-circuits the
+/// inference run and surfaces a `was_cached: true` summary in `< 100 ms`.
+/// `force_refresh = true` re-runs the inference path unconditionally.
+#[cfg(feature = "neural")]
+#[tauri::command]
+#[tracing::instrument(skip(state, progress), fields(force_refresh = force_refresh))]
+pub async fn transcribe_recording(
+    state: State<'_, AppState>,
+    recording_id: String,
+    force_refresh: bool,
+    progress: Channel<crate::transcribe::TranscribeProgress>,
+) -> Result<crate::transcribe::TranscribeSummary, String> {
+    let parsed: neural_pitch_core::store::RecordingId = recording_id
+        .parse()
+        .map_err(|e| format!("invalid recording id: {e}"))?;
+    let library = Arc::clone(&state.library);
+    let recordings_dir = state.recordings_dir.clone();
+    let sink = ChannelTranscribeSink { channel: progress };
+    tokio::task::spawn_blocking(move || {
+        let sink_ref: &dyn crate::transcribe::TranscribeProgressSink = &sink;
+        crate::transcribe::transcribe_recording_blocking(
+            &library,
+            &recordings_dir,
+            parsed,
+            force_refresh,
+            Some(sink_ref),
+        )
+    })
+    .await
+    .map_err(|e| format!("transcribe_recording task panicked: {e}"))?
+    .map_err(|e| format!("{e:#}"))
+}
+
+/// Export the cached `(recording_id, "basic-pitch", "1.0")` polyphonic
+/// transcription as an SMF type-1 MIDI file.
+///
+/// Returns the number of bytes written to `dest_path`. The caller MUST run
+/// `transcribe_recording` first; an empty `analysis_cache` row surfaces as
+/// `Err("transcribe first")`.
+#[cfg(feature = "neural")]
+#[tauri::command]
+#[tracing::instrument(skip(state), fields(dest_path = %dest_path))]
+pub async fn export_midi(
+    state: State<'_, AppState>,
+    recording_id: String,
+    dest_path: String,
+) -> Result<u64, String> {
+    let parsed: neural_pitch_core::store::RecordingId = recording_id
+        .parse()
+        .map_err(|e| format!("invalid recording id: {e}"))?;
+    let library = Arc::clone(&state.library);
+    let dest = PathBuf::from(dest_path);
+    tokio::task::spawn_blocking(move || {
+        crate::transcribe::export_midi_blocking(&library, parsed, &dest)
+    })
+    .await
+    .map_err(|e| format!("export_midi task panicked: {e}"))?
+    .map_err(|e| format!("{e:#}"))
+}
+
 #[cfg(test)]
 #[allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 mod tests {

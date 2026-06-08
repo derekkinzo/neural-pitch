@@ -27,6 +27,7 @@ import { PlaybackPanel } from "@/components/recordings/PlaybackPanel";
 import { RecordingDetail } from "@/components/recordings/RecordingDetail";
 import { formatDurationShort, formatRelative } from "@/lib/duration-format";
 import { useAnalysisProgress } from "@/hooks/useAnalysisProgress";
+import { useTranscribeProgress } from "@/hooks/useTranscribeProgress";
 import { useRecordingsStore } from "@/stores/recordingsStore";
 import type { Recording } from "@/types/recording";
 
@@ -45,6 +46,10 @@ export function RecordingsList({ open, onOpenChange }: RecordingsListProps): Rea
   // the drawer mount so the AnalysisSummary card's progress bar reflects
   // the live percent driven by the Rust analyzer.
   useAnalysisProgress();
+  // Same wiring for the Phase-3 transcription channel — TranscribePanel
+  // mounts inside RecordingDetail (a child of this drawer) so a single
+  // subscription at the drawer root covers every panel instance.
+  useTranscribeProgress();
 
   // Refresh on open so the list reflects any rows persisted while the
   // drawer was closed. Fire-and-forget; the action handles its own errors.

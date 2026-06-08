@@ -16,6 +16,8 @@ under MIT OR Apache-2.0.
 - **Range and vibrato reports.** Per-recording lowest/highest pitch,
   tessitura, and vibrato rate / extent / regularity, computed from the
   cached contour.
+- **Import and transcribe.** Drag in a WAV / FLAC / MP3, run polyphonic
+  transcription, and export the result as a Standard MIDI File.
 
 The `neural-pitch-core` crate is pure Rust, has no Tauri dependency, and
 can be reused as a library. The default build pulls in only the classical

@@ -18,6 +18,11 @@ interface TestHooks {
    *  the E2E mock can resolve a sentinel path to a `page.route`-served
    *  URL without invoking the real `tauri://` bridge. */
   convertFileSrc?: (path: string) => string;
+  /** Optional sentinel for the Phase-3 file-open dialog. When set, the
+   *  `openAudioFileDialog` helper short-circuits the real Tauri plugin
+   *  and resolves to this value directly. `null` simulates the user
+   *  dismissing the dialog without selecting a file. */
+  dialogOpenResult?: string | null;
 }
 
 interface WindowWithHooks extends Window {

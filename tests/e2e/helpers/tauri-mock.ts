@@ -839,6 +839,300 @@ export async function installPlaybackRoutes(page: Page): Promise<void> {
   );
 }
 
+/**
+ * Phase-3 transcription — wire-format mirrors `src/types/transcription.ts`
+ * (planned). Field names are camelCase on the TS side; the Rust IPC boundary
+ * maps from snake_case per the existing `analysis.ts` convention.
+ *
+ * `wasCached` is the only field that varies across the cache branches
+ * (cached read vs. forced re-transcribe). The mock derives it from the
+ * inbound `forceRefresh` flag, mirroring `installAnalysisMock`.
+ */
+export interface MockTranscribeSummary {
+  recordingId: string;
+  noteCount: number;
+  durationMs: number;
+  wasCached: boolean;
+  transcriberVersion: string;
+}
+
+/** A single point in the per-note `pitch_bend_curve` polyline. */
+export interface MockBendPoint {
+  tMs: number;
+  cents: number;
+}
+
+/** A single note in the polyphonic transcription. */
+export interface MockNote {
+  midi: number; // 21..108
+  startMs: number;
+  durationMs: number;
+  velocity: number; // 0..127
+  pitchBendCurve: MockBendPoint[];
+}
+
+export interface MockPolyResult {
+  recordingId: string;
+  transcriberVersion: string;
+  durationMs: number;
+  notes: MockNote[];
+}
+
+/**
+ * In-flight transcription progress payload — emitted at ~10 Hz over the
+ * `transcribe-progress` Tauri channel while Basic Pitch / ONNX inference
+ * is running. The page-side `transcriptionStore` registers a listener on
+ * `__neuralPitchTestHooks.listeners.get("transcribe-progress")` and pushes
+ * the percent into the `<progress role="progressbar">` rendered by
+ * TranscribePanel while the recording id is in `inProgress`.
+ */
+export interface MockTranscribeProgress {
+  recordingId: string;
+  percent: number; // 0..100
+  status?: "running" | "finalizing" | "failed";
+  error?: string;
+}
+
+/**
+ * Build a small synthetic 3-note `PolyResult` over 1.2 s — E4, G4, B4.
+ * Each note carries a 5-point linear `pitch_bend_curve`. Specs reuse this
+ * factory verbatim so the canvas hit-tests are deterministic and the axe
+ * scan has a stable label fragment to match against.
+ */
+export function buildSyntheticPolyResult(recordingId: string): MockPolyResult {
+  const linearBend = (startMs: number, durationMs: number): MockBendPoint[] => {
+    const points: MockBendPoint[] = [];
+    for (let i = 0; i < 5; i += 1) {
+      const fraction = i / 4;
+      points.push({
+        tMs: startMs + fraction * durationMs,
+        cents: -10 + 20 * fraction,
+      });
+    }
+    return points;
+  };
+  return {
+    recordingId,
+    transcriberVersion: "basicpitch-0.1.0",
+    durationMs: 1200,
+    notes: [
+      {
+        midi: 64, // E4
+        startMs: 0,
+        durationMs: 400,
+        velocity: 96,
+        pitchBendCurve: linearBend(0, 400),
+      },
+      {
+        midi: 67, // G4
+        startMs: 400,
+        durationMs: 400,
+        velocity: 102,
+        pitchBendCurve: linearBend(400, 400),
+      },
+      {
+        midi: 71, // B4
+        startMs: 800,
+        durationMs: 400,
+        velocity: 108,
+        pitchBendCurve: linearBend(800, 400),
+      },
+    ],
+  };
+}
+
+/**
+ * Install mock responses for the Phase-3 import IPC surface.
+ *
+ * Phase-3 contract:
+ *   - `import_audio_file({ sourcePath })` → MockRecording (synthetic row
+ *     pushed onto the shared `__neuralPitchTestHooks.recordings` slot).
+ *
+ * The handler self-initialises the slot on first call using the embedded
+ * seed JSON — same closure-survival pattern as `installRecordingsMock`.
+ */
+export function installImportMock(): TauriMockResponses {
+  // eslint-disable-next-line @typescript-eslint/no-implied-eval, no-new-func
+  const importHandler = new Function(
+    "args",
+    `var w = window;
+     var hooks = w.__neuralPitchTestHooks || {};
+     if (!hooks.recordings) { hooks.recordings = []; }
+     w.__neuralPitchTestHooks = hooks;
+     var src = String((args && args.sourcePath) || "/tmp/imported.wav");
+     var slash = src.lastIndexOf("/");
+     var base = slash >= 0 ? src.substring(slash + 1) : src;
+     var id = "rec-import-" + Date.now() + "-" + Math.floor(Math.random() * 1e6).toString(16);
+     var rec = {
+       id: id,
+       filename: base,
+       createdAt: Date.now(),
+       durationMs: 1230,
+       sampleRateHz: 48000,
+       channels: 1,
+       bitDepth: 24,
+       a4Hz: 440,
+       instrumentProfile: "Voice"
+     };
+     hooks.recordings = [rec].concat(hooks.recordings || []);
+     w.__neuralPitchTestHooks = hooks;
+     return rec;`,
+  ) as (args: Record<string, unknown>) => unknown;
+
+  return {
+    import_audio_file: importHandler,
+  };
+}
+
+/**
+ * Page-side stub for the Tauri `plugin-dialog` `open()` call. The Phase-3
+ * `ImportButton` issues `await open({ multiple: false, filters: [...] })`
+ * and routes the resulting path string through `import_audio_file`. We
+ * stash a fixed sentinel on `__neuralPitchTestHooks.dialogOpenResult` and
+ * the page-side dialog shim consults that hook before falling back to the
+ * real plugin — exactly how `convertFileSrc` is overridden in
+ * `installPlaybackRoutes`.
+ *
+ * Pass `null` to simulate the user dismissing the dialog.
+ */
+export async function installDialogMock(
+  page: Page,
+  result: string | null = "/tmp/imported-fixture.wav",
+): Promise<void> {
+  await page.addInitScript((seed: string | null) => {
+    type Hooks = {
+      handlers?: Map<string, unknown>;
+      listeners?: Map<string, Array<(payload: unknown) => void>>;
+      invokeCalls?: Array<{ cmd: string; args: Record<string, unknown> }>;
+      dialogOpenResult?: string | null;
+    };
+    type WindowWithHooks = Window & { __neuralPitchTestHooks?: Hooks };
+    const w = window as WindowWithHooks;
+    const hooks: Hooks = w.__neuralPitchTestHooks ?? {
+      handlers: new Map(),
+      listeners: new Map(),
+      invokeCalls: [],
+    };
+    hooks.dialogOpenResult = seed;
+    w.__neuralPitchTestHooks = hooks;
+  }, result);
+}
+
+/**
+ * Install mock responses for the Phase-3 transcription IPC surface.
+ *
+ * Phase-3 contract:
+ *   - `transcribe_recording({ recordingId, forceRefresh })`
+ *       → MockTranscribeSummary (with `wasCached = !forceRefresh`)
+ *   - `get_poly_result({ recordingId })`
+ *       → MockPolyResult (3-note synthetic seed by default)
+ *   - `export_midi({ recordingId, destPath })`
+ *       → null (records the call for assertion)
+ *
+ * @param byRecordingId  Map of `recordingId → MockTranscribeSummary` for
+ *                       the seeded summary.
+ * @param polyByKey      Map of `${recordingId}:${transcriberVersion}` →
+ *                       MockPolyResult. The composite key matches the
+ *                       `polyResultsByKey` Map in `transcriptionStore`.
+ */
+export function installTranscribeMock(
+  byRecordingId: Record<string, MockTranscribeSummary>,
+  polyByKey: Record<string, MockPolyResult>,
+): TauriMockResponses {
+  const summaryJson = JSON.stringify(byRecordingId);
+  const polyJson = JSON.stringify(polyByKey);
+
+  const seedHydrate = `
+    var w = window;
+    var hooks = w.__neuralPitchTestHooks || {};
+    if (!hooks.transcription) {
+      hooks.transcription = {
+        summaries: JSON.parse(${JSON.stringify(summaryJson)}),
+        polyResults: JSON.parse(${JSON.stringify(polyJson)}),
+        exports: []
+      };
+    }
+    w.__neuralPitchTestHooks = hooks;
+  `;
+
+  // eslint-disable-next-line @typescript-eslint/no-implied-eval, no-new-func
+  const transcribeHandler = new Function(
+    "args",
+    `${seedHydrate}
+     var id = String((args && args.recordingId) || "");
+     var force = Boolean(args && args.forceRefresh);
+     var seed = window.__neuralPitchTestHooks.transcription.summaries[id];
+     if (!seed) {
+       throw new Error("unmocked transcribe summary for recordingId: " + id);
+     }
+     var copy = Object.assign({}, seed);
+     copy.wasCached = !force;
+     return copy;`,
+  ) as (args: Record<string, unknown>) => unknown;
+
+  // eslint-disable-next-line @typescript-eslint/no-implied-eval, no-new-func
+  const polyHandler = new Function(
+    "args",
+    `${seedHydrate}
+     var id = String((args && args.recordingId) || "");
+     var polyResults = window.__neuralPitchTestHooks.transcription.polyResults;
+     var prefix = id + ":";
+     var keys = Object.keys(polyResults);
+     for (var i = 0; i < keys.length; i++) {
+       if (keys[i].indexOf(prefix) === 0) {
+         return polyResults[keys[i]];
+       }
+     }
+     throw new Error("unmocked poly result for recordingId: " + id);`,
+  ) as (args: Record<string, unknown>) => unknown;
+
+  // eslint-disable-next-line @typescript-eslint/no-implied-eval, no-new-func
+  const exportHandler = new Function(
+    "args",
+    `${seedHydrate}
+     var id = String((args && args.recordingId) || "");
+     var dest = String((args && args.destPath) || "/tmp/export.mid");
+     window.__neuralPitchTestHooks.transcription.exports.push({
+       recordingId: id,
+       destPath: dest
+     });
+     return null;`,
+  ) as (args: Record<string, unknown>) => unknown;
+
+  return {
+    transcribe_recording: transcribeHandler,
+    get_poly_result: polyHandler,
+    export_midi: exportHandler,
+  };
+}
+
+/**
+ * Push a synthetic `transcribe-progress` event. Mirrors
+ * `pushAnalysisProgress`: the page-side `transcriptionStore` registers a
+ * listener on `__neuralPitchTestHooks.listeners.get("transcribe-progress")`
+ * and tests drive percent ticks through this helper. When `percent === 100`
+ * the spec is expected to resolve the in-flight `transcribe_recording()`
+ * promise via the IPC mock (which is already synchronous here), so the bar
+ * disappears in the same tick.
+ */
+export async function pushTranscribeProgress(
+  page: Page,
+  progress: MockTranscribeProgress,
+): Promise<void> {
+  await page.evaluate((frame) => {
+    type WindowWithHooks = Window & {
+      __neuralPitchTestHooks?: {
+        listeners: Map<string, Array<(payload: unknown) => void>>;
+      };
+    };
+    const w = window as WindowWithHooks;
+    const listeners = w.__neuralPitchTestHooks?.listeners.get("transcribe-progress") ?? [];
+    for (const fn of listeners) {
+      fn(frame);
+    }
+  }, progress);
+}
+
 /** Recorded invoke calls for assertion. */
 export async function getInvokeCalls(
   page: Page,

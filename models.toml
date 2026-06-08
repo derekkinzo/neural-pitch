@@ -17,3 +17,14 @@ url         = ""  # placeholder; populated in Phase 2.5/3
 sha256      = "0000000000000000000000000000000000000000000000000000000000000000"
 size_bytes  = 4_000_000
 license     = "LGPL-3.0-or-later"
+
+# Spotify Basic Pitch v1 (ICASSP 2022). Bundled in-tree under
+# `crates/neural-pitch-core/assets/basic_pitch_v1.0.onnx`; the resolver
+# treats `bundled = true` as already-resolved and never hits the network.
+[[models]]
+name        = "basic-pitch-v1"
+url         = "https://github.com/spotify/basic-pitch/raw/main/basic_pitch/saved_models/icassp_2022/nmp.onnx"
+sha256      = "2c3c1d144bfa61ad236e92e169c13535c880469a12a047d4e73451f2c059a0ec"
+size_bytes  = 230_444
+license     = "Apache-2.0"
+bundled     = true

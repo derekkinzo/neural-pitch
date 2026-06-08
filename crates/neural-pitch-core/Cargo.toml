@@ -12,10 +12,12 @@ readme.workspace       = true
 [features]
 default = ["cpal", "flac", "pyin"]
 cpal              = ["dep:cpal"]
-# ORT 2.0 (load-dynamic) + ndarray. The ONNX Runtime shared library is
-# supplied out of band via `ORT_DYLIB_PATH`; we deliberately avoid the
-# `download-binaries` feature.
-neural            = ["dep:ort", "dep:ndarray"]
+# ORT 2.0 (load-dynamic) + ndarray + rubato. The ONNX Runtime shared
+# library is supplied out of band via `ORT_DYLIB_PATH`; we deliberately
+# avoid the `download-binaries` feature. `rubato` is the resampler used by
+# `poly::basic_pitch` to coerce arbitrary capture rates into Basic Pitch's
+# native 22.05 kHz before windowing.
+neural            = ["dep:ort", "dep:ndarray", "dep:rubato"]
 # pYIN offline backend (Sytronik/pyin = "1.2"). Pulls in the pure-Rust
 # pyin crate plus claxon for the FLAC decode path used by
 # `analysis::contour::analyze_contour`.
@@ -94,6 +96,19 @@ sha2        = "0.10"
 # the analysis module can build under `--no-default-features` (i.e.
 # without the `pyin` feature).
 realfft     = "3.5"
+# `midly` is the SMF reader/writer used by `poly::midi` to emit Phase 3
+# MIDI exports. Pure-Rust, no system deps, ~50 KB compiled. Always-on
+# because the GREEN export path is not feature-gated; the surrounding
+# `poly` module is gated behind `feature = "neural"` at `lib.rs` so the
+# `--no-default-features` build never invokes the export path even
+# though the dependency is in the graph.
+midly       = { version = "0.5", default-features = false, features = ["std"] }
+# `rubato` is the asynchronous resampler used by
+# `poly::basic_pitch::BasicPitchEstimator` to map arbitrary capture rates
+# into Basic Pitch's native 22.05 kHz before windowing. Pure-Rust,
+# MIT-licensed; gated behind `feature = "neural"` because the only
+# consumer lives under `poly/`, which is itself feature-gated.
+rubato      = { version = "0.16", optional = true }
 
 [dev-dependencies]
 proptest    = "1"
@@ -124,6 +139,7 @@ path = "examples/build_voice_fixtures.rs"
 [[example]]
 name = "verify_voice_roundtrip"
 path = "examples/verify_voice_roundtrip.rs"
+
 
 [lints]
 workspace = true

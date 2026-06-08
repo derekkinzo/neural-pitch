@@ -17,6 +17,7 @@ import { DeviceDisconnectToast } from "@/components/DeviceDisconnectToast";
 import { HistoryStrip } from "@/components/HistoryStrip";
 import { NoteDisplay } from "@/components/NoteDisplay";
 import { PermissionNotice } from "@/components/PermissionNotice";
+import { ImportButton } from "@/components/recordings/ImportButton";
 import { RecordButton } from "@/components/recordings/RecordButton";
 import { RecordingsList } from "@/components/recordings/RecordingsList";
 import { SavedToast } from "@/components/recordings/SavedToast";
@@ -54,7 +55,20 @@ export function Tuner(): ReactNode {
         <header className="relative z-50 flex items-center justify-between px-6 py-4">
           <StatusPill />
           <div className="flex items-center gap-2">
-            <RecordButton />
+            {/* Phase-3 toolbar: co-locates the record + import controls
+                under a single `role="toolbar"` group so AT users land on
+                a labelled landmark before navigating into either control.
+                The drawer and settings triggers stay outside the toolbar
+                — they are navigation, not part of the recording surface. */}
+            <div
+              role="toolbar"
+              aria-label="Recording controls"
+              data-testid="recording-toolbar"
+              className="flex items-center gap-2"
+            >
+              <RecordButton />
+              <ImportButton />
+            </div>
             <Button
               variant="ghost"
               aria-label="Open recordings library"

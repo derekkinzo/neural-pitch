@@ -24,12 +24,15 @@
 
 import { useEffect, useMemo, type ReactNode } from "react";
 import { ContourLine } from "@/components/recordings/ContourLine";
+import { PianoRoll } from "@/components/recordings/PianoRoll";
 import { RangeReadout } from "@/components/recordings/RangeReadout";
+import { TranscribePanel } from "@/components/recordings/TranscribePanel";
 import { VibratoReadout } from "@/components/recordings/VibratoReadout";
 import { formatDurationShort, formatRelative } from "@/lib/duration-format";
 import { formatMidiNote } from "@/lib/note-format";
 import { useAnalysisStore, selectLatestContour } from "@/stores/analysisStore";
 import { useRecordingsStore } from "@/stores/recordingsStore";
+import { selectLatestPolyResult, useTranscriptionStore } from "@/stores/transcriptionStore";
 
 function formatSignedCents(cents: number): string {
   const sign = cents >= 0 ? "+" : "";
@@ -61,6 +64,9 @@ export function RecordingDetail(): ReactNode {
     currentRecordingId !== null ? selectLatestContour(s, currentRecordingId) : undefined,
   );
   const analyze = useAnalysisStore((s) => s.analyze);
+  const polyResult = useTranscriptionStore((s) =>
+    currentRecordingId !== null ? selectLatestPolyResult(s, currentRecordingId) : undefined,
+  );
 
   // The recording row provides the header metadata; we look it up from the
   // already-loaded list rather than firing a per-row IPC.
@@ -249,12 +255,15 @@ export function RecordingDetail(): ReactNode {
         </div>
       </section>
 
+      <TranscribePanel recordingId={currentRecordingId} />
+
       <div className="grid gap-3 md:grid-cols-2">
         <RangeReadout summary={summary} a4Hz={recording.a4Hz} />
         <VibratoReadout summary={summary} />
       </div>
 
       <ContourLine summary={summary} contour={contour} />
+      {polyResult !== undefined ? <PianoRoll poly={polyResult} a4Hz={recording.a4Hz} /> : null}
     </section>
   );
 }
