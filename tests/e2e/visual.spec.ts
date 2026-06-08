@@ -225,7 +225,7 @@ test.describe("visual — Phase 2.1 RecordingDetail", () => {
 
     // Gate on both readout regions being visible before the screenshot
     // so a transient progress repaint cannot race the snapshot.
-    await expect(page.getByRole("group", { name: /Vocal range report/i })).toBeVisible();
+    await expect(page.getByRole("group", { name: /Pitch range report/i })).toBeVisible();
     await expect(page.getByRole("group", { name: /Vibrato analysis/i })).toBeVisible();
     await expect(page.getByTestId("contour-canvas")).toBeVisible();
 

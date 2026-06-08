@@ -1,6 +1,6 @@
 [package]
 name        = "neural-pitch"
-description = "NeuralPitch — pitch-detection app for singers and musicians."
+description = "NeuralPitch — pitch-detection app for musicians."
 version.workspace      = true
 edition.workspace      = true
 rust-version.workspace = true

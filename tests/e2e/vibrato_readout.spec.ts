@@ -7,7 +7,7 @@
 //
 //   1. Happy path — median rate 5.4 Hz lands the meter at
 //      `aria-valuenow="5.4"` with `aria-valuetext` matching
-//      /typical singer range/i, and the 4–7 Hz typical band rect renders.
+//      /typical voice range/i, and the 4–7 Hz typical band rect renders.
 //   2. Per-window dot strip — one dot per `windows[i]`.
 //   3. Reduced-motion — when `prefers-reduced-motion: reduce` matches,
 //      the indicator carries a `transition-none` class (no animated
@@ -126,9 +126,9 @@ test.describe("vibrato readout — meter + dots + reduced-motion + empty", () =>
     await expect(meter).toHaveAttribute("aria-valuemin", "0");
     await expect(meter).toHaveAttribute("aria-valuemax", "10");
     await expect(meter).toHaveAttribute("aria-valuenow", "5.4");
-    await expect(meter).toHaveAttribute("aria-valuetext", /typical singer range/i);
+    await expect(meter).toHaveAttribute("aria-valuetext", /typical voice range/i);
 
-    // The typical-singer band rect is visible under the indicator.
+    // The typical-voice band rect is visible under the indicator.
     await expect(page.getByTestId("typical-band")).toBeVisible();
   });
 

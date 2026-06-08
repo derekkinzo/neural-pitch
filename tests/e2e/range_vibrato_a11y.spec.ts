@@ -134,7 +134,7 @@ test.describe("a11y — range + vibrato readouts", () => {
     // Both readout regions must mount before we scan. axe is a static
     // analyzer; if the regions are not yet present, the scan is a
     // no-op and would produce a false green.
-    await expect(page.getByRole("group", { name: /Vocal range report/i })).toBeVisible();
+    await expect(page.getByRole("group", { name: /Pitch range report/i })).toBeVisible();
     await expect(page.getByRole("group", { name: /Vibrato analysis/i })).toBeVisible();
 
     const results = await axe.analyze();

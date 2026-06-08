@@ -10,8 +10,8 @@
 //
 // The rate bar is an SVG `role="meter"` carrying:
 //   - `aria-valuemin={0}`, `aria-valuemax={10}`, `aria-valuenow={rate}`
-//   - `aria-valuetext` composed as e.g. "5.4 Hz, typical singer range"
-//     ("typical singer range" when 4..7 Hz, "below" / "above" otherwise).
+//   - `aria-valuetext` composed as e.g. "5.4 Hz, typical voice range"
+//     ("typical voice range" when 4..7 Hz, "below" / "above" otherwise).
 // The 4–7 Hz typical band is a fixed `<rect data-testid="typical-band">`
 // at x=40%/width=30%; the indicator is a static `<line>`.
 //
@@ -80,7 +80,7 @@ function buildAriaText(rateHz: number): string {
   const rounded = rateHz.toFixed(1);
   if (rateHz < TYPICAL_LOW) return `${rounded} Hz, below typical range`;
   if (rateHz > TYPICAL_HIGH) return `${rounded} Hz, above typical range`;
-  return `${rounded} Hz, typical singer range`;
+  return `${rounded} Hz, typical voice range`;
 }
 
 function dotColorClass(confidence: number): string {
@@ -176,7 +176,7 @@ export function VibratoReadout({ summary }: VibratoReadoutProps): ReactNode {
 
       {/* Rate bar — SVG with role="meter" on the wrapping div so AT users
           read the value via aria-valuenow / aria-valuetext. The
-          `<rect data-testid="typical-band">` paints the 4–7 Hz singer band
+          `<rect data-testid="typical-band">` paints the 4–7 Hz typical-rate band
           under the indicator; the indicator itself is a static <line>. */}
       <div
         role="meter"

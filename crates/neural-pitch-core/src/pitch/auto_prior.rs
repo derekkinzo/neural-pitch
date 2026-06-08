@@ -205,7 +205,7 @@ impl AutoPrior {
     /// Configure a *soft clamp* — the auto-mode median range is intersected
     /// with this hint's canonical range, but the median still drives the
     /// returned bounds. Useful for "auto-prior under the assumption it is
-    /// a singer" without fully pinning the range.
+    /// a voice" without fully pinning the range.
     ///
     /// When the auto-mode range produces an empty intersection with the
     /// soft clamp, [`AutoPrior::current_range`] falls back to

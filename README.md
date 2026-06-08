@@ -1,15 +1,17 @@
 # NeuralPitch
 
-A small, FOSS pitch-detection app for singers. Desktop build is a Rust core
-wrapped in a Tauri 2 shell with a React + Tailwind front end. Dual-licensed
-under MIT OR Apache-2.0.
+A small, FOSS pitch-detection app for musicians and audio nerds. Desktop
+build is a Rust core wrapped in a Tauri 2 shell with a React + Tailwind
+front end. Dual-licensed under MIT OR Apache-2.0.
 
 ## What it does today
 
-- **Live tuner.** Real-time pitch detection from the default input device.
-  Note name, cents-off meter, and recent-history strip update at audio rate.
-  Settings (reference A, transpose, tuning system) persist across launches.
-- **Recordings.** Capture mic audio to FLAC, store it in a per-platform
+- **Live tuner.** Real-time pitch detection from the default input device
+  — guitar, piano, voice, violin, bass, or anything else with a
+  fundamental. Note name, cents-off meter, and recent-history strip update
+  at audio rate. Settings (reference A, transpose, tuning system) persist
+  across launches.
+- **Recordings.** Capture input audio to FLAC, store it in a per-platform
   SQLite library, and rename or delete entries from the UI.
 - **Offline analysis.** Run pYIN over a recording, smooth the contour, and
   cache the results in the library.

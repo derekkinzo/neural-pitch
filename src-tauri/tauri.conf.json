@@ -31,8 +31,8 @@
     "active": true,
     "category": "Music",
     "copyright": "Copyright © 2026 Derek Kinzo",
-    "shortDescription": "Pitch-detection app for singers.",
-    "longDescription": "Real-time pitch tuner with offline recording, contour analysis, vocal-range reports, and vibrato detection.",
+    "shortDescription": "Pitch-detection app for musicians.",
+    "longDescription": "Real-time pitch tuner with offline recording, contour analysis, pitch-range reports, and vibrato detection.",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

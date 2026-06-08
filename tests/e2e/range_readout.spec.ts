@@ -118,7 +118,7 @@ test.describe("range readout — comfortable + full + voice hints", () => {
     await expect(page.getByTestId("recordings-list")).toBeVisible();
     await page.getByTestId("recording-row").first().click();
 
-    const region = page.getByRole("group", { name: /Vocal range report/i });
+    const region = page.getByRole("group", { name: /Pitch range report/i });
     await expect(region).toBeVisible();
     await expect(page.getByTestId("range-readout")).toBeVisible();
 
@@ -138,7 +138,7 @@ test.describe("range readout — comfortable + full + voice hints", () => {
     // The New Grove disclaimer is reachable somewhere in the region —
     // either via the tooltip content or via the visually-hidden fallback
     // paragraph for AT users that swallow tooltip content.
-    await expect(region).toContainText(/NOT a vocal coach assessment/i);
+    await expect(region).toContainText(/NOT a vocal-coach assessment/i);
   });
 
   test("empty / insufficient state renders single 'Not enough voiced material' paragraph", async ({
@@ -153,7 +153,7 @@ test.describe("range readout — comfortable + full + voice hints", () => {
     await page.getByTestId("library-trigger").click();
     await page.getByTestId("recording-row").first().click();
 
-    const region = page.getByRole("group", { name: /Vocal range report/i });
+    const region = page.getByRole("group", { name: /Pitch range report/i });
     await expect(region).toBeVisible();
 
     const empty = page.getByTestId("range-empty");

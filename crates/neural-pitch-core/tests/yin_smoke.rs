@@ -51,7 +51,7 @@ fn yin_silence_returns_unvoiced() {
 fn yin_vibrato_within_10_cents() {
     let cfg = default_cfg();
     let mut est = make_estimator(Backend::YinMpm, cfg.clone(), None).expect("construct yin");
-    // 5 Hz vibrato, +/-50 cents extent — typical singer.
+    // 5 Hz vibrato, +/-50 cents extent — typical for voice.
     let buf = vibrato_signal(440.0, 5.0, 50.0, cfg.sample_rate_hz, cfg.window_size);
     let frame = est
         .process(&buf)

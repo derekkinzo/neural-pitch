@@ -1,4 +1,4 @@
-// RangeReadout — Phase 2.3 vocal-range readout.
+// RangeReadout — Phase 2.3 pitch-range readout.
 //
 // Mounted inside RecordingDetail as a sibling of AnalysisSummary, *below*
 // the summary card and above ContourLine, in a 2-column grid alongside
@@ -40,7 +40,7 @@ export interface RangeReadoutProps {
 const VOICED_FRAME_THRESHOLD = 250;
 
 const VOICE_TYPE_DISCLAIMER =
-  "Your comfortable range overlaps these voice types per New Grove vocal-range conventions. This is not a vocal coach assessment.";
+  "Your comfortable range overlaps these voice types per New Grove pitch-range conventions. This is not a vocal-coach assessment.";
 
 /** Stable id for the visible disclaimer paragraph. The pill row references
  *  it via `aria-describedby` so AT engines announce the disclaimer exactly
@@ -54,15 +54,15 @@ export function RangeReadout({ summary, a4Hz }: RangeReadoutProps): ReactNode {
   return (
     <section
       role="group"
-      aria-label="Vocal range report"
+      aria-label="Pitch range report"
       data-testid="range-readout"
       className="flex flex-col gap-2 rounded-md border border-slate-700 bg-slate-900/40 p-3"
     >
-      <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-300">Vocal range</h3>
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-300">Pitch range</h3>
 
       {insufficient ? (
         <p data-testid="range-empty" className="text-xs text-slate-400">
-          Not enough voiced material to compute a range. Sing at least 5 seconds of voiced audio.
+          Not enough voiced material to compute a range. Record at least 5 seconds of voiced audio.
         </p>
       ) : (
         <>
