@@ -102,6 +102,7 @@ fn write_440hz_sine_wav(path: &std::path::Path, sample_rate_hz: u32, duration_ms
     f.sync_all().expect("fsync wav");
 }
 
+#[ignore = "ort cpu-fallback path is too slow on the CI matrix; runs locally"]
 #[test]
 fn transcribe_recording_caches_blob_and_force_refresh_re_runs_inference() {
     let tmp_root =

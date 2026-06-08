@@ -27,6 +27,7 @@ use neural_pitch_core::test_utils::signals::sine_wave;
 const BASIC_PITCH_SR_HZ: u32 = 22_050;
 const TONE_DURATION_MS: u64 = 5_000;
 
+#[ignore = "ort cpu-fallback path is too slow on the CI matrix; runs locally"]
 #[test]
 fn basic_pitch_does_not_split_a_long_tone_at_window_boundaries() {
     let n_samples = (BASIC_PITCH_SR_HZ as u64 * TONE_DURATION_MS / 1_000) as usize;

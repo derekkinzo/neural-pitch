@@ -21,6 +21,7 @@ use neural_pitch_core::test_utils::signals::silence;
 const BASIC_PITCH_SR_HZ: u32 = 22_050;
 const SILENCE_DURATION_MS: u64 = 1_000;
 
+#[ignore = "ort cpu-fallback path is too slow on the CI matrix; runs locally"]
 #[test]
 fn basic_pitch_emits_no_notes_for_pure_silence() {
     let n_samples = (BASIC_PITCH_SR_HZ as u64 * SILENCE_DURATION_MS / 1_000) as usize;

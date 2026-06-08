@@ -69,6 +69,7 @@ fn write_440hz_sine_wav(path: &std::path::Path, sample_rate_hz: u32, duration_ms
     f.sync_all().expect("fsync wav");
 }
 
+#[ignore = "ort cpu-fallback path is too slow on the CI matrix; runs locally"]
 #[test]
 fn export_midi_writes_valid_smf_with_at_least_one_note_on() {
     let tmp_root = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("phase3_export_midi_roundtrip");

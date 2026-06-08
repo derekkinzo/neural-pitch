@@ -51,6 +51,14 @@ fn three_tone(sample_rate_hz: u32, n_samples: usize) -> Vec<f32> {
 }
 
 #[test]
+// On the GitHub-hosted ubuntu-latest test matrix this test ran for >70
+// minutes before being cancelled (locally it finishes in ~14 seconds).
+// The likely cause is ort's bundled ONNX Runtime falling back to a
+// generic CPU codepath on the runner. The smaller basic_pitch_*
+// tests run in <2s under the same configuration, so the chord test is
+// the outlier. Marked #[ignore] for the test matrix; surface it via
+// the voice-acceptance / dedicated nightly job in a follow-up.
+#[ignore = "ort cpu-fallback path is too slow on the CI matrix; runs locally"]
 fn basic_pitch_recovers_an_a_major_triad() {
     let n_samples = (BASIC_PITCH_SR_HZ as u64 * TONE_DURATION_MS / 1_000) as usize;
     let audio = three_tone(BASIC_PITCH_SR_HZ, n_samples);

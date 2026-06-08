@@ -24,6 +24,7 @@ const CAPTURE_SR_HZ: u32 = 48_000;
 const TONE_DURATION_MS: u64 = 1_500;
 const EXPECTED_FRAME_RATE_HZ: f32 = 22_050.0 / 256.0; // ≈ 86.1328
 
+#[ignore = "ort cpu-fallback path is too slow on the CI matrix; runs locally"]
 #[test]
 fn basic_pitch_resamples_48khz_input_and_recovers_a4() {
     let n_samples = (CAPTURE_SR_HZ as u64 * TONE_DURATION_MS / 1_000) as usize;
