@@ -88,7 +88,7 @@ fn export_midi_writes_valid_smf_with_at_least_one_note_on() {
     let id = import_audio_file_blocking(&lib, &recordings_dir, &source_path)
         .expect("import_audio_file must succeed before transcribe");
 
-    let _ = transcribe_recording_blocking(&lib, &recordings_dir, id, false, None)
+    let _ = transcribe_recording_blocking(&lib, &recordings_dir, id, false, None, None)
         .expect("transcribe must succeed before export");
 
     let dest_path = tmp_root.join("export.mid");

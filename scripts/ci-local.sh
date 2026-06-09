@@ -229,14 +229,33 @@ no_leak_grep() {
   # The pattern below mentions the forbidden substrings; tag this
   # exact line with the sentinel so the grep below skips ONLY it.
   local pattern='amazon|amzn|asbx|midway|brazil|claude|/home/ANT' # no-leak: regex-source
+  # Singer-positioning preflight. The repo positions itself as a
+  # general-purpose pitch-detection app for musicians. The forbidden
+  # phrases appearing in copy or marketing surfaces would re-introduce
+  # the singer-specific framing that was explicitly dropped.
+  # no-leak: regex-source. 'sight-singing' is a Phase-4 ear-training drill ID — allowlisted under training/ sub-trees.
+  local singer_pattern='for singers|sight-singing|app for singers' # no-leak: regex-source
+  # Path allowlist for Phase-4 ear-training drill code. These trees
+  # legitimately reference the drill ID; the singer_pattern grep is
+  # precise about which paths it permits — we do NOT blanket-exclude
+  # src/components/, only training/ subtrees.
+  local training_allowlist='^crates/neural-pitch-core/src/training/|^src-tauri/src/commands_drill\.rs$|^src-tauri/tests/(drill_history_persists|match_channel_emits)\.rs$|^src/components/training/|^src/hooks/useDrillMatchStream\.ts$|^src/lib/drill-synth\.ts$|^src/stores/trainingStore\.ts$|^src/types/training\.ts$|^tests/e2e/[a-z0-9_]*(training|karaoke|sight_singing|interval_drill|chord_drill|scale_drill|solfege)[a-z0-9_]*\.spec\.ts$|^tests/e2e/helpers/tauri-mock\.ts$'
   hits="$(git ls-files \
     | xargs grep -InE "${pattern}" 2>/dev/null \
     | grep -vE '# no-leak: regex-source' \
     | cut -d: -f1 \
     | sort -u || true)"
-  if [ -n "${hits}" ]; then
+  local singer_hits
+  singer_hits="$(git ls-files \
+    | xargs grep -InE "${singer_pattern}" 2>/dev/null \
+    | grep -vE '# no-leak: regex-source' \
+    | cut -d: -f1 \
+    | grep -vE "${training_allowlist}" \
+    | sort -u || true)"
+  if [ -n "${hits}" ] || [ -n "${singer_hits}" ]; then
     echo "no-leak grep FAILED — offending files:" >&2
-    echo "${hits}" >&2
+    [ -n "${hits}" ] && echo "${hits}" >&2
+    [ -n "${singer_hits}" ] && echo "${singer_hits}" >&2
     return 1
   fi
 }

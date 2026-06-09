@@ -20,6 +20,13 @@ front end. Dual-licensed under MIT OR Apache-2.0.
   cached contour.
 - **Import and transcribe.** Drag in a WAV / FLAC / MP3, run polyphonic
   transcription, and export the result as a Standard MIDI File.
+- **Stem separation (preview).** Split a recording into vocals, drums,
+  bass, and other, play each stem, and run polyphonic transcription on
+  any stem. The HTDemucs ONNX model (~316 MB on first use) is downloaded
+  from huggingface.co/StemSplitio/htdemucs-onnx and pinned by SHA-256;
+  the runtime falls back to a deterministic four-bus splitter when the
+  model is unavailable so the persistence, playback, and per-stem
+  transcribe wiring can be exercised end-to-end.
 
 The `neural-pitch-core` crate is pure Rust, has no Tauri dependency, and
 can be reused as a library. The default build pulls in only the classical

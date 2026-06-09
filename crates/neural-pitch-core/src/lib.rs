@@ -23,6 +23,14 @@ pub mod poly;
 pub mod prelude;
 pub mod settings;
 pub mod smoothing;
+// Phase 5 stem-separation surface (HTDemucs ONNX). Gated behind
+// `feature = "neural"` because every submodule's GREEN
+// implementation depends on `ort`, `rubato`, or a TLS HTTP client.
+// Sits parallel to `poly` for the same reason `poly` sits parallel
+// to `pitch`: a fundamentally different output shape (four named
+// stem buffers) deserves its own surface.
+#[cfg(feature = "neural")]
+pub mod stems;
 pub mod store;
 pub mod test_utils;
 // Phase 4 ear-training subsystem. Default-on (no feature gate) so the

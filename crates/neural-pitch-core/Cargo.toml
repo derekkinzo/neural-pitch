@@ -12,12 +12,15 @@ readme.workspace       = true
 [features]
 default = ["cpal", "flac", "pyin"]
 cpal              = ["dep:cpal"]
-# ORT 2.0 (load-dynamic) + ndarray + rubato. The ONNX Runtime shared
-# library is supplied out of band via `ORT_DYLIB_PATH`; we deliberately
-# avoid the `download-binaries` feature. `rubato` is the resampler used by
-# `poly::basic_pitch` to coerce arbitrary capture rates into Basic Pitch's
-# native 22.05 kHz before windowing.
-neural            = ["dep:ort", "dep:ndarray", "dep:rubato"]
+# ORT 2.0 (load-dynamic) + ndarray + rubato + reqwest. The ONNX Runtime
+# shared library is supplied out of band via `ORT_DYLIB_PATH`; we
+# deliberately avoid the `download-binaries` feature. `rubato` is the
+# resampler used by `poly::basic_pitch` to coerce arbitrary capture rates
+# into Basic Pitch's native 22.05 kHz before windowing, and reused by
+# `stems::resample` for the 44.1 kHz HTDemucs round-trip. `reqwest`
+# (rustls-only, no OpenSSL) drives the on-demand HTDemucs ONNX download
+# in `stems::download` — the model is too large (~80 MB) to commit.
+neural            = ["dep:ort", "dep:ndarray", "dep:rubato", "dep:reqwest"]
 # pYIN offline backend (Sytronik/pyin = "1.2"). Pulls in the pure-Rust
 # pyin crate plus claxon for the FLAC decode path used by
 # `analysis::contour::analyze_contour`.
@@ -109,6 +112,17 @@ midly       = { version = "0.5", default-features = false, features = ["std"] }
 # MIT-licensed; gated behind `feature = "neural"` because the only
 # consumer lives under `poly/`, which is itself feature-gated.
 rubato      = { version = "0.16", optional = true }
+# `reqwest` drives the on-demand HTDemucs ONNX download in
+# `stems::download`. We use the blocking client (no async runtime in the
+# core crate) and the rustls-tls backend to keep OpenSSL out of the
+# dependency tree. MIT/Apache-2.0; gated behind `feature = "neural"`
+# because the only consumer lives under `stems/`, which is itself
+# feature-gated.
+# `rustls-tls-native-roots` uses the platform trust store (Linux:
+# /etc/ssl/certs, macOS: Keychain, Windows: cert store) so the build
+# does not pull in the `webpki-roots` crate (CDLA-Permissive-2.0, not
+# in our deny.toml allowlist). See: license audit finding for Phase 5.
+reqwest     = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls-native-roots"], optional = true }
 
 [dev-dependencies]
 proptest    = "1"

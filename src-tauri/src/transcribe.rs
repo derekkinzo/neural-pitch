@@ -453,33 +453,49 @@ fn probe_wav(path: &Path) -> Result<AudioProbe, ImportError> {
 /// produce one or more [`WireNoteEvent`]s, postcard-encode the result,
 /// upsert via `library.upsert_analysis(..)`, and return
 /// [`TranscribeSummary`] with `was_cached = false`.
+///
+/// `stem_kind` keys the analysis cache on the four-tuple
+/// `(recording_id, "basic-pitch", "1.0", stem_kind)`. `None` round-trips
+/// as SQL NULL — the un-stemmed full-mix transcribe path — and matches
+/// every pre-V0003 row verbatim. `Some(StemKind::*)` distinguishes per-
+/// stem cache entries so transcribing the vocals stem does not clobber
+/// the previously-cached full-mix transcription. The on-disk source path
+/// is also re-routed when `stem_kind` is set: instead of the recording's
+/// top-level FLAC, the helper reads
+/// `<recordings_dir>/<recording_id>/stems/<slug>.flac` (the same path
+/// `separate_stems_blocking` writes).
 pub fn transcribe_recording_blocking(
     library: &RecordingsLibrary,
     recordings_dir: &Path,
     recording_id: RecordingId,
     force_refresh: bool,
+    stem_kind: Option<crate::stems::StemKind>,
     progress: Option<&dyn TranscribeProgressSink>,
 ) -> Result<TranscribeSummary, TranscribeError> {
     let row = resolve_recording(library, recording_id)?;
+
+    let cache_kind = stem_kind.map(crate::stems::StemKind::cache_discriminant);
 
     // Cache lookup. On hit + !force_refresh, decode the meta row only and
     // emit a terminal tick.
     if !force_refresh {
         let blob = library
-            .get_analysis(
+            .get_analysis_for_stem(
                 recording_id,
                 BASIC_PITCH_ANALYZER_NAME,
                 BASIC_PITCH_ANALYZER_VERSION,
+                cache_kind,
             )
             .map_err(|e| TranscribeError::Library(format!("{e:#}")))?;
         if let Some(blob) = blob {
             let wire: WirePolyResult = postcard::from_bytes(&blob)
                 .map_err(|e| TranscribeError::CacheCorrupted(format!("{e:#}")))?;
             let meta = library
-                .get_analysis_meta(
+                .get_analysis_meta_for_stem(
                     recording_id,
                     BASIC_PITCH_ANALYZER_NAME,
                     BASIC_PITCH_ANALYZER_VERSION,
+                    cache_kind,
                 )
                 .map_err(|e| TranscribeError::Library(format!("{e:#}")))?;
             let computed_at_unix_ms = meta.map_or(0, |(ts, _)| ts);
@@ -496,11 +512,18 @@ pub fn transcribe_recording_blocking(
     }
 
     // Cache miss — decode the WAV and run the deterministic transcriber.
-    // The recordings_dir + row.filename round-trip mirrors
-    // `get_recording_path`'s contract.
-    let path = recordings_dir.join(&row.filename);
+    // For the un-stemmed (full-mix) path the source is the recording's
+    // top-level file; for a per-stem call we re-route to the FLAC the
+    // separator wrote under <recording_id>/stems/<slug>.flac.
+    let path = match stem_kind {
+        Some(kind) => recordings_dir
+            .join(recording_id.to_string())
+            .join("stems")
+            .join(format!("{}.flac", kind.slug())),
+        None => recordings_dir.join(&row.filename),
+    };
     let (samples, sample_rate_hz) =
-        decode_wav_mono(&path).map_err(|e| TranscribeError::DecodeFailed(format!("{e:#}")))?;
+        decode_audio_mono(&path).map_err(|e| TranscribeError::DecodeFailed(format!("{e:#}")))?;
     if samples.is_empty() {
         return Err(TranscribeError::AnalyzerFailed(
             "audio buffer is empty".to_string(),
@@ -514,19 +537,21 @@ pub fn transcribe_recording_blocking(
         .map_err(|e| TranscribeError::AnalyzerFailed(format!("postcard encode: {e:#}")))?;
 
     library
-        .upsert_analysis(
+        .upsert_analysis_for_stem(
             recording_id,
             BASIC_PITCH_ANALYZER_NAME,
             BASIC_PITCH_ANALYZER_VERSION,
+            cache_kind,
             &blob,
         )
         .map_err(|e| TranscribeError::Library(format!("{e:#}")))?;
 
     let meta = library
-        .get_analysis_meta(
+        .get_analysis_meta_for_stem(
             recording_id,
             BASIC_PITCH_ANALYZER_NAME,
             BASIC_PITCH_ANALYZER_VERSION,
+            cache_kind,
         )
         .map_err(|e| TranscribeError::Library(format!("{e:#}")))?;
     let computed_at_unix_ms = meta.map_or(0, |(ts, _)| ts);
@@ -598,6 +623,55 @@ fn resolve_recording(
     rows.into_iter()
         .find(|r| r.id == id)
         .ok_or(TranscribeError::RecordingNotFound(id))
+}
+
+/// Route to the right per-extension decoder so the per-stem transcribe
+/// path (which reads FLAC) and the full-mix transcribe path (which
+/// reads WAV from the import flow) share one entry point.
+fn decode_audio_mono(path: &Path) -> Result<(Vec<f32>, u32), String> {
+    let ext = path
+        .extension()
+        .and_then(|s| s.to_str())
+        .map(str::to_ascii_lowercase)
+        .unwrap_or_default();
+    match ext.as_str() {
+        "wav" => decode_wav_mono(path),
+        "flac" => decode_flac_mono(path),
+        other => Err(format!("unsupported source extension: {other}")),
+    }
+}
+
+/// Decode a FLAC into a mono `f32` buffer at the source sample rate.
+/// Multi-channel sources are mono-summed (mean of channels).
+fn decode_flac_mono(path: &Path) -> Result<(Vec<f32>, u32), String> {
+    let mut reader = claxon::FlacReader::open(path).map_err(|e| format!("open flac: {e}"))?;
+    let info = reader.streaminfo();
+    let bits = info.bits_per_sample;
+    let scale = (((1_u64 << bits.saturating_sub(1)) as f32).max(1.0)).recip();
+    let channels = usize::try_from(info.channels.max(1)).unwrap_or(1);
+    let mut samples: Vec<f32> = Vec::with_capacity(info.samples.unwrap_or(0) as usize);
+    if channels == 1 {
+        for s in reader.samples() {
+            let v = s.map_err(|e| format!("decode flac: {e}"))?;
+            samples.push((v as f32) * scale);
+        }
+    } else {
+        let channels_i64 = i64::try_from(channels).unwrap_or(1);
+        let mut acc: i64 = 0;
+        let mut idx: usize = 0;
+        for s in reader.samples() {
+            let v = s.map_err(|e| format!("decode flac: {e}"))?;
+            acc += i64::from(v);
+            idx += 1;
+            if idx == channels {
+                let mono = (acc / channels_i64) as f32 * scale;
+                samples.push(mono);
+                acc = 0;
+                idx = 0;
+            }
+        }
+    }
+    Ok((samples, info.sample_rate))
 }
 
 /// Decode a 16-bit PCM mono / stereo WAV file into a mono `f32` buffer in

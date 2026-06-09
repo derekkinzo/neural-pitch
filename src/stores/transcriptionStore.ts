@@ -36,6 +36,7 @@ import type {
   TranscribeSummary,
 } from "@/types/transcription";
 import type { RecordingId } from "@/types/recording";
+import type { StemKind } from "@/types/stems";
 
 /** Snake_case wire-format mirroring serde Rust output. The TS layer accepts
  *  either casing, exactly like analysisStore — the Tier-5 mock emits
@@ -143,6 +144,11 @@ export function polyResultKey(recId: RecordingId, transcriberVersion: string): s
 
 interface TranscribeOptions {
   readonly forceRefresh?: boolean;
+  /** Phase 5: optional stem kind. When set, the IPC payload carries
+   *  `stemKind` so the Rust shell transcribes the stem FLAC instead of
+   *  the original mix. The cache key gains `stemKind` so the four stems
+   *  and the mix do not clobber each other. */
+  readonly stemKind?: StemKind;
 }
 
 export interface TranscriptionState {
@@ -196,6 +202,7 @@ export const useTranscriptionStore = create<TranscriptionStore>((set, get) => ({
 
   transcribe: async (id, opts): Promise<void> => {
     const force = opts?.forceRefresh === true;
+    const stemKind = opts?.stemKind;
     // Mark in-progress before the IPC fires so the panel's progress bar
     // becomes visible synchronously on click. The button spec depends on
     // this ordering — the progress bar must surface before any awaits.
@@ -220,10 +227,12 @@ export const useTranscriptionStore = create<TranscriptionStore>((set, get) => ({
     });
 
     try {
-      const raw = await invoke<WireSummary>("transcribe_recording", {
+      const ipcArgs: Record<string, unknown> = {
         recordingId: id,
         forceRefresh: force,
-      });
+      };
+      if (stemKind !== undefined) ipcArgs["stemKind"] = stemKind;
+      const raw = await invoke<WireSummary>("transcribe_recording", ipcArgs);
       const summary = normaliseSummary(raw);
       // Park on the completion edge — either a real progress event with
       // `percent >= 100` or the failure path drives this.

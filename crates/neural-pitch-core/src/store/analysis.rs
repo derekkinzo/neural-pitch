@@ -20,11 +20,19 @@ use super::model::RecordingId;
 /// see a typed `NotFound` rather than an opaque [`StoreError::Sql`]. The
 /// existence check and the insert run inside the caller-held connection
 /// lock, so the row cannot be deleted between the two statements.
+///
+/// `stem_kind` round-trips as SQL `NULL` when `None` so pre-V0003 rows
+/// keep their existing key intact; per-stem callers pass
+/// `Some("vocals" | "drums" | "bass" | "other")`. The PRIMARY KEY on
+/// `analysis_cache` remains the legacy three-tuple in SQL; the new
+/// logical four-tuple is enforced at the application layer by always
+/// matching the same `stem_kind` on read and write.
 pub(super) fn upsert(
     conn: &Connection,
     id: RecordingId,
     name: &str,
     version: &str,
+    stem_kind: Option<&str>,
     blob: &[u8],
 ) -> Result<(), StoreError> {
     // Pre-flight FK check: the connection lock is held by the caller, so
@@ -49,32 +57,51 @@ pub(super) fn upsert(
     conn.execute(
         "INSERT INTO analysis_cache (
              recording_id, analyzer_name, analyzer_version,
-             computed_at_unix_ms, result_format_version, result_blob
-         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+             computed_at_unix_ms, result_format_version, result_blob, stem_kind
+         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
          ON CONFLICT(recording_id, analyzer_name, analyzer_version) DO UPDATE SET
              computed_at_unix_ms = excluded.computed_at_unix_ms,
              result_format_version = excluded.result_format_version,
-             result_blob = excluded.result_blob",
-        params![&id.0[..], name, version, now, 1_i64, blob],
+             result_blob = excluded.result_blob,
+             stem_kind = excluded.stem_kind",
+        params![&id.0[..], name, version, now, 1_i64, blob, stem_kind],
     )?;
     Ok(())
 }
 
 /// Fetch one analyzer-result blob, if present.
+///
+/// `stem_kind` is matched exactly: `None` selects rows where the column
+/// is SQL NULL; `Some(slug)` selects rows where the column equals the
+/// supplied slug. This mirrors the application-layer four-tuple key
+/// described on [`upsert`].
 pub(super) fn get(
     conn: &Connection,
     id: RecordingId,
     name: &str,
     version: &str,
+    stem_kind: Option<&str>,
 ) -> Result<Option<Vec<u8>>, StoreError> {
-    let blob: Option<Vec<u8>> = conn
-        .query_row(
-            "SELECT result_blob FROM analysis_cache
-             WHERE recording_id = ?1 AND analyzer_name = ?2 AND analyzer_version = ?3",
-            params![&id.0[..], name, version],
-            |row| row.get::<_, Vec<u8>>(0),
-        )
-        .optional()?;
+    let blob: Option<Vec<u8>> = match stem_kind {
+        Some(slug) => conn
+            .query_row(
+                "SELECT result_blob FROM analysis_cache
+                 WHERE recording_id = ?1 AND analyzer_name = ?2
+                   AND analyzer_version = ?3 AND stem_kind = ?4",
+                params![&id.0[..], name, version, slug],
+                |row| row.get::<_, Vec<u8>>(0),
+            )
+            .optional()?,
+        None => conn
+            .query_row(
+                "SELECT result_blob FROM analysis_cache
+                 WHERE recording_id = ?1 AND analyzer_name = ?2
+                   AND analyzer_version = ?3 AND stem_kind IS NULL",
+                params![&id.0[..], name, version],
+                |row| row.get::<_, Vec<u8>>(0),
+            )
+            .optional()?,
+    };
     Ok(blob)
 }
 
@@ -87,15 +114,28 @@ pub(super) fn get_meta(
     id: RecordingId,
     name: &str,
     version: &str,
+    stem_kind: Option<&str>,
 ) -> Result<Option<(i64, i64)>, StoreError> {
-    let row: Option<(i64, i64)> = conn
-        .query_row(
-            "SELECT computed_at_unix_ms, result_format_version FROM analysis_cache
-             WHERE recording_id = ?1 AND analyzer_name = ?2 AND analyzer_version = ?3",
-            params![&id.0[..], name, version],
-            |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?)),
-        )
-        .optional()?;
+    let row: Option<(i64, i64)> = match stem_kind {
+        Some(slug) => conn
+            .query_row(
+                "SELECT computed_at_unix_ms, result_format_version FROM analysis_cache
+                 WHERE recording_id = ?1 AND analyzer_name = ?2
+                   AND analyzer_version = ?3 AND stem_kind = ?4",
+                params![&id.0[..], name, version, slug],
+                |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?)),
+            )
+            .optional()?,
+        None => conn
+            .query_row(
+                "SELECT computed_at_unix_ms, result_format_version FROM analysis_cache
+                 WHERE recording_id = ?1 AND analyzer_name = ?2
+                   AND analyzer_version = ?3 AND stem_kind IS NULL",
+                params![&id.0[..], name, version],
+                |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?)),
+            )
+            .optional()?,
+    };
     Ok(row)
 }
 

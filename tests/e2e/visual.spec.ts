@@ -18,9 +18,11 @@ import {
   installPlaybackMock,
   installPlaybackRoutes,
   installRecordingsMock,
+  installStemsMock,
   installTranscribeMock,
   makePitchUpdate,
   pushPitchUpdate,
+  pushStemsComplete,
   pushTranscribeProgress,
   type MockAnalysisSummary,
   type MockContourResult,
@@ -324,6 +326,50 @@ test.describe("visual — Phase 2.1 RecordingDetail", () => {
     await expect(page.getByTestId("contour-canvas")).toBeVisible();
 
     await expect(page).toHaveScreenshot("recording-detail-with-piano-roll.png", {
+      fullPage: true,
+    });
+  });
+
+  // Phase 5 — RecordingDetail with the StemSeparationPanel in its
+  // `complete` branch: four StemCards mounted (vocals → drums → bass →
+  // other) with their nested PlaybackPanels. Each stem panel must finish
+  // mounting (aria-busy="false") so the wavesurfer canvas paints
+  // statically before the snapshot — otherwise the in-flight loading
+  // shimmer would race the screenshot.
+  test("recording-detail-stems-complete — four stem cards steady", async ({ page, mockTauri }) => {
+    await mockTauri.install({
+      ...installRecordingsMock(SEED),
+      ...installAnalysisMock(SUMMARY, CONTOUR),
+      ...installPlaybackMock(),
+      ...installStemsMock(),
+    });
+    await installPlaybackRoutes(page);
+
+    await page.goto("/");
+    await expect(page.getByTestId("status-pill")).toHaveAttribute("data-state", "live");
+
+    await page.getByTestId("library-trigger").click();
+    await page.getByTestId("recording-row").first().click();
+
+    // Drive the panel from idle to complete with a single push, then
+    // gate on every stem card's PlaybackPanel having settled into the
+    // `aria-busy="false"` ready state so no async loader paints over
+    // the snapshot.
+    await page.getByTestId("separate-stems").click();
+    await pushStemsComplete(page, { recordingId: "rec-vis-001" });
+
+    await expect(page.locator('[data-testid^="stem-card-"]')).toHaveCount(4);
+    const cards = page.locator('[data-testid^="stem-card-"]');
+    for (let i = 0; i < 4; i += 1) {
+      const card = cards.nth(i);
+      // Each card hosts its own PlaybackPanel; wait for the stem panel
+      // to flip aria-busy to false (wavesurfer ready) before snapshotting.
+      await expect(card.getByTestId("playback-panel")).toHaveAttribute("aria-busy", "false", {
+        timeout: 4000,
+      });
+    }
+
+    await expect(page).toHaveScreenshot("recording-detail-stems-complete.png", {
       fullPage: true,
     });
   });

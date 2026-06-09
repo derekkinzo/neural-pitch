@@ -23,6 +23,28 @@ import { useRecordingsStore } from "@/stores/recordingsStore";
 
 const PLAYBACK_TIME_THROTTLE_MS = 33; // ~30 Hz visible readout
 
+/**
+ * Optional props.
+ *
+ * `audioPath` (Phase 5): when set, the panel skips the
+ * `get_recording_path` IPC and resolves the supplied path directly via
+ * `convertFileSrc()` (or the test-hook override). The Phase 5 stem
+ * cards pass each FLAC's full path explicitly so the same panel
+ * component covers both the mix (where the recording id implies the
+ * path) and a per-stem playback (where the path is already known).
+ *
+ * `variant` (Phase 5): "stem" suppresses the playback-head publish path
+ * AND the spectrogram toggle. The mix panel publishes into
+ * `playback-head` so ContourLine consumes the cursor; stem panels stay
+ * self-contained because no live overlay reads from them. The
+ * spectrogram is reserved for the mix to keep the FFT cost bounded — a
+ * single host, not five.
+ */
+export interface PlaybackPanelProps {
+  readonly audioPath?: string;
+  readonly variant?: "mix" | "stem";
+}
+
 interface SpectrogramPluginCtor {
   create: (opts: {
     container: string | HTMLElement;
@@ -50,14 +72,26 @@ function resolveAssetUrl(path: string): string {
   return convertFileSrc(path);
 }
 
-export function PlaybackPanel(): ReactNode {
+export function PlaybackPanel(props: PlaybackPanelProps = {}): ReactNode {
+  const audioPath = props.audioPath;
+  const variant = props.variant ?? "mix";
+  const isStemVariant = variant === "stem";
   const currentRecordingId = useRecordingsStore((s) => s.currentRecordingId);
   const setIsPlayingStore = useRecordingsStore((s) => s.setIsPlaying);
-  const isPlaying = useRecordingsStore((s) => s.isPlaying);
+  const isPlayingStore = useRecordingsStore((s) => s.isPlaying);
   const setPlaybackTimeMs = useRecordingsStore((s) => s.setPlaybackTimeMs);
-  const playbackTimeMs = useRecordingsStore((s) => s.playbackTimeMs);
+  const playbackTimeMsStore = useRecordingsStore((s) => s.playbackTimeMs);
   const showSpectrogram = useRecordingsStore((s) => s.showSpectrogram);
   const toggleSpectrogram = useRecordingsStore((s) => s.toggleSpectrogram);
+
+  // Stem panels keep their own play-state + time-readout local so the
+  // four cards do not crosstalk on the shared `recordingsStore` slot.
+  // The mix panel keeps reading from the store so existing callers are
+  // unaffected.
+  const [localIsPlaying, setLocalIsPlaying] = useState<boolean>(false);
+  const [localTimeMs, setLocalTimeMs] = useState<number>(0);
+  const isPlaying = isStemVariant ? localIsPlaying : isPlayingStore;
+  const playbackTimeMs = isStemVariant ? localTimeMs : playbackTimeMsStore;
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const spectrogramHostRef = useRef<HTMLDivElement | null>(null);
@@ -97,7 +131,10 @@ export function PlaybackPanel(): ReactNode {
     }
     spectrogramPluginRef.current = null;
 
-    if (currentRecordingId === null) {
+    // Stem panels mount on `audioPath` directly — no recording id to
+    // gate against, so a `null` `currentRecordingId` is fine. The mix
+    // panel still parks on null until a row is selected.
+    if (!isStemVariant && currentRecordingId === null) {
       resetPlaybackHead(0);
       return;
     }
@@ -113,13 +150,22 @@ export function PlaybackPanel(): ReactNode {
       const now = typeof performance !== "undefined" ? performance.now() : Date.now();
       if (now - lastStoreWriteRef.current >= PLAYBACK_TIME_THROTTLE_MS) {
         lastStoreWriteRef.current = now;
-        setPlaybackTimeMs(tMs);
+        if (isStemVariant) {
+          setLocalTimeMs(tMs);
+        } else {
+          setPlaybackTimeMs(tMs);
+        }
       }
     };
 
     const mount = async (): Promise<void> => {
       try {
-        const path = await invoke<string>("get_recording_path", { id: currentRecordingId });
+        // Stem panels supply the path explicitly; mix panel resolves it
+        // via `get_recording_path` keyed on the current recording id.
+        const path =
+          audioPath !== undefined
+            ? audioPath
+            : await invoke<string>("get_recording_path", { id: currentRecordingId });
         if (cancelled) return;
         const url = resolveAssetUrl(path);
         const host = containerRef.current;
@@ -148,24 +194,38 @@ export function PlaybackPanel(): ReactNode {
         ws.on("audioprocess", (t) => {
           if (cancelled) return;
           const tMs = t * 1000;
-          publishTime(tMs);
+          // Only the mix panel publishes into the playback-head bus —
+          // ContourLine's overlay only consumes the mix.
+          if (!isStemVariant) publishTime(tMs);
           writePlaybackTime(tMs);
         });
         ws.on("play", () => {
-          publishIsPlaying(true);
-          setIsPlayingStore(true);
+          if (isStemVariant) {
+            setLocalIsPlaying(true);
+          } else {
+            publishIsPlaying(true);
+            setIsPlayingStore(true);
+          }
         });
         ws.on("pause", () => {
-          publishIsPlaying(false);
-          setIsPlayingStore(false);
+          if (isStemVariant) {
+            setLocalIsPlaying(false);
+          } else {
+            publishIsPlaying(false);
+            setIsPlayingStore(false);
+          }
         });
         ws.on("finish", () => {
-          publishIsPlaying(false);
-          setIsPlayingStore(false);
+          if (isStemVariant) {
+            setLocalIsPlaying(false);
+          } else {
+            publishIsPlaying(false);
+            setIsPlayingStore(false);
+          }
         });
         ws.on("seeking", (t) => {
           const tMs = t * 1000;
-          publishTime(tMs);
+          if (!isStemVariant) publishTime(tMs);
           // Same throttle as audioprocess — a slider drag fires `seeking`
           // at every pixel of motion, which would otherwise re-render
           // the entire panel at 60 Hz per drag-tick.

@@ -261,7 +261,28 @@ impl RecordingsLibrary {
         blob: &[u8],
     ) -> Result<(), StoreError> {
         let conn = self.lock_conn();
-        analysis::upsert(&conn, id, name, version, blob)
+        analysis::upsert(&conn, id, name, version, None, blob)
+    }
+
+    /// Insert or replace an `analysis_cache` row keyed by
+    /// `(recording_id, analyzer_name, analyzer_version, stem_kind)`.
+    ///
+    /// `stem_kind = None` round-trips as SQL NULL and matches every
+    /// pre-V0003 row verbatim; `Some(slug)` distinguishes per-stem cache
+    /// entries (`vocals` / `drums` / `bass` / `other`). The PRIMARY KEY
+    /// on `analysis_cache` is the legacy three-tuple by SQL definition;
+    /// the four-tuple is enforced at the application layer by always
+    /// passing both keys through this helper.
+    pub fn upsert_analysis_for_stem(
+        &self,
+        id: RecordingId,
+        name: &str,
+        version: &str,
+        stem_kind: Option<&str>,
+        blob: &[u8],
+    ) -> Result<(), StoreError> {
+        let conn = self.lock_conn();
+        analysis::upsert(&conn, id, name, version, stem_kind, blob)
     }
 
     /// Fetch a previously cached analysis blob, if present.
@@ -272,7 +293,19 @@ impl RecordingsLibrary {
         version: &str,
     ) -> Result<Option<Vec<u8>>, StoreError> {
         let conn = self.lock_conn();
-        analysis::get(&conn, id, name, version)
+        analysis::get(&conn, id, name, version, None)
+    }
+
+    /// Fetch a per-stem cached analysis blob, if present.
+    pub fn get_analysis_for_stem(
+        &self,
+        id: RecordingId,
+        name: &str,
+        version: &str,
+        stem_kind: Option<&str>,
+    ) -> Result<Option<Vec<u8>>, StoreError> {
+        let conn = self.lock_conn();
+        analysis::get(&conn, id, name, version, stem_kind)
     }
 
     /// Fetch metadata for a previously cached analysis row, if present.
@@ -284,7 +317,100 @@ impl RecordingsLibrary {
         version: &str,
     ) -> Result<Option<(i64, i64)>, StoreError> {
         let conn = self.lock_conn();
-        analysis::get_meta(&conn, id, name, version)
+        analysis::get_meta(&conn, id, name, version, None)
+    }
+
+    /// Fetch metadata for a per-stem cached analysis row, if present.
+    pub fn get_analysis_meta_for_stem(
+        &self,
+        id: RecordingId,
+        name: &str,
+        version: &str,
+        stem_kind: Option<&str>,
+    ) -> Result<Option<(i64, i64)>, StoreError> {
+        let conn = self.lock_conn();
+        analysis::get_meta(&conn, id, name, version, stem_kind)
+    }
+
+    /// Insert or replace a `stem_results` row keyed on
+    /// `(recording_id, separator_version)`. `paths` are the four canonical
+    /// on-disk FLAC paths under
+    /// `<recordings_dir>/<recording_id>/stems/{vocals,drums,bass,other}.flac`.
+    #[allow(clippy::too_many_arguments)]
+    pub fn upsert_stem_result(
+        &self,
+        id: RecordingId,
+        separator_version: &str,
+        completed_at_unix_ms: i64,
+        vocals_path: &str,
+        drums_path: &str,
+        bass_path: &str,
+        other_path: &str,
+    ) -> Result<(), StoreError> {
+        let conn = self.lock_conn();
+        let exists: bool = conn
+            .query_row(
+                "SELECT 1 FROM recordings WHERE id = ?1",
+                params![&id.0[..]],
+                |_| Ok(true),
+            )
+            .optional()?
+            .unwrap_or(false);
+        if !exists {
+            return Err(StoreError::NotFound(id));
+        }
+        conn.execute(
+            "INSERT INTO stem_results (
+                 recording_id, separator_version, completed_at_unix_ms,
+                 vocals_path, drums_path, bass_path, other_path
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+             ON CONFLICT(recording_id, separator_version) DO UPDATE SET
+                 completed_at_unix_ms = excluded.completed_at_unix_ms,
+                 vocals_path          = excluded.vocals_path,
+                 drums_path           = excluded.drums_path,
+                 bass_path            = excluded.bass_path,
+                 other_path           = excluded.other_path",
+            params![
+                &id.0[..],
+                separator_version,
+                completed_at_unix_ms,
+                vocals_path,
+                drums_path,
+                bass_path,
+                other_path,
+            ],
+        )?;
+        Ok(())
+    }
+
+    /// Fetch a previously cached `stem_results` row keyed on
+    /// `(recording_id, separator_version)`. Returns the four on-disk FLAC
+    /// paths plus the `completed_at_unix_ms` timestamp; `None` if no row
+    /// matches.
+    pub fn get_stem_result(
+        &self,
+        id: RecordingId,
+        separator_version: &str,
+    ) -> Result<Option<StemResultRow>, StoreError> {
+        let conn = self.lock_conn();
+        let row: Option<StemResultRow> = conn
+            .query_row(
+                "SELECT completed_at_unix_ms, vocals_path, drums_path, bass_path, other_path
+                 FROM stem_results
+                 WHERE recording_id = ?1 AND separator_version = ?2",
+                params![&id.0[..], separator_version],
+                |r| {
+                    Ok(StemResultRow {
+                        completed_at_unix_ms: r.get(0)?,
+                        vocals_path: r.get(1)?,
+                        drums_path: r.get(2)?,
+                        bass_path: r.get(3)?,
+                        other_path: r.get(4)?,
+                    })
+                },
+            )
+            .optional()?;
+        Ok(row)
     }
 
     /// Enumerate every cached analysis row for one recording.
@@ -493,6 +619,25 @@ impl RecordingsLibrary {
         )?;
         Ok(count)
     }
+}
+
+/// One row in the `stem_results` table, hydrated for the IPC layer.
+///
+/// All four `*_path` fields point at FLACs on disk under
+/// `<recordings_dir>/<recording_id>/stems/{vocals,drums,bass,other}.flac`.
+/// `completed_at_unix_ms` mirrors the column verbatim.
+#[derive(Debug, Clone)]
+pub struct StemResultRow {
+    /// Wall-clock time the separation completed, in Unix milliseconds.
+    pub completed_at_unix_ms: i64,
+    /// On-disk FLAC for the vocals bus.
+    pub vocals_path: String,
+    /// On-disk FLAC for the drums bus.
+    pub drums_path: String,
+    /// On-disk FLAC for the bass bus.
+    pub bass_path: String,
+    /// On-disk FLAC for the "other" bus.
+    pub other_path: String,
 }
 
 /// Input row for [`RecordingsLibrary::insert_drill_attempt`]. Mirrors

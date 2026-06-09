@@ -1590,6 +1590,7 @@ pub async fn transcribe_recording(
     state: State<'_, AppState>,
     recording_id: String,
     force_refresh: bool,
+    stem: Option<crate::stems::StemKind>,
     progress: Channel<crate::transcribe::TranscribeProgress>,
 ) -> Result<crate::transcribe::TranscribeSummary, String> {
     let parsed: neural_pitch_core::store::RecordingId = recording_id
@@ -1605,6 +1606,7 @@ pub async fn transcribe_recording(
             &recordings_dir,
             parsed,
             force_refresh,
+            stem,
             Some(sink_ref),
         )
     })
@@ -1637,6 +1639,273 @@ pub async fn export_midi(
     })
     .await
     .map_err(|e| format!("export_midi task panicked: {e}"))?
+    .map_err(|e| format!("{e:#}"))
+}
+
+// ----------------------------------------------------------------------------
+// Phase 5 — HTDemucs four-stem separation Tauri commands.
+//
+// Mirror the Phase 3 transcribe shape: a thin `async` Tauri shim that
+// adapts a typed `Channel<…>` to a pure-Rust `…ProgressSink` and dispatches
+// the heavy work into `tokio::task::spawn_blocking`. The four commands
+// below are gated behind `feature = "neural"`; under
+// `--no-default-features` they compile out entirely so the classical-only
+// build stays clean.
+// ----------------------------------------------------------------------------
+
+/// Adapter that adapts a `tauri::ipc::Channel<SeparateProgress>` to the
+/// pure-Rust [`crate::stems::SeparateProgressSink`] trait. Channel `send`
+/// is best-effort — a dropped consumer is logged at `debug!` and ignored,
+/// matching the `start_recording` progress-channel contract.
+#[cfg(feature = "neural")]
+struct ChannelSeparateSink {
+    channel: Channel<crate::stems::SeparateProgress>,
+}
+
+#[cfg(feature = "neural")]
+impl crate::stems::SeparateProgressSink for ChannelSeparateSink {
+    fn emit(&self, progress: crate::stems::SeparateProgress) {
+        if let Err(e) = self.channel.send(progress) {
+            tracing::debug!(error = %e, "separate-progress channel send failed");
+        }
+    }
+}
+
+/// Adapter that adapts a `tauri::ipc::Channel<DownloadProgress>` to the
+/// pure-Rust [`crate::stems::DownloadProgressSink`] trait. Same drop-
+/// tolerance contract as [`ChannelSeparateSink`].
+#[cfg(feature = "neural")]
+struct ChannelDownloadSink {
+    channel: Channel<crate::stems::DownloadProgress>,
+}
+
+#[cfg(feature = "neural")]
+impl crate::stems::DownloadProgressSink for ChannelDownloadSink {
+    fn emit(&self, progress: crate::stems::DownloadProgress) {
+        if let Err(e) = self.channel.send(progress) {
+            tracing::debug!(error = %e, "download-progress channel send failed");
+        }
+    }
+}
+
+/// Run the HTDemucs four-stem separator on a previously-imported recording.
+///
+/// On a cache hit (a `stem_results` row keyed on
+/// `(recording_id, "htdemucs-4.0.1")` exists) the four FLAC paths are
+/// returned in `< 50 ms` without touching the ONNX session.
+///
+/// On a cache miss the heavy work runs inside `tokio::task::spawn_blocking`
+/// because the synchronous separation monopolises a CPU thread for ~3×
+/// audio duration on CPU-only hosts; that is too long for an async tokio
+/// worker thread.
+#[cfg(feature = "neural")]
+#[tauri::command]
+#[tracing::instrument(skip(state, progress))]
+pub async fn separate_stems(
+    state: State<'_, AppState>,
+    recording_id: String,
+    progress: Channel<crate::stems::SeparateProgress>,
+) -> Result<crate::stems::StemSummary, String> {
+    let parsed: neural_pitch_core::store::RecordingId = recording_id
+        .parse()
+        .map_err(|e| format!("invalid recording id: {e}"))?;
+
+    // Mint a fresh cancel token and register it. If a previous run for
+    // the same recording is still registered (e.g. front-end double-
+    // clicked Separate), trip it first so the new request takes the
+    // slot — matches the analyze_recording precedent.
+    let cancel = CancellationToken::new();
+    {
+        let mut g = state.active_separations.lock();
+        if let Some(prev) = g.insert(parsed, cancel.clone()) {
+            prev.cancel();
+        }
+    }
+
+    // Lazy initialisation of the shared `Arc<StemSeparator>`. The ONNX
+    // session is heavy; the constructor is cheap today but we still
+    // share it across calls so the inference-count counter persists.
+    let separator: Arc<crate::stems::StemSeparator> = {
+        let mut g = state.stem_separator.lock();
+        if let Some(existing) = g.as_ref() {
+            Arc::clone(existing)
+        } else {
+            let fresh = Arc::new(crate::stems::StemSeparator::new());
+            *g = Some(Arc::clone(&fresh));
+            fresh
+        }
+    };
+
+    let library = Arc::clone(&state.library);
+    let recordings_dir = state.recordings_dir.clone();
+    let cancel_for_blocking = cancel.clone();
+    let sink_owned = ChannelSeparateSink { channel: progress };
+
+    let result = tokio::task::spawn_blocking(move || {
+        let sink_ref: &dyn crate::stems::SeparateProgressSink = &sink_owned;
+        crate::stems::separate_stems_blocking(
+            &library,
+            &recordings_dir,
+            parsed,
+            separator,
+            cancel_for_blocking,
+            Some(sink_ref),
+        )
+    })
+    .await
+    .map_err(|e| {
+        // Deregister the cancel token on a panic so the registry stays
+        // bounded even when the worker died before the function-end
+        // cleanup path could run. We unconditionally remove our slot —
+        // a racing re-separate would already have replaced it via the
+        // `insert(..)` above and tripped our token, in which case this
+        // is a no-op.
+        let mut g = state.active_separations.lock();
+        g.remove(&parsed);
+        format!("separate_stems task panicked: {e}")
+    })?;
+
+    {
+        let mut g = state.active_separations.lock();
+        g.remove(&parsed);
+    }
+    let _ = cancel; // suppress unused-binding lint after registry cleanup.
+
+    result.map_err(|e| format!("{e:#}"))
+}
+
+/// Read one stem FLAC into memory and return the raw bytes.
+///
+/// The caller (front-end) wraps the bytes into a synthetic `blob:` URL
+/// feeding the existing `PlaybackPanel`. Looks up `stem_results` to
+/// resolve the on-disk path so a cancel-then-replay sequence cannot
+/// return bytes from a stale FLAC.
+#[cfg(feature = "neural")]
+#[tauri::command]
+#[tracing::instrument(skip(state))]
+pub async fn read_stem_audio(
+    state: State<'_, AppState>,
+    recording_id: String,
+    stem: crate::stems::StemKind,
+) -> Result<Vec<u8>, String> {
+    let parsed: neural_pitch_core::store::RecordingId = recording_id
+        .parse()
+        .map_err(|e| format!("invalid recording id: {e}"))?;
+    let library = Arc::clone(&state.library);
+    let recordings_dir = state.recordings_dir.clone();
+    tokio::task::spawn_blocking(move || {
+        crate::stems::read_stem_audio_blocking(&library, &recordings_dir, parsed, stem)
+    })
+    .await
+    .map_err(|e| format!("read_stem_audio task panicked: {e}"))?
+    .map_err(|e| format!("{e:#}"))
+}
+
+/// Cancel an in-flight stem-separation. Idempotent: returns `Ok(())` if no
+/// separation is currently registered for the supplied `recording_id`.
+#[cfg(feature = "neural")]
+#[tauri::command]
+#[tracing::instrument(skip(state))]
+pub async fn cancel_stem_separation(
+    state: State<'_, AppState>,
+    recording_id: String,
+) -> Result<(), String> {
+    let parsed: neural_pitch_core::store::RecordingId = recording_id
+        .parse()
+        .map_err(|e| format!("invalid recording id: {e}"))?;
+    let token = {
+        let g = state.active_separations.lock();
+        g.get(&parsed).cloned()
+    };
+    if let Some(t) = token {
+        t.cancel();
+    }
+    Ok(())
+}
+
+/// Copy the cached stem FLAC for `(recording_id, stem)` into
+/// `dest_path`. Looks up the absolute path through `stem_results` so a
+/// rename / re-separate cannot leak bytes from a stale on-disk file.
+///
+/// Atomic-ish: writes to `<dest>.partial`, fsyncs, then renames so a
+/// crash mid-export does not corrupt a pre-existing file at `dest_path`.
+#[cfg(feature = "neural")]
+#[tauri::command]
+#[tracing::instrument(skip(state), fields(dest_path = %dest_path))]
+pub async fn export_stem(
+    state: State<'_, AppState>,
+    recording_id: String,
+    stem_kind: crate::stems::StemKind,
+    dest_path: String,
+) -> Result<u64, String> {
+    let parsed: neural_pitch_core::store::RecordingId = recording_id
+        .parse()
+        .map_err(|e| format!("invalid recording id: {e}"))?;
+    let library = Arc::clone(&state.library);
+    let dest = PathBuf::from(dest_path);
+    tokio::task::spawn_blocking(move || -> Result<u64, String> {
+        // Resolve the on-disk path through the library so a rename or
+        // re-separate cannot return bytes from a stale FLAC.
+        let row = library
+            .get_stem_result(parsed, crate::stems::HTDEMUCS_SEPARATOR_VERSION)
+            .map_err(|e| format!("library lookup: {e:#}"))?
+            .ok_or_else(|| {
+                format!("no cached stem result for recording {parsed} — run separate_stems first")
+            })?;
+        let src: &str = match stem_kind {
+            crate::stems::StemKind::Vocals => &row.vocals_path,
+            crate::stems::StemKind::Drums => &row.drums_path,
+            crate::stems::StemKind::Bass => &row.bass_path,
+            crate::stems::StemKind::Other => &row.other_path,
+        };
+        // Partial-write + atomic-rename so a crash mid-export does not
+        // corrupt the destination if it already existed.
+        let partial = {
+            let mut p = dest.clone().into_os_string();
+            p.push(".partial");
+            PathBuf::from(p)
+        };
+        let bytes = std::fs::copy(src, &partial)
+            .map_err(|e| format!("copy {src} -> {}: {e}", partial.display()))?;
+        // Best-effort fsync of the partial file's contents before the
+        // atomic rename so the byte stream is durable.
+        if let Ok(f) = std::fs::File::open(&partial) {
+            let _ = f.sync_all();
+        }
+        std::fs::rename(&partial, &dest)
+            .map_err(|e| format!("rename {} -> {}: {e}", partial.display(), dest.display()))?;
+        Ok(bytes)
+    })
+    .await
+    .map_err(|e| format!("export_stem task panicked: {e}"))?
+}
+
+/// Pre-fetch the HTDemucs ONNX model into `$APPDATA/models/`.
+///
+/// Surfaced as a manual button in the settings drawer so users on
+/// metered networks can pre-fetch before the first separation. The
+/// blocking helper validates a streaming SHA-256 against the build-time
+/// constant before the temp file is renamed into place.
+#[cfg(feature = "neural")]
+#[tauri::command]
+#[tracing::instrument(skip(state, progress))]
+pub async fn download_stem_model(
+    state: State<'_, AppState>,
+    progress: Channel<crate::stems::DownloadProgress>,
+) -> Result<(), String> {
+    // Resolve the per-platform models directory — same convention as
+    // `get_model_status`: app-data dir / models.
+    let models_dir = state
+        .recordings_dir
+        .parent()
+        .map_or_else(|| PathBuf::from("models"), |p| p.join("models"));
+    let sink_owned = ChannelDownloadSink { channel: progress };
+    tokio::task::spawn_blocking(move || {
+        let sink_ref: &dyn crate::stems::DownloadProgressSink = &sink_owned;
+        crate::stems::download_stem_model_blocking(&models_dir, Some(sink_ref))
+    })
+    .await
+    .map_err(|e| format!("download_stem_model task panicked: {e}"))?
     .map_err(|e| format!("{e:#}"))
 }
 

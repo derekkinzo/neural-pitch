@@ -303,14 +303,30 @@ jobs:
           # with the literal sentinel `# no-leak: regex-source` and
           # filter those tagged lines out of the input.
           PATTERN='amazon|amzn|asbx|midway|brazil|claude|/home/ANT' # no-leak: regex-source
+          # Singer-positioning preflight. The repo is a general-purpose
+          # pitch-detection app for musicians. The forbidden phrases
+          # appearing in marketing or copy would re-introduce the
+          # singer-specific framing that was explicitly dropped.
+          # no-leak: regex-source. 'sight-singing' is a Phase-4 ear-training drill ID — allowlisted under training/ sub-trees.
+          SINGER_PATTERN='for singers|sight-singing|app for singers' # no-leak: regex-source
+          # Path allowlist for Phase-4 ear-training drill code — must
+          # be precise; do NOT blanket-exclude src/components/.
+          TRAINING_ALLOWLIST='^crates/neural-pitch-core/src/training/|^src-tauri/src/commands_drill\.rs$|^src-tauri/tests/(drill_history_persists|match_channel_emits)\.rs$|^src/components/training/|^src/hooks/useDrillMatchStream\.ts$|^src/lib/drill-synth\.ts$|^src/stores/trainingStore\.ts$|^src/types/training\.ts$|^tests/e2e/[a-z0-9_]*(training|karaoke|sight_singing|interval_drill|chord_drill|scale_drill|solfege)[a-z0-9_]*\.spec\.ts$|^tests/e2e/helpers/tauri-mock\.ts$'
           hits="$(git ls-files \
             | xargs grep -InE "${PATTERN}" 2>/dev/null \
             | grep -vE '# no-leak: regex-source' \
             | cut -d: -f1 \
             | sort -u || true)"
-          if [ -n "${hits}" ]; then
+          singer_hits="$(git ls-files \
+            | xargs grep -InE "${SINGER_PATTERN}" 2>/dev/null \
+            | grep -vE '# no-leak: regex-source' \
+            | cut -d: -f1 \
+            | grep -vE "${TRAINING_ALLOWLIST}" \
+            | sort -u || true)"
+          if [ -n "${hits}" ] || [ -n "${singer_hits}" ]; then
             echo "::error::no-leak grep found forbidden references in:"
-            echo "${hits}"
+            [ -n "${hits}" ] && echo "${hits}"
+            [ -n "${singer_hits}" ] && echo "${singer_hits}"
             exit 1
           fi
           echo "no-leak: clean"

@@ -151,6 +151,26 @@ pub struct AppState {
     /// `analyze_recording` on success / failure / cancel so the registry
     /// surface stays bounded by the number of concurrent runs.
     pub(crate) analyses: Mutex<HashMap<RecordingId, Arc<AtomicBool>>>,
+
+    /// In-flight stem-separation cancel tokens keyed by `RecordingId`.
+    ///
+    /// `separate_stems` mints a `CancellationToken` here before
+    /// `spawn_blocking`-ing the synth/HTDemucs run; `cancel_stem_separation`
+    /// trips the matching token. The map entry is cleaned up by the
+    /// command on every exit path so the registry surface stays
+    /// bounded by the number of concurrent runs. Stored outside the
+    /// `dsp` slot so a separation can run while live capture is also
+    /// active.
+    #[cfg(feature = "neural")]
+    pub(crate) active_separations: Mutex<HashMap<RecordingId, CancellationToken>>,
+
+    /// Lazily-constructed shared HTDemucs separator. The `Arc` is shared
+    /// across `separate_stems` invocations so the ONNX session and the
+    /// inference-count counter persist across cache-hit fast-paths and
+    /// cache-miss warm-up paths. `None` until the first call to
+    /// `separate_stems` constructs the separator on demand.
+    #[cfg(feature = "neural")]
+    pub(crate) stem_separator: Mutex<Option<Arc<crate::stems::StemSeparator>>>,
 }
 
 impl AppState {
@@ -171,6 +191,10 @@ impl AppState {
             settings: RwLock::new(settings),
             events: Mutex::new(None),
             analyses: Mutex::new(HashMap::new()),
+            #[cfg(feature = "neural")]
+            active_separations: Mutex::new(HashMap::new()),
+            #[cfg(feature = "neural")]
+            stem_separator: Mutex::new(None),
         }
     }
 

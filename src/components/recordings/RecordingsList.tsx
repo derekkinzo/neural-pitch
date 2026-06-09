@@ -27,6 +27,7 @@ import { PlaybackPanel } from "@/components/recordings/PlaybackPanel";
 import { RecordingDetail } from "@/components/recordings/RecordingDetail";
 import { formatDurationShort, formatRelative } from "@/lib/duration-format";
 import { useAnalysisProgress } from "@/hooks/useAnalysisProgress";
+import { useStemProgressSubscription } from "@/hooks/useStemProgressSubscription";
 import { useTranscribeProgress } from "@/hooks/useTranscribeProgress";
 import { useRecordingsStore } from "@/stores/recordingsStore";
 import type { Recording } from "@/types/recording";
@@ -50,6 +51,10 @@ export function RecordingsList({ open, onOpenChange }: RecordingsListProps): Rea
   // mounts inside RecordingDetail (a child of this drawer) so a single
   // subscription at the drawer root covers every panel instance.
   useTranscribeProgress();
+  // Phase 5 stems channel — StemSeparationPanel mounts inside the same
+  // RecordingDetail subtree, so co-locating the subscription here keeps
+  // a single fanout site for all per-recording IPC channels.
+  useStemProgressSubscription();
 
   // Refresh on open so the list reflects any rows persisted while the
   // drawer was closed. Fire-and-forget; the action handles its own errors.

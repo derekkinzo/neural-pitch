@@ -48,6 +48,11 @@ postcard       = { workspace = true, optional = true }
 # `--no-default-features` build does not pick up the dependency. ~50 KB
 # pure-Rust, MIT/Apache-2.0.
 midly          = { version = "0.5", default-features = false, features = ["std"], optional = true }
+# Pure-Rust FLAC decoder used by the stem-separator import path. The
+# live recording pipeline writes FLAC, so the separator must be able to
+# decode FLAC sources. Pulled in only under `feature = "neural"` because
+# the only consumer lives in `crate::stems::decode_mono_48k`.
+claxon         = { version = "0.4", optional = true }
 cpal           = "0.17"
 rtrb           = "0.3"
 tokio          = { version = "1", features = ["rt", "time", "macros"] }
@@ -70,7 +75,7 @@ app-neural     = ["neural-pitch-core/neural"]
 # `--no-default-features` and the `cargo build --no-default-features`
 # build stays clean. `postcard` and `midly` ride on the same gate because
 # they only appear in the transcribe / export code paths.
-neural         = ["neural-pitch-core/neural", "dep:postcard", "dep:midly"]
+neural         = ["neural-pitch-core/neural", "dep:postcard", "dep:midly", "dep:claxon"]
 
 [dev-dependencies]
 # Integration tests for the analysis Tauri surface. Drives the public

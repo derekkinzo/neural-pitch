@@ -1305,6 +1305,261 @@ export function buildSyntheticMelody(): MockMelody {
   return { id: "melody-c-major-octave", tonicMidi, notes };
 }
 
+/**
+ * Phase-5 stems — wire-format mirrors `src/types/stems.ts`. Field names
+ * are camelCase on the TS side; the Rust IPC boundary maps from
+ * snake_case per the existing `transcription.ts` convention.
+ */
+
+/** The four standard Demucs stems. */
+export type MockStemKind = "vocals" | "drums" | "bass" | "other";
+
+/** Per-frame separation progress payload — emitted at ~10–20 Hz over the
+ *  `separate-progress` Tauri channel while HTDemucs is running. */
+export interface MockSeparateProgress {
+  recordingId: string;
+  stage: MockStemKind | "finalizing";
+  percent: number; // 0..100
+}
+
+/** Static metadata about the bundled HTDemucs model. The mock surfaces a
+ *  `cached: true` flag so the panel skips the download arc by default. */
+export interface MockStemModelInfo {
+  downloadUrl: string;
+  sha256: string;
+  sizeBytes: number;
+}
+
+/**
+ * Install mock responses for the Phase-5 stem-separation IPC surface.
+ *
+ * Phase-5 contract:
+ *   - `download_stem_model()`                    -> `{ cached: true }`
+ *   - `get_stem_model_info()`                    -> `MockStemModelInfo`
+ *   - `separate_stems({ recordingId })`          -> parked promise; resolves
+ *     only when `pushStemsComplete(page, ...)` fires (or rejects when
+ *     `cancel_stem_separation` is invoked, or when `pushStemsError` fires).
+ *   - `cancel_stem_separation({ recordingId })`  -> null (best-effort; the
+ *     in-page panel's own pending-promise registry drives the reject).
+ *   - `get_stem_path({ recordingId, stemKind })` -> sentinel path string.
+ *   - `read_stem_audio()`                        -> 0-length Uint8Array
+ *     stand-in (not consumed by the panel — PlaybackPanel resolves the
+ *     path via `convertFileSrc`, not this IPC).
+ *   - `export_stem({ recordingId, stemKind, destPath })` -> null.
+ *
+ * The handler self-initialises `__neuralPitchTestHooks.stems` from the
+ * embedded seed JSON on first call — same closure-survival pattern as
+ * `installRecordingsMock` and `installTranscribeMock`.
+ *
+ * Note: PlaybackPanel resolves stem audio via the same `convertFileSrc`
+ * test-hook path used by the mix; the helper returns a sentinel that
+ * routes through the `installPlaybackRoutes` resolver if the test wires
+ * one up. Specs that don't exercise audio playback can let wavesurfer
+ * 404 — the spec assertions only target the panel chrome and progress
+ * markup.
+ */
+export function installStemsMock(): TauriMockResponses {
+  // Hydrator. Each handler embeds this so cold-call into any handler
+  // initialises the shared slot. Closures don't survive the
+  // `Function.prototype.toString()` round-trip, so we cannot capture an
+  // outer Map — every handler has to re-derive state from the hooks slot.
+  const seedHydrate = `
+    var w = window;
+    var hooks = w.__neuralPitchTestHooks || {};
+    if (!hooks.stems) {
+      hooks.stems = {
+        // Pending separations keyed by recordingId. Each slot holds a
+        // pair of resolver functions the channel-side helpers fire.
+        pendingResolvers: {},
+        pendingRejecters: {},
+        // Fixed sentinel paths so each stem maps to a stable URL the
+        // PlaybackPanel mount path can pass through convertFileSrc.
+        stemPaths: {},
+        // Last-export call for assertion if a spec needs it.
+        exports: []
+      };
+    }
+    w.__neuralPitchTestHooks = hooks;
+  `;
+
+  // eslint-disable-next-line @typescript-eslint/no-implied-eval, no-new-func
+  const downloadHandler = new Function(
+    "args",
+    `${seedHydrate}
+     return { cached: true };`,
+  ) as (args: Record<string, unknown>) => unknown;
+
+  // eslint-disable-next-line @typescript-eslint/no-implied-eval, no-new-func
+  const modelInfoHandler = new Function(
+    "args",
+    `${seedHydrate}
+     return {
+       downloadUrl: "https://example.invalid/htdemucs.onnx",
+       sha256: "0000000000000000000000000000000000000000000000000000000000000000",
+       sizeBytes: 80 * 1024 * 1024
+     };`,
+  ) as (args: Record<string, unknown>) => unknown;
+
+  // The separate handler returns a Promise that the page-side helpers
+  // resolve / reject. We stash the resolvers on the hooks slot keyed by
+  // recordingId so `pushStemsComplete` and `pushStemsError` can find
+  // them. `cancel_stem_separation` rejects with an Error("Cancelled") which
+  // the store's catch path uses to flip back to `idle`.
+  // eslint-disable-next-line @typescript-eslint/no-implied-eval, no-new-func
+  const separateHandler = new Function(
+    "args",
+    `${seedHydrate}
+     var id = String((args && args.recordingId) || "");
+     return new Promise(function (resolve, reject) {
+       window.__neuralPitchTestHooks.stems.pendingResolvers[id] = resolve;
+       window.__neuralPitchTestHooks.stems.pendingRejecters[id] = reject;
+     });`,
+  ) as (args: Record<string, unknown>) => unknown;
+
+  // eslint-disable-next-line @typescript-eslint/no-implied-eval, no-new-func
+  const cancelHandler = new Function(
+    "args",
+    `${seedHydrate}
+     var id = String((args && args.recordingId) || "");
+     var rej = window.__neuralPitchTestHooks.stems.pendingRejecters[id];
+     if (typeof rej === "function") {
+       delete window.__neuralPitchTestHooks.stems.pendingResolvers[id];
+       delete window.__neuralPitchTestHooks.stems.pendingRejecters[id];
+       try { rej(new Error("Cancelled")); } catch (e) { /* swallow */ }
+     }
+     return null;`,
+  ) as (args: Record<string, unknown>) => unknown;
+
+  // eslint-disable-next-line @typescript-eslint/no-implied-eval, no-new-func
+  const getPathHandler = new Function(
+    "args",
+    `${seedHydrate}
+     var id = String((args && args.recordingId) || "");
+     var kind = String((args && args.stemKind) || "vocals");
+     return "/tmp/stems/" + id + "/" + kind + ".flac";`,
+  ) as (args: Record<string, unknown>) => unknown;
+
+  // eslint-disable-next-line @typescript-eslint/no-implied-eval, no-new-func
+  const readStemHandler = new Function(
+    "args",
+    `${seedHydrate}
+     return new Uint8Array(0);`,
+  ) as (args: Record<string, unknown>) => unknown;
+
+  // eslint-disable-next-line @typescript-eslint/no-implied-eval, no-new-func
+  const exportHandler = new Function(
+    "args",
+    `${seedHydrate}
+     window.__neuralPitchTestHooks.stems.exports.push({
+       recordingId: String((args && args.recordingId) || ""),
+       stemKind: String((args && args.stemKind) || ""),
+       destPath: String((args && args.destPath) || "")
+     });
+     return null;`,
+  ) as (args: Record<string, unknown>) => unknown;
+
+  return {
+    download_stem_model: downloadHandler,
+    get_stem_model_info: modelInfoHandler,
+    separate_stems: separateHandler,
+    cancel_stem_separation: cancelHandler,
+    get_stem_path: getPathHandler,
+    read_stem_audio: readStemHandler,
+    export_stem: exportHandler,
+  };
+}
+
+/**
+ * Push a synthetic `separate-progress` event through the test bridge.
+ * Mirrors `pushTranscribeProgress`: the page-side `useStemProgressSubscription`
+ * hook registers a listener on `__neuralPitchTestHooks.listeners.get(
+ * "separate-progress")` and tests drive frames through this helper.
+ *
+ * MUST be a no-op when the listener list is empty — receiver-closed-early
+ * tolerance for unmount races (e.g. cancel-then-late-frame).
+ */
+export async function pushStemsProgress(page: Page, progress: MockSeparateProgress): Promise<void> {
+  await page.evaluate((frame) => {
+    type WindowWithHooks = Window & {
+      __neuralPitchTestHooks?: {
+        listeners: Map<string, Array<(payload: unknown) => void>>;
+      };
+    };
+    const w = window as WindowWithHooks;
+    const listeners = w.__neuralPitchTestHooks?.listeners.get("separate-progress") ?? [];
+    if (listeners.length === 0) return; // receiver-closed-early no-op
+    for (const fn of listeners) {
+      fn(frame);
+    }
+  }, progress);
+}
+
+/**
+ * Resolve the parked `separate_stems` promise for a recording id with
+ * the four FLAC paths. The store flips to `complete` and the panel
+ * mounts the four StemCards.
+ */
+export async function pushStemsComplete(
+  page: Page,
+  payload: {
+    recordingId: string;
+    stemPaths?: Partial<Record<MockStemKind, string>>;
+  },
+): Promise<void> {
+  await page.evaluate((p) => {
+    type Hooks = {
+      stems?: {
+        pendingResolvers: Record<string, (value: unknown) => void>;
+        pendingRejecters: Record<string, (err: unknown) => void>;
+      };
+    };
+    type WindowWithHooks = Window & { __neuralPitchTestHooks?: Hooks };
+    const w = window as WindowWithHooks;
+    const stems = w.__neuralPitchTestHooks?.stems;
+    if (stems === undefined) return;
+    const id = p.recordingId;
+    const resolver = stems.pendingResolvers[id];
+    if (typeof resolver !== "function") return;
+    delete stems.pendingResolvers[id];
+    delete stems.pendingRejecters[id];
+    const paths = {
+      vocals: p.stemPaths?.vocals ?? `/tmp/stems/${id}/vocals.flac`,
+      drums: p.stemPaths?.drums ?? `/tmp/stems/${id}/drums.flac`,
+      bass: p.stemPaths?.bass ?? `/tmp/stems/${id}/bass.flac`,
+      other: p.stemPaths?.other ?? `/tmp/stems/${id}/other.flac`,
+    };
+    resolver({ stemPaths: paths });
+  }, payload);
+}
+
+/**
+ * Reject the parked `separate_stems` promise with an error. Drives the
+ * store into the `error` branch.
+ */
+export async function pushStemsError(
+  page: Page,
+  payload: { recordingId: string; message: string },
+): Promise<void> {
+  await page.evaluate((p) => {
+    type Hooks = {
+      stems?: {
+        pendingResolvers: Record<string, (value: unknown) => void>;
+        pendingRejecters: Record<string, (err: unknown) => void>;
+      };
+    };
+    type WindowWithHooks = Window & { __neuralPitchTestHooks?: Hooks };
+    const w = window as WindowWithHooks;
+    const stems = w.__neuralPitchTestHooks?.stems;
+    if (stems === undefined) return;
+    const id = p.recordingId;
+    const rejecter = stems.pendingRejecters[id];
+    if (typeof rejecter !== "function") return;
+    delete stems.pendingResolvers[id];
+    delete stems.pendingRejecters[id];
+    rejecter(new Error(p.message));
+  }, payload);
+}
+
 /** Recorded invoke calls for assertion. */
 export async function getInvokeCalls(
   page: Page,

@@ -151,20 +151,44 @@ fn pre_phase4_db_picks_up_v0002_cleanly() {
             .expect("seed legacy row");
     }
 
-    // Snip V0002 out of the refinery history + drop the drill_attempts
-    // surface so the database matches the on-disk state of an
-    // app installed before V0002 existed. The pragmas survive (they
-    // are per-connection; refinery does not touch them).
+    // Snip V0002 + V0003 out of the refinery history and drop the
+    // tables/columns each migration introduces so the database matches
+    // the on-disk state of an app installed before V0002 existed. The
+    // pragmas survive (they are per-connection; refinery does not
+    // touch them).
+    //
+    // V0003's `analysis_cache.stem_kind` column would normally be
+    // dropped via `ALTER TABLE … DROP COLUMN`, but that DDL only lands
+    // on recent SQLite versions. Rebuild `analysis_cache` from scratch
+    // so the on-disk shape exactly matches a pre-V0003 deployment —
+    // mirrors the strategy the V0003-specific test uses.
     {
         let conn = rusqlite::Connection::open(&path).expect("open raw conn");
         conn.execute_batch(
             r"
             DROP INDEX IF EXISTS idx_drill_attempts_history;
             DROP TABLE IF EXISTS drill_attempts;
-            DELETE FROM refinery_schema_history WHERE version = 2;
+            DROP INDEX IF EXISTS idx_stem_results_lookup;
+            DROP TABLE IF EXISTS stem_results;
+            CREATE TABLE analysis_cache_pre_v0003 (
+              recording_id           BLOB    NOT NULL REFERENCES recordings(id) ON DELETE CASCADE,
+              analyzer_name          TEXT    NOT NULL,
+              analyzer_version       TEXT    NOT NULL,
+              computed_at_unix_ms    INTEGER NOT NULL,
+              result_format_version  INTEGER NOT NULL,
+              result_blob            BLOB    NOT NULL,
+              PRIMARY KEY (recording_id, analyzer_name, analyzer_version)
+            ) STRICT;
+            INSERT INTO analysis_cache_pre_v0003
+              SELECT recording_id, analyzer_name, analyzer_version,
+                     computed_at_unix_ms, result_format_version, result_blob
+              FROM analysis_cache;
+            DROP TABLE analysis_cache;
+            ALTER TABLE analysis_cache_pre_v0003 RENAME TO analysis_cache;
+            DELETE FROM refinery_schema_history WHERE version IN (2, 3);
             ",
         )
-        .expect("snip V0002 state");
+        .expect("snip V0002 + V0003 state");
     }
 
     let history_before = refinery_history_count(&path);
@@ -184,7 +208,7 @@ fn pre_phase4_db_picks_up_v0002_cleanly() {
     let history_after = refinery_history_count(&path);
     assert_eq!(
         history_after,
-        history_before + 1,
-        "exactly one new entry (V0002) must land in refinery_schema_history; was {history_before}, now {history_after}",
+        history_before + 2,
+        "V0002 + V0003 must both land in refinery_schema_history on the upgrade; was {history_before}, now {history_after}",
     );
 }

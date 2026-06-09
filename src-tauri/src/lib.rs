@@ -18,6 +18,13 @@ pub mod state;
 // is compiled out entirely so the classical-only build stays clean.
 #[cfg(feature = "neural")]
 pub mod transcribe;
+// Phase 5 — HTDemucs four-stem separation surface (vocals / drums /
+// bass / other). Same gating story as `transcribe`: the headless twin
+// in `stems.rs` decodes recordings + writes FLACs through APIs that
+// only compile under `neural`, so the whole module is compiled out
+// under `--no-default-features`.
+#[cfg(feature = "neural")]
+pub mod stems;
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -114,6 +121,16 @@ pub fn run() {
             commands::transcribe_recording,
             #[cfg(feature = "neural")]
             commands::export_midi,
+            #[cfg(feature = "neural")]
+            commands::separate_stems,
+            #[cfg(feature = "neural")]
+            commands::read_stem_audio,
+            #[cfg(feature = "neural")]
+            commands::cancel_stem_separation,
+            #[cfg(feature = "neural")]
+            commands::download_stem_model,
+            #[cfg(feature = "neural")]
+            commands::export_stem,
             commands_drill::start_drill,
             commands_drill::submit_drill_attempt,
             commands_drill::list_drill_history,

@@ -133,6 +133,7 @@ fn transcribe_recording_caches_blob_and_force_refresh_re_runs_inference() {
         &recordings_dir,
         id,
         false,
+        None,
         Some(&sink_first as &dyn TranscribeProgressSink),
     )
     .expect("first transcribe must succeed (cache miss)");
@@ -159,6 +160,7 @@ fn transcribe_recording_caches_blob_and_force_refresh_re_runs_inference() {
         &recordings_dir,
         id,
         false,
+        None,
         Some(&sink_second as &dyn TranscribeProgressSink),
     )
     .expect("second transcribe must succeed (cache hit)");
@@ -199,6 +201,7 @@ fn transcribe_recording_caches_blob_and_force_refresh_re_runs_inference() {
         &recordings_dir,
         id,
         true,
+        None,
         Some(&sink_third as &dyn TranscribeProgressSink),
     )
     .expect("force_refresh transcribe must succeed");

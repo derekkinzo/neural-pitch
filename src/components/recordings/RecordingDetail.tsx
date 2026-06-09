@@ -26,6 +26,7 @@ import { useEffect, useMemo, type ReactNode } from "react";
 import { ContourLine } from "@/components/recordings/ContourLine";
 import { PianoRoll } from "@/components/recordings/PianoRoll";
 import { RangeReadout } from "@/components/recordings/RangeReadout";
+import { StemSeparationPanel } from "@/components/recordings/StemSeparationPanel";
 import { TranscribePanel } from "@/components/recordings/TranscribePanel";
 import { VibratoReadout } from "@/components/recordings/VibratoReadout";
 import { formatDurationShort, formatRelative } from "@/lib/duration-format";
@@ -256,6 +257,8 @@ export function RecordingDetail(): ReactNode {
       </section>
 
       <TranscribePanel recordingId={currentRecordingId} />
+
+      <StemSeparationPanel recordingId={currentRecordingId} recordingLabel={displayLabel} />
 
       <div className="grid gap-3 md:grid-cols-2">
         <RangeReadout summary={summary} a4Hz={recording.a4Hz} />
