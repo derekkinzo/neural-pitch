@@ -58,11 +58,28 @@ test.describe("settings — A4 reference + debounced configure", () => {
     await a4Input.fill("442");
     await a4Input.fill("443");
 
+    // Poll on the SETTLED final value rather than calls.length === 1.
+    // Under parallel-worker load, Playwright fill() latency between three
+    // sequential fills can straddle the 150 ms debounce window, so the
+    // first fill's configure() may land before the third fill lands —
+    // a `calls.length === 1` poll would pass with a4_hz=441 in that
+    // window and the trailing call would arrive moments later. Waiting
+    // for the last-call payload to equal 443 lets the debounce settle
+    // before we assert the coalesce invariant.
     await expect
-      .poll(async () => (await getInvokeCalls(page, "configure")).length, { timeout: 2000 })
-      .toBe(1);
+      .poll(
+        async () => {
+          const calls = await getInvokeCalls(page, "configure");
+          const last = calls[calls.length - 1]?.args;
+          const settings = (last?.["settings"] ?? {}) as Record<string, unknown>;
+          return settings["a4_hz"];
+        },
+        { timeout: 2000 },
+      )
+      .toBe(443);
 
     const calls = await getInvokeCalls(page, "configure");
+    expect(calls.length).toBe(1);
     const args = calls[0]?.args;
     const settings = (args?.["settings"] ?? {}) as Record<string, unknown>;
     // Whichever value was the last fill wins.

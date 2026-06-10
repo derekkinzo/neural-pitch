@@ -18,7 +18,6 @@ allow = [
   "Apache-2.0 WITH LLVM-exception",
   "BSD-2-Clause",
   "BSD-3-Clause",
-  "ISC",
   "Unicode-3.0",
   "MPL-2.0",
   "Zlib",
@@ -29,6 +28,65 @@ allow = [
 [bans]
 multiple-versions = "warn"
 wildcards = "deny"
+# Transitive duplicates we cannot resolve from our own Cargo.toml. Each
+# entry is pinned by an upstream crate we don't control (tauri/wry/gtk-rs,
+# cpal/alsa, windows-sys, the icu/toml ecosystems). Revisit once those
+# upstreams unify their version pins.
+skip = [
+  # rustls-pemfile keeps 0.21; reqwest / tauri / tower-http track 0.22.
+  { crate = "base64" },
+  # gtk-rs / webkit2gtk / javascriptcore-rs still on 1.x; alsa + tauri-utils on 2.x.
+  { crate = "bitflags" },
+  # `directories` 5.x keeps 0.4; `directories` 6.x + cpal track 0.5.
+  { crate = "dirs-sys" },
+  # rand 0.8 keeps 0.2; rand 0.9 + wasi 0.14 track 0.3 / 0.4.
+  { crate = "getrandom" },
+  # heapless 0.7 vs 0.8 disagree on hash32.
+  { crate = "hash32" },
+  # postcard pins heapless 0.7; other deps track 0.8.
+  { crate = "heapless" },
+  # clap_derive ships 0.5; enum-as-inner / tauri stay on 0.4.
+  { crate = "heck" },
+  # toml 0.8 keeps indexmap 2.7; toml 0.9+ tracks the latest.
+  { crate = "indexmap" },
+  # ico (tauri-codegen) keeps png 0.17.16; image / wgpu track 0.18.
+  { crate = "png" },
+  # gtk3-macros / glib-macros still on proc-macro-crate 1.x.
+  { crate = "proc-macro-crate" },
+  # wasi 0.14 pulls r-efi 4.x; wasi 0.11 pulls 5.x.
+  { crate = "r-efi" },
+  # dirs-sys 0.4 vs 0.5 each pull a different redox_users.
+  { crate = "redox_users" },
+  # toml 0.8 + toml 0.9 + toml 1.0 each carry their own serde_spanned.
+  { crate = "serde_spanned" },
+  # gtk-rs proc-macros keep syn 1.x; everything else is on syn 2.x.
+  { crate = "syn" },
+  # cookie / refinery / zip still pin thiserror 1.x; everyone else is on 2.x.
+  { crate = "thiserror" },
+  { crate = "thiserror-impl" },
+  # windows-sys family: tao/wry/windows-result/etc. each pin different majors.
+  { crate = "windows-link" },
+  { crate = "windows-sys" },
+  { crate = "windows-targets" },
+  { crate = "windows_aarch64_gnullvm" },
+  { crate = "windows_aarch64_msvc" },
+  { crate = "windows_i686_gnu" },
+  { crate = "windows_i686_gnullvm" },
+  { crate = "windows_i686_msvc" },
+  { crate = "windows_x86_64_gnu" },
+  { crate = "windows_x86_64_gnullvm" },
+  { crate = "windows_x86_64_msvc" },
+  # wasi 0.11 vs 0.14 ship different wit-bindgen.
+  { crate = "wit-bindgen" },
+  # toml 0.8 / 0.9 / 1.0 each track their own winnow.
+  { crate = "winnow" },
+  # toml 0.8 / 0.9 / 1.0 — whole family duplicates downstream.
+  { crate = "toml" },
+  { crate = "toml_datetime" },
+  { crate = "toml_edit" },
+  # ahash 0.7 (used by some tauri deps) keeps hashbrown 0.13; newer track 0.14/0.15.
+  { crate = "hashbrown" },
+]
 
 [sources]
 unknown-registry = "deny"
