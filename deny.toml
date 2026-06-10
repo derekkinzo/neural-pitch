@@ -18,6 +18,9 @@ allow = [
   "Apache-2.0 WITH LLVM-exception",
   "BSD-2-Clause",
   "BSD-3-Clause",
+  # Required under --all-features: ort 2.0 pulls libloading (ISC-only) and
+  # ring (Apache-2.0 AND ISC). Default-features build does not need it.
+  "ISC",
   "Unicode-3.0",
   "MPL-2.0",
   "Zlib",
