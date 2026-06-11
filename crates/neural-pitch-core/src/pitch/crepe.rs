@@ -3,21 +3,21 @@
 //!
 //! CREPE-tiny (Kim et al., ICASSP 2018) is a 6-conv-layer cents-bin
 //! classifier. We target the MIT-licensed weights from
-//! `yqzhishen/onnxcrepe` v1.1.0 (1.96 MB) — explicitly the
-//! **license-clean fallback** for builds where counsel rejects PESTO's
-//! LGPL-3.0 lineage or where a profile sets `--cfg license_strict_mit`.
+//! `yqzhishen/onnxcrepe` v1.1.0 (1.96 MB) — the optional neural-backend
+//! complement to the classical YIN / MPM / pYIN estimators that always
+//! ship.
 //!
-//! Unlike PESTO, CREPE has **no temporal cache tensor** — it is fully
-//! stateless. Each `process` call is a single forward pass over a
-//! 1024-sample @ 16 kHz window.
+//! CREPE has **no temporal cache tensor** — it is fully stateless. Each
+//! `process` call is a single forward pass over a 1024-sample @ 16 kHz
+//! window.
 //!
 //! # Backends
 //!
 //! Two backends share the [`CrepeTinyEstimator`] struct:
 //!
-//! * `Stub` — used by the Tier-1 test suite. Performs autocorrelation
+//! * `Stub` — used by the unit-test suite. Performs autocorrelation
 //!   pitch detection over the raw 48 kHz window (the stub does not
-//!   round-trip through 16 kHz because the Tier-1 contract is
+//!   round-trip through 16 kHz because the test invariant is
 //!   "recover 440 Hz within 5 cents"; a stub-internal resample would
 //!   only add quantisation noise).
 //! * `Onnx` — currently surfaces an [`EstimatorError::Ort`] with a
@@ -47,11 +47,10 @@ const CREPE_MODEL_SAMPLE_RATE_HZ: u32 = 16_000;
 #[allow(dead_code)]
 const CREPE_MODEL_FRAME_SIZE: usize = 1024;
 
-/// Backend selected at constructor time, mirroring the
-/// [`super::pesto::PestoEstimator`] split: synthetic stub for
-/// hermetic Tier-1 tests, real ORT session for production.
+/// Backend selected at constructor time: synthetic stub for hermetic
+/// unit tests, real ORT session for production.
 enum Backend {
-    /// Hermetic stub used by the Tier-1 test suite — no ORT shared
+    /// Hermetic stub used by the unit-test suite — no ORT shared
     /// library required.
     Stub,
     /// Real ONNX session held opaquely so callers do not depend on
@@ -167,17 +166,18 @@ fn validate_crepe_cfg(cfg: &EstimatorConfig) -> Result<(), EstimatorError> {
     Ok(())
 }
 
-/// Detect the in-tree synthetic stub payload. Both stubs share a
-/// four-byte zero prefix, so we additionally key on a per-stub marker
-/// to keep the PESTO and CREPE branches independent.
+/// Detect the in-tree synthetic stub payload. Keys on a marker that
+/// follows the four-byte zero prefix so a future stub branch can be
+/// added without colliding on the prefix alone.
 fn is_stub_bytes(bytes: &[u8], marker: &[u8]) -> bool {
     bytes.len() < 1024 && bytes.windows(marker.len()).any(|w| w == marker)
 }
 
-/// Lightweight autocorrelation pitch detector used by the stub backend,
-/// shared in shape with [`super::pesto`] but kept in this module to
-/// avoid a public-API dependency between the two estimators. See the
-/// PESTO module's docstring for the full design notes.
+/// Lightweight autocorrelation pitch detector used by the stub
+/// backend. Not a full YIN — no CMNDF, no parabolic interpolation
+/// beyond the local refinement below — but sized to satisfy the
+/// stub-graph contract ("recover 440 Hz within a few cents")
+/// without dragging the YIN scratch buffers into the neural module.
 fn autocorr_pitch_hz(
     samples: &[f32],
     sample_rate_hz: u32,
@@ -254,7 +254,7 @@ impl PitchEstimator for CrepeTinyEstimator {
         match &self.backend {
             Backend::Stub => Ok(self.process_stub(samples)),
             Backend::Onnx(_) => Err(EstimatorError::Ort(
-                "real CREPE-tiny ONNX path not yet wired (Phase 2.5)".into(),
+                "real CREPE-tiny ONNX path not yet wired".into(),
             )),
         }
     }

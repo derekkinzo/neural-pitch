@@ -17,7 +17,7 @@ use serde::Deserialize;
 /// [`super::resolver::ResolverError::NotConfigured`].
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct ManifestEntry {
-    /// Stable model identifier, e.g. `"pesto-v1"`.
+    /// Stable model identifier, e.g. `"basic-pitch-v1"`.
     pub name: String,
     /// HTTPS URL where the ONNX blob is hosted (empty == not yet configured).
     pub url: String,
@@ -25,7 +25,7 @@ pub struct ManifestEntry {
     pub sha256: String,
     /// Expected file size in bytes (informational; the hash is the source of truth).
     pub size_bytes: u64,
-    /// SPDX license identifier, e.g. `"LGPL-3.0-or-later"`.
+    /// SPDX license identifier, e.g. `"Apache-2.0"`.
     pub license: String,
     /// Models that ship in-tree under `crates/neural-pitch-core/assets/`
     /// instead of being downloaded by the resolver. The resolver short-

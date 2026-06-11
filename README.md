@@ -20,13 +20,16 @@ front end. Dual-licensed under MIT OR Apache-2.0.
   cached contour.
 - **Import and transcribe.** Drag in a WAV / FLAC / MP3, run polyphonic
   transcription, and export the result as a Standard MIDI File.
-- **Stem separation (preview).** Split a recording into vocals, drums,
-  bass, and other, play each stem, and run polyphonic transcription on
-  any stem. The HTDemucs ONNX model (~316 MB on first use) is downloaded
-  from huggingface.co/StemSplitio/htdemucs-onnx and pinned by SHA-256;
-  the runtime falls back to a deterministic four-bus splitter when the
-  model is unavailable so the persistence, playback, and per-stem
-  transcribe wiring can be exercised end-to-end.
+- **Ear-training drills.** Intervals, chord quality, scale identification,
+  pitch-matching with a karaoke ribbon, and tuning practice — with
+  movable-do solfege as a display option.
+- **Stem separation.** Split a recording into vocals, drums, bass, and
+  other, play each stem, and run polyphonic transcription on any stem.
+  The HTDemucs ONNX model (~316 MB on first use) is downloaded from
+  huggingface.co/StemSplitio/htdemucs-onnx and pinned by SHA-256; the
+  runtime falls back to a deterministic four-bus splitter when the model
+  is unavailable so persistence, playback, and per-stem transcribe still
+  work end-to-end.
 
 The `neural-pitch-core` crate is pure Rust, has no Tauri dependency, and
 can be reused as a library. The default build pulls in only the classical
@@ -63,14 +66,8 @@ cargo tauri dev         # or: cargo run -p neural-pitch
 ### Build the core crate only
 
 ```sh
-cargo build -p neural-pitch-core                    # classical estimators
-cargo build -p neural-pitch-core --features neural  # + neural module surface
+cargo build -p neural-pitch-core
 ```
-
-The `neural` feature is off by default. With it on, the PESTO and
-CREPE-tiny module surface and ORT linkage compile in, but the offline
-analyser still routes only pYIN today; the inference path is not yet
-hooked up end-to-end.
 
 ## Running tests
 

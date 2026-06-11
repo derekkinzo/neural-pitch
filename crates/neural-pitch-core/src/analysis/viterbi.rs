@@ -1,5 +1,5 @@
 #![allow(clippy::doc_markdown)]
-//! Phase 2.2 — generic frame-by-frame Viterbi decoder.
+//! Generic frame-by-frame Viterbi decoder.
 //!
 //! `decode(emissions, transition)` runs a dynamic-programming maximisation
 //! over a discrete state space and returns one best-state index per frame.
@@ -17,12 +17,12 @@
 //! `t`. After the forward pass the best terminal state argmax-es `delta_T`
 //! and a back-pointer table walks the path back to `t = 0`.
 //!
-//! Phase 2.2 wires this only for the neural backends — PESTO / CREPE emit
-//! cents-bin frame-level probabilities and the offline pipeline calls
-//! [`decode`] with a Gaussian transition model centred on the previous
-//! state. The decoder is intentionally backend-agnostic: any future
-//! classical estimator that wants HMM smoothing can lift the gate and
-//! depend on this module.
+//! Wired only for the neural backend today — CREPE emits cents-bin
+//! frame-level probabilities and the offline pipeline calls [`decode`]
+//! with a Gaussian transition model centred on the previous state. The
+//! decoder is intentionally backend-agnostic: any future classical
+//! estimator that wants HMM smoothing can lift the gate and depend on
+//! this module.
 //!
 //! # Hot-path discipline
 //!
@@ -33,9 +33,9 @@
 /// Transition model for the Viterbi recurrence.
 ///
 /// The default Gaussian model centres a normal-shaped log-penalty on the
-/// previous state with `sigma = 2` bins (= 40 cents at the canonical
-/// 20-cents-per-bin PESTO grid) and adds a small self-loop bonus that
-/// slightly favours staying in the same state on quiet frames.
+/// previous state with `sigma = 2` bins (= 40 cents on a 20-cents-per-bin
+/// cents grid) and adds a small self-loop bonus that slightly favours
+/// staying in the same state on quiet frames.
 #[derive(Clone, Debug)]
 pub struct TransitionModel {
     /// Standard deviation, in state-index units (typically cents bins).

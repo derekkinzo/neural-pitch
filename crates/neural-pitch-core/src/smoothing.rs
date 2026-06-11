@@ -41,8 +41,7 @@ impl ContourSmoother {
         // Capacity in *frames* — assume one frame per millisecond as a
         // conservative upper bound. This is intentionally generous so the
         // ring never reallocates on the hot path even for high-rate
-        // estimators (e.g. PESTO at ~100 Hz frame rate). See the doc above
-        // for the unit-of-measure caveat.
+        // estimators. See the doc above for the unit-of-measure caveat.
         let capacity = window_ms.max(1.0).ceil() as usize;
         Self {
             window_ms,

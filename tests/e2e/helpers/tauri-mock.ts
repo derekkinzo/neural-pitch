@@ -9,7 +9,7 @@
 // plus the callback-registry fields — but does it before any application
 // script runs, so the very first `invoke()` call sees the mock.
 //
-// Phase 1.2 extends the bridge with:
+// The bridge surface includes:
 //   - default responses for `start_capture`, `stop_capture`, `configure`
 //   - a synthetic Channel<PitchUpdate> path: the page-side `usePitchStream`
 //     hook registers itself on `__neuralPitchTestHooks.listeners` and tests
@@ -39,7 +39,7 @@ interface SerialisedEntry {
 }
 
 /**
- * Phase-1.2 default responses. Adding entries here is how new Tauri commands
+ * Default mock responses for the live-tuner IPC surface. Adding entries here is how new Tauri commands
  * acquire a mock baseline that all specs share.
  */
 export const defaultResponses: TauriMockResponses = {
@@ -60,14 +60,14 @@ export const defaultResponses: TauriMockResponses = {
     window_samples: 2048,
     hop_samples: 512,
   }),
-  // Phase 2.0: PlaybackPanel resolves the on-disk path when a row is
-  // selected. Specs that exercise the detail panel (Phase 2.1) inherit a
+  // PlaybackPanel resolves the on-disk path when a row is
+  // selected. Specs that exercise the detail panel inherit a
   // benign placeholder so the panel can mount without each spec re-seeding.
   get_recording_path: (args: Record<string, unknown>) => {
     const id = typeof args["id"] === "string" ? (args["id"] as string) : "rec";
     return `/tmp/${id}.flac`;
   },
-  // Phase 2.1: baseline analyze + contour responders so specs that only
+  // Baseline analyze + contour responders so specs that only
   // exercise the recordings list (not the detail panel) inherit non-throwing
   // defaults. Per-spec installAnalysisMock(...) overrides this baseline with
   // seeded summaries / contours.
@@ -260,8 +260,10 @@ export async function pushPitchUpdate(page: Page, update: MockPitchUpdate): Prom
 }
 
 /**
- * Wire-format AudioBackendEvent variants the Tier-5 specs synthesise.
- * Mirrors the Phase-1.3 IPC contract.
+ * Wire-format AudioBackendEvent variants the end-to-end specs synthesise.
+ * Mirrors the `neural_pitch_core::pipeline::AudioBackendEvent` Rust enum —
+ * discriminants and field names match exactly so a serde rename caught
+ * here would also surface in the production shell.
  */
 export type MockAudioBackendEvent =
   | { type: "PriorNarrowed"; rangeHz: readonly [number, number] }
@@ -321,7 +323,7 @@ export function makePitchUpdate(opts: {
 }
 
 /**
- * Phase-2.0 recordings — wire-format mirrors `src/types/recording.ts` (planned).
+ * Recordings — wire-format mirrors `src/types/recording.ts`.
  * Field names are camelCase on the TS side; the Rust IPC boundary maps from
  * snake_case per the audio-event.ts convention. We keep the test-side type
  * camelCase so specs read in the same vocabulary as the React components
@@ -350,7 +352,7 @@ export interface MockRecordingProgress {
 }
 
 /**
- * Install mock responses for the Phase-2.0 recordings IPC surface.
+ * Install mock responses for the recordings IPC surface.
  *
  * The handlers mutate a shared list stashed on `window.__neuralPitchTestHooks
  * .recordings`. The seed array is JSON-encoded into the handler source so
@@ -358,7 +360,7 @@ export interface MockRecordingProgress {
  * `Function.prototype.toString()`, so each handler self-initialises the
  * shared slot from its embedded seed on first call.
  *
- * Phase-2.0 contract:
+ * Recordings IPC contract:
  *   - `list_recordings()`                          → MockRecording[]
  *     (returned descending by createdAt to match the store selector)
  *   - `start_recording({ instrumentProfile })`     → { recordingId }
@@ -493,7 +495,7 @@ export async function pushRecordingProgress(
 }
 
 /**
- * Phase-2.1 analysis — wire-format mirrors `src/types/analysis.ts` (planned).
+ * Analysis — wire-format mirrors `src/types/analysis.ts`.
  *
  * Field names are camelCase on the TS side; the IPC boundary maps from
  * snake_case Rust per the existing `recording.ts` convention. Specs
@@ -533,7 +535,7 @@ export interface MockContourResult {
 
 /**
  * In-flight progress payload — emitted at ~10 Hz over the
- * `analysis-progress` Tauri channel while pYIN/PESTO is running. The
+ * `analysis-progress` Tauri channel while pYIN is running. The
  * page-side `analysisStore` registers a listener on
  * `__neuralPitchTestHooks.listeners.get("analysis-progress")` and
  * pushes the percent into the `<progress role="progressbar">` rendered
@@ -547,14 +549,14 @@ export interface MockAnalysisProgress {
 }
 
 /**
- * Install mock responses for the Phase-2.1 analysis IPC surface.
+ * Install mock responses for the analysis IPC surface.
  *
  * Following the same source-serialisation pattern as `installRecordingsMock`:
  * closures do not survive `Function.prototype.toString()`, so each handler
  * embeds a JSON-encoded literal for the seed maps and self-initialises the
  * shared `__neuralPitchTestHooks.analysis` slot on first call.
  *
- * Phase-2.1 contract:
+ * Analysis IPC contract:
  *   - `analyze_recording({ recordingId, forceRefresh })`
  *       → MockAnalysisSummary (with `wasCached = !forceRefresh`)
  *   - `get_contour({ recordingId })`
@@ -651,9 +653,9 @@ export async function pushAnalysisProgress(
 }
 
 /**
- * Phase-2.3 vocal-range — wire-format mirrors `RangeReport` in
+ * Vocal-range — wire-format mirrors `RangeReport` in
  * `src/types/analysis.ts`. The summary cache extension carries a `range`
- * field next to the existing pYIN/PESTO numerics; readouts read from the
+ * field next to the existing pYIN numerics; readouts read from the
  * same `byRecording` Map entry.
  *
  *   New Grove Dictionary of Music — vocal-range conventions for
@@ -669,7 +671,7 @@ export interface MockRangeReport {
 }
 
 /**
- * Phase-2.3 vibrato — wire-format mirrors `VibratoReport` in
+ * Vibrato — wire-format mirrors `VibratoReport` in
  * `src/types/analysis.ts`. Per-window dots downstream of the rate bar are
  * driven by the `windows[]` array; the meter (`role="meter"`) reflects
  * `medianRateHz` against the 0–10 Hz scale.
@@ -694,7 +696,7 @@ export interface MockVibratoReport {
  * exercise the vocal-range readout call this so the seeded summary
  * carries `range` directly — no second IPC, no second store entry.
  *
- * Per the Phase-2.3 architecture, the `byRecording`
+ * The `byRecording`
  * Map already holds `AnalysisSummary`; `RangeReadout` reads
  * `byRecording.get(id)?.range` from the same entry as the existing
  * summary card.
@@ -735,7 +737,7 @@ export function installAnalysisMockWithVibrato(
 }
 
 /**
- * Phase-2.4 playback fixture.
+ * Playback fixture.
  *
  * `installPlaybackMock()` returns a `TauriMockResponses` patch that
  * overrides `get_recording_path` to return a sentinel string, plus an
@@ -840,8 +842,8 @@ export async function installPlaybackRoutes(page: Page): Promise<void> {
 }
 
 /**
- * Phase-3 transcription — wire-format mirrors `src/types/transcription.ts`
- * (planned). Field names are camelCase on the TS side; the Rust IPC boundary
+ * Transcription — wire-format mirrors `src/types/transcription.ts`.
+ * Field names are camelCase on the TS side; the Rust IPC boundary
  * maps from snake_case per the existing `analysis.ts` convention.
  *
  * `wasCached` is the only field that varies across the cache branches
@@ -942,9 +944,9 @@ export function buildSyntheticPolyResult(recordingId: string): MockPolyResult {
 }
 
 /**
- * Install mock responses for the Phase-3 import IPC surface.
+ * Install mock responses for the import IPC surface.
  *
- * Phase-3 contract:
+ * Import IPC contract:
  *   - `import_audio_file({ sourcePath })` → MockRecording (synthetic row
  *     pushed onto the shared `__neuralPitchTestHooks.recordings` slot).
  *
@@ -985,7 +987,7 @@ export function installImportMock(): TauriMockResponses {
 }
 
 /**
- * Page-side stub for the Tauri `plugin-dialog` `open()` call. The Phase-3
+ * Page-side stub for the Tauri `plugin-dialog` `open()` call. The
  * `ImportButton` issues `await open({ multiple: false, filters: [...] })`
  * and routes the resulting path string through `import_audio_file`. We
  * stash a fixed sentinel on `__neuralPitchTestHooks.dialogOpenResult` and
@@ -1019,9 +1021,9 @@ export async function installDialogMock(
 }
 
 /**
- * Install mock responses for the Phase-3 transcription IPC surface.
+ * Install mock responses for the transcription IPC surface.
  *
- * Phase-3 contract:
+ * Transcription IPC contract:
  *   - `transcribe_recording({ recordingId, forceRefresh })`
  *       → MockTranscribeSummary (with `wasCached = !forceRefresh`)
  *   - `get_poly_result({ recordingId })`
@@ -1134,8 +1136,8 @@ export async function pushTranscribeProgress(
 }
 
 /**
- * Phase-4 ear-training drills — wire-format mirrors `src/types/training.ts`
- * (planned). Field names are camelCase on the TS side; the Rust IPC
+ * Ear-training drills — wire-format mirrors `src/types/training.ts`.
+ * Field names are camelCase on the TS side; the Rust IPC
  * boundary maps from snake_case per the existing `transcription.ts`
  * convention.
  *
@@ -1187,9 +1189,9 @@ export interface MockMatchUpdate {
 }
 
 /**
- * Install mock responses for the Phase-4 ear-training IPC surface.
+ * Install mock responses for the ear-training IPC surface.
  *
- * Phase-4 contract:
+ * Ear-training IPC contract:
  *   - `start_drill_match({ melody })` → null (registers a Channel listener
  *     on the page-side store; tests drive frames via `pushMatchUpdate`).
  *   - `stop_drill_match()` → null (no-op; the receiver tear-down is
@@ -1306,7 +1308,7 @@ export function buildSyntheticMelody(): MockMelody {
 }
 
 /**
- * Phase-5 stems — wire-format mirrors `src/types/stems.ts`. Field names
+ * Stems — wire-format mirrors `src/types/stems.ts`. Field names
  * are camelCase on the TS side; the Rust IPC boundary maps from
  * snake_case per the existing `transcription.ts` convention.
  */
@@ -1331,9 +1333,9 @@ export interface MockStemModelInfo {
 }
 
 /**
- * Install mock responses for the Phase-5 stem-separation IPC surface.
+ * Install mock responses for the stem-separation IPC surface.
  *
- * Phase-5 contract:
+ * Stems IPC contract:
  *   - `download_stem_model()`                    -> `{ cached: true }`
  *   - `get_stem_model_info()`                    -> `MockStemModelInfo`
  *   - `separate_stems({ recordingId })`          -> parked promise; resolves

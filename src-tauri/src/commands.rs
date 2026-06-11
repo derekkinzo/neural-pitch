@@ -543,7 +543,7 @@ pub async fn delete_recording(
     Ok(())
 }
 
-// -- Phase 2.1 analysis surface ---------------------------------------------
+// -- Analysis surface -------------------------------------------------------
 
 /// Default analyzer name handed to the cache layer. Mirrors
 /// [`neural_pitch_core::analysis::contour::PYIN_ANALYZER_NAME`] so the IPC
@@ -734,13 +734,14 @@ pub async fn delete_analysis(
     .map_err(|e| format!("delete_analysis: {e:#}"))
 }
 
-// -- Phase 2.3 range / vibrato accessors ------------------------------------
+// -- Range / vibrato accessors ----------------------------------------------
 //
 // Convenience IPC surface for the recordings UI: shell out to a
 // `spawn_blocking` worker that postcard-decodes the cached `(recording_id,
 // analyzer_name, analyzer_version)` blob and projects the requested
-// sub-field. No separate row, no second cache key — see Phase 2.3 §2 and
-// Cache-version bump backs the projection.
+// sub-field. No separate row, no second cache key — the row's existing
+// `analyzer_version` column is the projection's cache key, so a version
+// bump invalidates both summary and projection together.
 //
 // Both commands re-use the `a4_hz` stored on the originating recordings
 // row so the projection is consistent with what `analyze_recording`'s
@@ -750,7 +751,7 @@ pub async fn delete_analysis(
 
 /// Resolve a recording id to its `a4_hz` reference pitch.
 ///
-/// Phase 2.3 range / vibrato projections need the `a4_hz` from the row
+/// Range / vibrato projections need the `a4_hz` from the row
 /// (no module-level A4 state). We accept the SQLite hop on
 /// the spawn_blocking worker rather than forcing the caller to supply
 /// `a4_hz` over IPC; the recording row is the source of truth.
@@ -777,7 +778,7 @@ fn lookup_a4_hz(
 /// `get_contour`'s error semantics:
 ///   * `Err("not found")` — no row matches the cache key.
 ///   * `Err("not present in cache row")` — the row exists but predates
-///     Phase 2.3 (the cached `ContourResult` blob fails postcard decode
+///     the current schema (the cached `ContourResult` blob fails postcard decode
 ///     under the live schema and the version is not a recognised legacy);
 ///     the front-end should re-run with `force_refresh = true`.
 ///
@@ -868,13 +869,13 @@ pub async fn get_vibrato_report(
     result.ok_or_else(|| "not found".to_string())
 }
 
-// -- Phase 2.2 backend-aware analysis surface -------------------------------
+// -- Backend-aware analysis surface -----------------------------------------
 
 /// Wire shape for the requested pitch backend.
 ///
 /// `tag = "kind"` so the front-end matches exhaustively on the discriminant
 /// rather than the field set; `untagged` would let a typo silently fall
-/// into a different arm. Phase 2.2 ships the four shipping backends; the
+/// into a different arm. The IPC currently exposes the four shipping backends; the
 /// neural arms carry the resolved on-disk path so the resolver stays
 /// out of the IPC boundary.
 ///
@@ -893,12 +894,6 @@ pub enum BackendKind {
     /// pYIN (Mauch & Dixon 2014). Requires `feature = "pyin"` in core.
     #[serde(rename = "pyin")]
     PYin,
-    /// PESTO neural backend. Requires `feature = "neural"` in core.
-    #[serde(rename = "pesto")]
-    Pesto {
-        /// Resolved on-disk path to the PESTO ONNX file.
-        onnx_path: PathBuf,
-    },
     /// CREPE-tiny neural backend. Requires `feature = "neural"` in core.
     #[serde(rename = "crepe-tiny")]
     CrepeTiny {
@@ -915,7 +910,6 @@ impl BackendKind {
         match self {
             Self::Yin => "yin",
             Self::PYin => "pyin",
-            Self::Pesto { .. } => "pesto",
             Self::CrepeTiny { .. } => "crepe-tiny",
         }
     }
@@ -926,27 +920,25 @@ impl BackendKind {
     fn analyzer_version(&self) -> &'static str {
         match self {
             Self::Yin | Self::PYin => DEFAULT_ANALYZER_VERSION,
-            // Phase 2.2 baseline.
-            Self::Pesto { .. } | Self::CrepeTiny { .. } => "0.1",
+            Self::CrepeTiny { .. } => "0.1",
         }
     }
 }
 
 /// Run a backend-selected analysis on a previously-recorded file.
 ///
-/// Phase 2.2 routing reality: the underlying analyzer plumbing in
+/// Routing reality: the underlying analyzer plumbing in
 /// [`neural_pitch_core::store::analyze_recording_blocking`] is hard-wired
 /// to pYIN — `run_analyzer_with_progress` constructs a `PYinEstimator`
 /// unconditionally and ignores the supplied `analyzer_name`. To prevent
 /// silent data-mislabelling (pYIN-derived contour bytes persisted under
-/// `analyzer_name = "pesto"`), this command short-circuits every backend
-/// other than [`BackendKind::PYin`] with `Err("backend not yet routed:
-/// <name> — Phase 2.5")` until the dispatcher in core lands. YIN is also
-/// refused for the same reason: the live tuner uses YIN/MPM, but the
-/// offline path here would still execute pYIN under the YIN cache key.
-///
-/// When the dispatcher arrives, this guard lifts and the `BackendKind`
-/// arms route to the appropriate `make_estimator` arm.
+/// `analyzer_name = "crepe-tiny"`), this command short-circuits every
+/// backend other than [`BackendKind::PYin`] with `Err("backend not yet
+/// routed: <name>")`. YIN is also refused for the same reason: the live
+/// tuner uses YIN/MPM, but the offline path here would still execute pYIN
+/// under the YIN cache key. Remove the guard once the per-backend
+/// dispatcher in core honours `analyzer_name`; the `BackendKind` arms are
+/// already shaped to route to the matching `make_estimator` arm.
 #[tauri::command]
 #[tracing::instrument(
     skip(state, progress, backend),
@@ -970,10 +962,7 @@ pub async fn analyze_recording_with_backend(
     match &backend {
         BackendKind::PYin => {}
         other => {
-            return Err(format!(
-                "backend not yet routed: {} — Phase 2.5",
-                other.analyzer_name()
-            ));
+            return Err(format!("backend not yet routed: {}", other.analyzer_name()));
         }
     }
 
@@ -1057,7 +1046,7 @@ pub fn get_capabilities() -> Result<Capabilities, String> {
 /// Status of a model entry in the workspace `models.toml`.
 ///
 /// Maps onto the resolver's [`PeekResult`] so the front-end Settings UI
-/// can render a "Download PESTO model" button when
+/// can render a "Download model" button when
 /// [`ModelStatus::MissingButFetchable`].
 #[derive(Serialize, Debug, Clone)]
 #[serde(tag = "kind", rename_all = "snake_case")]
@@ -1164,23 +1153,20 @@ pub async fn rename_recording(
     };
     let library = Arc::clone(&state.library);
     tokio::task::spawn_blocking(move || {
-        // No dedicated rename API today — round-trip via the connection.
-        // We extend the library surface here directly so the IPC command
-        // stays local until a Phase 2.4 rename helper lands.
+        // The library exposes only insert/list/soft_delete/upsert. We
+        // validate the row exists so callers get a clean `NotFound` for
+        // bad ids, but the label-update itself is a no-op: there is no
+        // rename helper on the library surface to call through to.
         let rows =
             library.list_recordings(neural_pitch_core::store::ListFilter::IncludingDeleted)?;
         if !rows.iter().any(|r| r.id == parsed) {
             return Err(neural_pitch_core::store::StoreError::NotFound(parsed));
         }
-        // The library exposes only insert/list/soft_delete/upsert today.
-        // For Phase 2.0 we accept the label-update is a no-op until the
-        // dedicated rename API lands in Phase 2.4 — log so operators see
-        // the intent.
         tracing::info!(
             target: "neural_pitch::commands",
             id = %parsed,
             label = ?new_label,
-            "rename_recording is a placeholder; persisted rename lands with Phase 2.4 surface",
+            "rename_recording accepted but not persisted — library has no rename helper",
         );
         Ok(())
     })
@@ -1404,7 +1390,7 @@ fn build_controller(
     emitter: Option<AudioEventEmitter>,
 ) -> Result<DspController, BuildError> {
     // 1) Discover the default input device. We do not currently allow
-    //    explicit device selection from the front-end; that is Phase 1.3
+    //    explicit device selection from the front-end; that is future
     //    work.
     let host = cpal::default_host();
     let device = host
@@ -1446,7 +1432,7 @@ fn build_controller(
     let smoother = ContourSmoother::new(settings.smoothing_window_ms, settings.sample_rate_hz);
     let vad = VoiceActivityGate::new(0.005, 4);
 
-    // 3) SPSC ring sized per the Phase 1.1 contract.
+    // 3) SPSC ring sized per the audio-backend ring-capacity contract.
     let (producer, consumer) = rtrb::RingBuffer::<f32>::new(backend_cfg.ring_capacity());
 
     // 4) Sink + worker + cancellation token + shared recording fan-out.
@@ -1470,10 +1456,10 @@ fn build_controller(
 
     // 5) Construct + start the cpal-backed audio capture. If `start`
     //    fails, drop the worker side (cancel + join) and bubble the error
-    //    verbatim. The Phase 1.1 backend semantics already satisfy the
+    //    verbatim. The audio-backend semantics already satisfy the
     //    "no poison" rule.
     //
-    //    Phase 1.3: request a `Fixed(256)` buffer size for WASAPI; the
+    //    Request a `Fixed(256)` buffer size for WASAPI; the
     //    backend clamps to the device's supported range via
     //    `pick_buffer_size` and falls back to `BufferSize::Default` when
     //    the range is `Unknown`. The optional `emitter` forwards
@@ -1523,13 +1509,13 @@ fn validate_sample_format(fmt: SampleFormat) -> Result<SampleFormat, BuildError>
     }
 }
 
-// -- Phase 3 — file-import / Basic Pitch transcribe / MIDI export -----------
+// -- File-import / Basic Pitch transcribe / MIDI export ---------------------
 //
 // Each command is a thin async wrapper over the matching `*_blocking` helper
 // in [`crate::transcribe`]: validate the IPC argument shape, hop onto a
 // `spawn_blocking` worker, flatten the typed error to `Result<T, String>`
-// at the boundary. Mirror the analyse / contour command shape from
-// Phase 2.1 so the IPC surface stays uniform.
+// at the boundary. Mirror the analyse / contour command shape so the IPC
+// surface stays uniform.
 
 /// Adapter that adapts a `tauri::ipc::Channel<TranscribeProgress>` to the
 /// pure-Rust [`crate::transcribe::TranscribeProgressSink`] trait. Channel
@@ -1643,9 +1629,9 @@ pub async fn export_midi(
 }
 
 // ----------------------------------------------------------------------------
-// Phase 5 — HTDemucs four-stem separation Tauri commands.
+// HTDemucs four-stem separation Tauri commands.
 //
-// Mirror the Phase 3 transcribe shape: a thin `async` Tauri shim that
+// Mirror the transcribe surface shape: a thin `async` Tauri shim that
 // adapts a typed `Channel<…>` to a pure-Rust `…ProgressSink` and dispatches
 // the heavy work into `tokio::task::spawn_blocking`. The four commands
 // below are gated behind `feature = "neural"`; under
@@ -1947,15 +1933,11 @@ mod tests {
             serde_json::from_str(r#"{"kind":"yin"}"#).expect("yin should deserialize");
         let pyin: BackendKind =
             serde_json::from_str(r#"{"kind":"pyin"}"#).expect("pyin should deserialize");
-        let pesto: BackendKind =
-            serde_json::from_str(r#"{"kind":"pesto","onnx_path":"/tmp/p.onnx"}"#)
-                .expect("pesto should deserialize");
         let crepe: BackendKind =
             serde_json::from_str(r#"{"kind":"crepe-tiny","onnx_path":"/tmp/c.onnx"}"#)
                 .expect("crepe-tiny should deserialize");
         assert_eq!(yin.analyzer_name(), "yin");
         assert_eq!(pyin.analyzer_name(), "pyin");
-        assert_eq!(pesto.analyzer_name(), "pesto");
         assert_eq!(crepe.analyzer_name(), "crepe-tiny");
     }
 }

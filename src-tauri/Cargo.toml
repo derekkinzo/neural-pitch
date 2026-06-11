@@ -21,7 +21,7 @@ tauri-build = { version = "2", features = [] }
 tauri          = { version = "2", features = ["protocol-asset"] }
 tauri-plugin-log   = "2"
 tauri-plugin-store = "2"
-# Phase 3 — dialog plugin powers the front-end's open / save pickers for
+# Dialog plugin powers the front-end's open / save pickers for
 # `import_audio_file` / `export_midi`. The Rust shell never touches the
 # returned path through a broad `fs:` plugin scope; the path is passed by
 # value into the typed commands, which then perform IO under their own
@@ -37,12 +37,12 @@ serde          = { workspace = true }
 serde_json     = { workspace = true }
 parking_lot    = { workspace = true }
 # Postcard is the on-the-wire serialiser for the `analysis_cache.result_blob`
-# column. The Phase 3 transcribe path stores a `WirePolyResult` blob keyed on
+# column. The transcribe path stores a `WirePolyResult` blob keyed on
 # `("basic-pitch", "1.0")` so the cache-hit path can re-summarise without
 # re-running ONNX inference. Gated behind the `neural` feature because the
 # transcribe surface is only compiled in under that feature.
 postcard       = { workspace = true, optional = true }
-# Phase 3 export-MIDI emitter writes SMF type-1 bytes via midly. Pulled into
+# Export-MIDI emitter writes SMF type-1 bytes via midly. Pulled into
 # the regular dep set (rather than dev-only) because the export path is the
 # production code that flushes the SMF to disk. Gated behind `neural` so the
 # `--no-default-features` build does not pick up the dependency. ~50 KB
@@ -62,14 +62,14 @@ tokio-util     = { version = "0.7", default-features = false }
 default        = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]
 # Pass-through that flips on the `neural` feature of `neural-pitch-core`
-# (PESTO + CREPE-tiny + Viterbi). Off by default so the standard
+# (CREPE-tiny + Viterbi). Off by default so the standard
 # `cargo tauri build` produces a binary with no `ort` / `ndarray`
 # dependency. Opt in with `cargo tauri build --features app-neural`.
 app-neural     = ["neural-pitch-core/neural"]
-# Phase 3 — file-import / transcribe / MIDI-export surface. Pass-through
+# File-import / transcribe / MIDI-export surface. Pass-through
 # to `neural-pitch-core/neural` (Basic Pitch + MIDI emitter live in
 # `neural_pitch_core::poly`, which is itself gated behind `neural`). The
-# Phase 3 integration tests under `tests/import_audio_file.rs`,
+# integration tests under `tests/import_audio_file.rs`,
 # `tests/transcribe_recording_cache.rs`, and `tests/export_midi_roundtrip.rs`
 # all start with `#![cfg(feature = "neural")]` so they compile out under
 # `--no-default-features` and the `cargo build --no-default-features`
@@ -86,7 +86,7 @@ neural-pitch-core = { path = "../crates/neural-pitch-core", version = "0.1" }
 # postcard is the wire format used by the analysis_cache table; the
 # integration test seeds a `ContourResult` blob directly.
 postcard          = { workspace = true }
-# Phase 3 export-MIDI round-trip test re-parses the SMF byte stream the
+# Export-MIDI round-trip test re-parses the SMF byte stream the
 # Tauri command writes to disk. Pure-Rust, MIT/Apache-2.0; gated to
 # dev-dependencies because production code never reads MIDI back.
 midly             = "0.5"

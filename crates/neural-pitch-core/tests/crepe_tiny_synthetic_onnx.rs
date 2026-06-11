@@ -1,21 +1,15 @@
 #![allow(missing_docs)]
 #![cfg(feature = "neural")]
 
-//! Phase 2.2 RED — CREPE-tiny end-to-end with a synthetic stub ONNX.
+//! CREPE-tiny end-to-end with a synthetic stub ONNX.
 //!
-//! Same shape as `pesto_synthetic_onnx.rs` — push a 960-sample @ 48 kHz
-//! 440 Hz sine through [`CrepeTinyEstimator::process`] and assert the
-//! recovered f0 lies within 5 cents of 440 Hz. The differences from PESTO
-//! are:
+//! Pushes a 960-sample @ 48 kHz 440 Hz sine through
+//! [`CrepeTinyEstimator::process`] and asserts the recovered f0 lies
+//! within 5 cents of 440 Hz. Notable properties:
 //!   * stateless graph — no `cache_in` / `cache_out` tensors,
 //!   * native rate is 16 kHz with a 1024-sample window, so the estimator
 //!     must resample the 48 kHz capture audio internally (rubato) and
 //!     keep the work alloc-free per the hot-path contract.
-//!
-//! TDD-RED: `CrepeTinyEstimator::from_onnx` panics with `todo!()` before
-//! the stub file is opened. Phase 2.2 GREEN replaces the stub bytes with
-//! a valid 1-layer ONNX graph and wires the resampler + softmax-argmax
-//! path inside `process`.
 
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 
@@ -82,7 +76,7 @@ fn crepe_tiny_synthetic_440hz_within_5_cents() {
 fn crepe_tiny_is_stateless_so_consecutive_calls_are_deterministic() {
     // CREPE has no cache tensor — a second call on the same input MUST
     // produce the same f0 as the first. This pins the "stateless"
-    // contract and is the inverse of the PESTO state-threading test.
+    // contract.
     let dir = temp_subdir("crepe-stateless");
     let model_path = write_stub_onnx(&dir, "crepe_stub.onnx", CREPE_STUB_ONNX_BYTES);
 

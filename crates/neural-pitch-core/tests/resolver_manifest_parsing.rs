@@ -1,12 +1,8 @@
-//! Phase 2.2 resolver test #1: `models.toml` round-trip.
+//! Resolver test: `models.toml` round-trip.
 //!
 //! Spec: write a fixture manifest with one valid `[[models]]` block to a
 //! per-test scratch dir, parse it, and assert the entry's name + license
 //! survive the round-trip.
-//!
-//! TDD-RED: `Manifest::from_toml_str` is `todo!()`, so this test panics with
-//! "not yet implemented". That panic is the red signal — Phase 2.2 lands the
-//! parser.
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 
 use std::path::PathBuf;
@@ -17,11 +13,11 @@ const FIXTURE: &str = r#"
 schema_version = 1
 
 [[models]]
-name        = "pesto-v1"
-url         = "https://example.invalid/pesto-v1.onnx"
+name        = "example-v1"
+url         = "https://example.invalid/example-v1.onnx"
 sha256      = "abcdef0000000000000000000000000000000000000000000000000000000000"
 size_bytes  = 4_000_000
-license     = "LGPL-3.0-or-later"
+license     = "Apache-2.0"
 "#;
 
 #[test]
@@ -46,16 +42,16 @@ fn resolver_manifest_round_trips_one_entry() {
     assert_eq!(parsed.models.len(), 1, "fixture has exactly one entry");
 
     let entry = parsed
-        .entry("pesto-v1")
-        .expect("pesto-v1 entry must be looked up by name");
-    assert_eq!(entry.name, "pesto-v1");
-    assert_eq!(entry.url, "https://example.invalid/pesto-v1.onnx");
+        .entry("example-v1")
+        .expect("example-v1 entry must be looked up by name");
+    assert_eq!(entry.name, "example-v1");
+    assert_eq!(entry.url, "https://example.invalid/example-v1.onnx");
     assert_eq!(
         entry.sha256,
         "abcdef0000000000000000000000000000000000000000000000000000000000"
     );
     assert_eq!(entry.size_bytes, 4_000_000);
-    assert_eq!(entry.license, "LGPL-3.0-or-later");
+    assert_eq!(entry.license, "Apache-2.0");
 }
 
 #[test]
@@ -64,11 +60,11 @@ fn resolver_manifest_rejects_unsupported_schema_version() {
 schema_version = 2
 
 [[models]]
-name        = "pesto-v1"
+name        = "example-v1"
 url         = ""
 sha256      = "0000000000000000000000000000000000000000000000000000000000000000"
 size_bytes  = 0
-license     = "LGPL-3.0-or-later"
+license     = "Apache-2.0"
 "#;
     let res = Manifest::from_toml_str(bad);
     assert!(

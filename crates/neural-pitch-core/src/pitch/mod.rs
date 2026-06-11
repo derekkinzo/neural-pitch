@@ -2,8 +2,8 @@
 //!
 //! The [`PitchEstimator`] trait is the single backend-agnostic interface for
 //! every pitch-detection algorithm in `neural-pitch-core`: YIN/MPM, pYIN,
-//! PESTO, and CREPE-tiny. Pipelines own exactly one boxed estimator at a
-//! time and call [`PitchEstimator::process`] on hop-aligned sample chunks.
+//! and CREPE-tiny. Pipelines own exactly one boxed estimator at a time and
+//! call [`PitchEstimator::process`] on hop-aligned sample chunks.
 //!
 //! # Contract
 //!
@@ -33,16 +33,14 @@ pub mod factory;
 pub mod pyin;
 pub mod yin;
 
-// Neural backends. Both modules are `#[cfg(feature = "neural")]`-gated at
-// their own crate-attribute level, so re-declaring the same gate here is
+// Neural backends. The module is `#[cfg(feature = "neural")]`-gated at
+// its own crate-attribute level, so re-declaring the same gate here is
 // required to keep `cargo build --no-default-features` green: with the
 // gate off, the `mod` statement still expects a compilable file, and the
 // inner `#![cfg(feature = "neural")]` would otherwise produce an
 // empty-but-imported module.
 #[cfg(feature = "neural")]
 pub mod crepe;
-#[cfg(feature = "neural")]
-pub mod pesto;
 
 /// One frame of fundamental-frequency analysis.
 ///

@@ -1,4 +1,4 @@
-# Phase 2.2 placeholder manifest.
+# Resolver manifest.
 #
 # This file is git-tracked. The resolved ONNX blobs under `/models/` are NOT
 # (see `.gitignore`).
@@ -6,17 +6,7 @@
 # `schema_version = 1` is the parser's exact-match guard; bumping it is a
 # breaking change that triggers a "manifest version unsupported" error rather
 # than silent reinterpretation.
-#
-# TODO(Phase 2.5/3): replace the placeholder URL + sha256 + size_bytes with
-# the real PESTO release artifact pinned to a Hugging Face commit hash.
 schema_version = 1
-
-[[models]]
-name        = "pesto-v1"
-url         = ""  # placeholder; populated in Phase 2.5/3
-sha256      = "0000000000000000000000000000000000000000000000000000000000000000"
-size_bytes  = 4_000_000
-license     = "LGPL-3.0-or-later"
 
 # Spotify Basic Pitch v1 (ICASSP 2022). Bundled in-tree under
 # `crates/neural-pitch-core/assets/basic_pitch_v1.0.onnx`; the resolver

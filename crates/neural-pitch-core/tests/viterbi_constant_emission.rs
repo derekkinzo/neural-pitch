@@ -1,18 +1,13 @@
 #![allow(missing_docs)]
 #![cfg(feature = "neural")]
 
-//! Phase 2.2 RED — Viterbi over single-peak-per-frame emissions.
+//! Viterbi over single-peak-per-frame emissions.
 //!
 //! When every frame's emission distribution is sharply unimodal, Viterbi
 //! is degenerate: the chosen state is the per-frame argmax regardless of
 //! the transition prior. This test pins that property as a baseline so
 //! later refactors of the transition kernel can't accidentally weight
 //! the prior strongly enough to override clear evidence.
-//!
-//! TDD-RED: the assertions are sketched against the spec; the body of
-//! [`neural_pitch_core::analysis::viterbi::decode`] is `todo!()`, so the
-//! test currently panics on the first call. Phase 2.2 GREEN turns this
-//! green by wiring the log-domain forward pass and back-pointer walk.
 
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 
@@ -30,7 +25,7 @@ fn one_hot_log(n_states: usize, peak: usize) -> Vec<f32> {
 
 #[test]
 fn viterbi_constant_emission_returns_argmax_path() {
-    let n_states = 384; // PESTO cents bins.
+    let n_states = 384; // 384 cents bins.
     let peaks = [120_usize, 121, 122, 123, 122, 121, 120, 119, 118, 117];
     let emissions: Vec<Vec<f32>> = peaks.iter().map(|&p| one_hot_log(n_states, p)).collect();
 

@@ -6,7 +6,6 @@
 //! Method, sharing the same [`yin::YinMpmEstimator`] struct via
 //! [`yin::YinAlgorithm`]). The pYIN and neural backends
 //! ([`crate::pitch::pyin::PYinEstimator`],
-//! [`crate::pitch::pesto::PestoEstimator`],
 //! [`crate::pitch::crepe::CrepeTinyEstimator`]) are constructed directly
 //! by callers and are not yet routed through this factory.
 

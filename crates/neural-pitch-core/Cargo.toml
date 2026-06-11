@@ -12,7 +12,7 @@ readme.workspace       = true
 [features]
 default = ["cpal", "flac", "pyin"]
 cpal              = ["dep:cpal"]
-# ORT 2.0 (load-dynamic) + ndarray + rubato + reqwest. The ONNX Runtime
+# ORT 2.0 (load-dynamic) + rubato + reqwest. The ONNX Runtime
 # shared library is supplied out of band via `ORT_DYLIB_PATH`; we
 # deliberately avoid the `download-binaries` feature. `rubato` is the
 # resampler used by `poly::basic_pitch` to coerce arbitrary capture rates
@@ -20,7 +20,7 @@ cpal              = ["dep:cpal"]
 # `stems::resample` for the 44.1 kHz HTDemucs round-trip. `reqwest`
 # (rustls-only, no OpenSSL) drives the on-demand HTDemucs ONNX download
 # in `stems::download` — the model is too large (~80 MB) to commit.
-neural            = ["dep:ort", "dep:ndarray", "dep:rubato", "dep:reqwest"]
+neural            = ["dep:ort", "dep:rubato", "dep:reqwest"]
 # pYIN offline backend (Sytronik/pyin = "1.2"). Pulls in the pure-Rust
 # pyin crate plus claxon for the FLAC decode path used by
 # `analysis::contour::analyze_contour`.
@@ -78,10 +78,6 @@ claxon      = { version = "0.4", optional = true }
 # api version that satisfies the symbol so we don't drag in newer api
 # surface unnecessarily.
 ort         = { version = "=2.0.0-rc.12", default-features = false, features = ["load-dynamic", "api-18"], optional = true }
-# `ndarray` is the host-side tensor staging buffer for the PESTO
-# state-cache and CREPE input. Pre-allocated in the constructor and re-used
-# across `process` calls so the hot path stays alloc-free.
-ndarray     = { version = "0.16", optional = true }
 # `toml` parses the workspace `models.toml` manifest used by the model
 # resolver. `parse` only — we never re-serialise the manifest from Rust.
 # Always-on (the resolver itself is not feature-gated; its `NotConfigured`
@@ -99,9 +95,9 @@ sha2        = "0.10"
 # the analysis module can build under `--no-default-features` (i.e.
 # without the `pyin` feature).
 realfft     = "3.5"
-# `midly` is the SMF reader/writer used by `poly::midi` to emit Phase 3
+# `midly` is the SMF reader/writer used by `poly::midi` to emit
 # MIDI exports. Pure-Rust, no system deps, ~50 KB compiled. Always-on
-# because the GREEN export path is not feature-gated; the surrounding
+# because the export path is not feature-gated; the surrounding
 # `poly` module is gated behind `feature = "neural"` at `lib.rs` so the
 # `--no-default-features` build never invokes the export path even
 # though the dependency is in the graph.
@@ -121,7 +117,7 @@ rubato      = { version = "0.16", optional = true }
 # `rustls-tls-native-roots` uses the platform trust store (Linux:
 # /etc/ssl/certs, macOS: Keychain, Windows: cert store) so the build
 # does not pull in the `webpki-roots` crate (CDLA-Permissive-2.0, not
-# in our deny.toml allowlist). See: license audit finding for Phase 5.
+# in our deny.toml allowlist).
 reqwest     = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls-native-roots"], optional = true }
 
 [dev-dependencies]

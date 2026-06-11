@@ -107,8 +107,8 @@ impl Default for NoteAssemblyConfig {
 /// Polyphonic transcription estimator backed by Spotify's Basic Pitch v1
 /// ONNX (Apache-2.0).
 ///
-/// Construction is path-based to match the existing PESTO / CREPE
-/// ergonomics in [`crate::pitch`]. The ONNX session is allocated in the
+/// Construction is path-based to match the existing CREPE ergonomics
+/// in [`crate::pitch`]. The ONNX session is allocated in the
 /// constructor; [`super::PolyEstimator::analyze`] re-builds the
 /// resampler each call because the input length is variable but the
 /// scratch buffers sit on the stack-local heap and the cost is small
@@ -298,9 +298,8 @@ fn run_window(
     }
     // Build the [1, AUDIO_N_SAMPLES, 1] input tensor. We hold the
     // samples in a flat slice and let `TensorRef::from_array_view`
-    // bind them to the session via the `(shape, &[T])` adaptor — this
-    // avoids the ort/ndarray version-skew (`ort` 2.0 uses `ndarray`
-    // 0.17, the rest of the workspace uses 0.16).
+    // bind them to the session via the `(shape, &[T])` adaptor so we
+    // never have to depend on `ort`'s internal `ndarray` version.
     let shape: [usize; 3] = [1, AUDIO_N_SAMPLES, 1];
     let input_value = ort::value::TensorRef::from_array_view((shape, window))
         .map_err(|e| EstimatorError::Ort(format!("tensor view: {e}")))?;
@@ -343,10 +342,11 @@ fn extract_2d(
     let value = outputs
         .get(name)
         .ok_or_else(|| EstimatorError::Ort(format!("output {name} missing")))?;
-    // Extract as a raw `(shape, &[T])` pair so we do not couple to the
-    // ort-internal ndarray version. The bundled Basic Pitch ONNX always
-    // emits `[1, T, trailing]`-shaped tensors so we drop the batch axis
-    // and reshape into a `Vec<Vec<f32>>` keyed by frame index.
+    // Extract as a raw `(shape, &[T])` pair so we do not couple to
+    // `ort`'s internal tensor representation. The bundled Basic Pitch
+    // ONNX always emits `[1, T, trailing]`-shaped tensors so we drop
+    // the batch axis and reshape into a `Vec<Vec<f32>>` keyed by frame
+    // index.
     let (shape, data) = value
         .try_extract_tensor::<f32>()
         .map_err(|e| EstimatorError::Ort(format!("extract {name}: {e}")))?;

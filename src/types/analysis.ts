@@ -1,14 +1,14 @@
-// Analysis — wire-format types for the Phase 2.1 offline pYIN backend.
+// Analysis — wire-format types for the offline pYIN backend.
 //
 // The Rust shell emits camelCase per the existing recording.ts convention;
 // the IPC boundary (`analyze_recording`, `get_contour`, `analysis-progress`)
-// shares this shape with the Tier-5 Tauri-mock under tests/e2e/helpers.
+// shares this shape with the E2E Tauri-mock under tests/e2e/helpers.
 //
 //   tests/e2e/helpers/tauri-mock.ts (MockAnalysisSummary / MockContourResult)
 
 import type { RecordingId } from "@/types/recording";
 
-/** Phase 2.3 — vocal-range report carried alongside the summary card.
+/** Vocal-range report carried alongside the summary card.
  *
  *  The analyzer derives a 5th/95th-percentile "comfortable" range plus the
  *  raw min/max voiced MIDI. `voicedFrameCount` gates the readout's empty
@@ -35,7 +35,7 @@ export interface RangeReport {
   readonly voiceTypeHints: readonly string[];
 }
 
-/** Phase 2.3 — single vibrato analysis window. */
+/** Single vibrato analysis window. */
 export interface VibratoWindow {
   /** Window center timestamp in milliseconds. */
   readonly tMs: number;
@@ -47,7 +47,7 @@ export interface VibratoWindow {
   readonly confidence: number;
 }
 
-/** Phase 2.3 — vibrato report carried alongside the summary card. */
+/** Vibrato report carried alongside the summary card. */
 export interface VibratoReport {
   /** Median rate (Hz) across all windows. */
   readonly medianRateHz: number;
@@ -78,10 +78,10 @@ export interface AnalysisSummary {
   /** Analyzer version stamp — part of the cache key alongside the recording
    *  id. Specs assert via the `${recordingId}:${analyzerVersion}` composite. */
   readonly analyzerVersion: string;
-  /** Phase 2.3 — vocal range report. Optional because older cached rows
+  /** Vocal range report. Optional because older cached rows
    *  pre-date the field; readouts treat `undefined` as the empty branch. */
   readonly range?: RangeReport;
-  /** Phase 2.3 — vibrato report. Optional for the same reason. */
+  /** Vibrato report. Optional for the same reason. */
   readonly vibrato?: VibratoReport;
 }
 
@@ -107,7 +107,7 @@ export interface ContourResult {
 }
 
 /** Streaming progress payload — emitted at ~10 Hz over the
- *  `analysis-progress` Tauri channel while pYIN/PESTO is running. */
+ *  `analysis-progress` Tauri channel while pYIN is running. */
 export interface AnalysisProgress {
   readonly recordingId: RecordingId;
   /** Percent complete in `[0, 100]`. The card flips back to the numeric
