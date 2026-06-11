@@ -53,8 +53,18 @@ export function Tuner(): ReactNode {
         {/* Header sits above the non-modal recordings drawer (z-40) so the
             record + library + settings triggers stay clickable while the
             drawer is open. The modal SettingsDrawer (z-50) still sits above
-            the header — that path correctly inerts main and traps focus. */}
-        <header className="relative z-50 flex items-center justify-between px-6 py-4">
+            the header — that path correctly inerts main and traps focus.
+            When the non-modal drawer is open the header reserves the
+            drawer's 360 px column on the right (`pr-[376px]` = 360 + 16 px
+            gutter) so the toolbar buttons no longer fight the drawer panel
+            for the same screen real estate. */}
+        <header
+          className={
+            libraryOpen
+              ? "relative z-50 flex items-center justify-between py-4 pl-6 pr-[376px] transition-[padding] duration-150"
+              : "relative z-50 flex items-center justify-between px-6 py-4 transition-[padding] duration-150"
+          }
+        >
           <StatusPill />
           <div className="flex items-center gap-2">
             {/* Toolbar: co-locates the record + import controls
