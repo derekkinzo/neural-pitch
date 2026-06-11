@@ -54,6 +54,9 @@ Thumbs.db
 # Acceptance harness regenerated artifact (timestamp + cents change per run)
 /.acceptance-reports/
 
+# Live-shell smoke harness (timestamped screenshots + summary per run)
+/.smoke-reports/
+
 # Local env
 .env
 .env.local
