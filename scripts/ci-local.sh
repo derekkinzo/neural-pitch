@@ -88,6 +88,23 @@ export CARGO_TERM_COLOR="${CARGO_TERM_COLOR:-always}"
 export RUSTFLAGS="${RUSTFLAGS:--D warnings}"
 export RUST_BACKTRACE="${RUST_BACKTRACE:-1}"
 
+# `ort = { features = ["load-dynamic"] }` looks up `libonnxruntime.so` at
+# runtime. If unset and the system loader cannot find one, ONNX session
+# constructors block in `dlopen` instead of erroring fast. Auto-detect a
+# common cached copy so the local gate's `--include-ignored` ONNX tests
+# do not silently hang. Override by exporting `ORT_DYLIB_PATH` yourself.
+if [[ -z "${ORT_DYLIB_PATH:-}" ]]; then
+  for candidate in \
+    "${HOME}/.bun/install/cache/onnxruntime-node@1.21.0@@@1/bin/napi-v3/linux/x64/libonnxruntime.so.1.21.0" \
+    "/usr/local/lib/libonnxruntime.so" \
+    "/usr/lib/x86_64-linux-gnu/libonnxruntime.so"; do
+    if [[ -f "${candidate}" ]]; then
+      export ORT_DYLIB_PATH="${candidate}"
+      break
+    fi
+  done
+fi
+
 # ---------------------------------------------------------------------
 # tty-aware colors via tput. Gate on BOTH stdout and stderr being a
 # tty so a single-stream redirect (e.g. `... 2> err.log`) strips ANSI

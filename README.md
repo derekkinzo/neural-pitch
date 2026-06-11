@@ -93,6 +93,22 @@ npm run typecheck && npm run lint
 npx playwright test
 ```
 
+### Running the ONNX-backed `#[ignore]`d tests
+
+Basic Pitch and HTDemucs use `ort` with `load-dynamic`, which resolves
+`libonnxruntime.so` at runtime via the system loader or `ORT_DYLIB_PATH`.
+If neither path resolves, ONNX session construction blocks inside
+`dlopen`. Point `ORT_DYLIB_PATH` at a working copy and include
+`--include-ignored`:
+
+```sh
+export ORT_DYLIB_PATH=/path/to/libonnxruntime.so
+cargo test --workspace --features neural -- --include-ignored
+```
+
+`scripts/ci-local.sh` auto-detects a few common cache paths so the
+local gate's ONNX tests do not silently hang.
+
 ## License
 
 Dual-licensed under MIT OR Apache-2.0 at your option.
