@@ -74,6 +74,43 @@ mkdir -p "${REPORT_DIR}"
 echo "Smoke report: ${REPORT_DIR}"
 
 # ---------------------------------------------------------------------
+# App-data isolation. The shell writes its SQLite library + recordings
+# under `$APP_DATA` resolved by `tauri::Manager::path().app_data_dir()`.
+# A clean smoke run starts from an empty library so the row counts are
+# deterministic. We do NOT delete the cached HTDemucs ONNX (~316 MB) —
+# the harness instead seeds it into the app-data models dir so the
+# stem-separate step does not have to redownload.
+# ---------------------------------------------------------------------
+APP_ID="com.derekkinzo.neuralpitch"
+APP_DATA="${HOME}/.local/share/${APP_ID}"
+RECORDINGS="${APP_DATA}/recordings"
+MODELS_DIR="${APP_DATA}/models"
+LEGACY_MODELS_DIR="${HOME}/.local/share/neural-pitch/models"
+
+echo "==> resetting app-data at ${APP_DATA}"
+rm -rf "${RECORDINGS}" "${APP_DATA}/settings.json" "${APP_DATA}/library.sqlite"*
+mkdir -p "${RECORDINGS}" "${MODELS_DIR}"
+
+# If a cached HTDemucs ONNX exists in the legacy location, hard-link it
+# into the active app-data dir so the stem-separate step short-circuits
+# the 316 MB download. (Hard-link, not copy, so we don't double-up disk.)
+if [[ -f "${LEGACY_MODELS_DIR}/htdemucs.onnx" ]] && [[ ! -f "${MODELS_DIR}/htdemucs.onnx" ]]; then
+  echo "==> linking cached HTDemucs ONNX from ${LEGACY_MODELS_DIR}"
+  ln -f "${LEGACY_MODELS_DIR}/htdemucs.onnx" "${MODELS_DIR}/htdemucs.onnx"
+fi
+
+# ---------------------------------------------------------------------
+# Pick a fixture FLAC. The driver imports it via the Tauri command
+# instead of the native open dialog (which WebDriver can't drive).
+# ---------------------------------------------------------------------
+FIXTURE="${REPO_ROOT}/crates/neural-pitch-core/tests/fixtures/voice/069_A4_synthvoice_clean.flac"
+if [[ ! -f "${FIXTURE}" ]]; then
+  echo "ERROR: fixture not found at ${FIXTURE}" >&2
+  exit 2
+fi
+echo "==> fixture: ${FIXTURE}"
+
+# ---------------------------------------------------------------------
 # Build a release binary so the smoke pass exercises the same code
 # the user will install. `npm run build` first because Tauri's
 # `generate_context!` reads `dist/`.
@@ -82,7 +119,11 @@ echo "==> npm run build"
 npm run build > "${REPORT_DIR}/npm-build.log" 2>&1
 
 echo "==> cargo tauri build (debug; release would push the run past 10 min)"
-cargo build -p neural-pitch --features app-neural > "${REPORT_DIR}/cargo-build.log" 2>&1
+# Both `app-neural` (PESTO/CREPE in core) and `neural` (Basic Pitch +
+# HTDemucs IPC surface in src-tauri) must be on for the smoke pass to
+# exercise the import / transcribe / separate commands.
+cargo build -p neural-pitch --features app-neural,neural \
+  > "${REPORT_DIR}/cargo-build.log" 2>&1
 
 BINARY="${REPO_ROOT}/target/debug/neural-pitch"
 if [[ ! -x "${BINARY}" ]]; then
@@ -109,12 +150,15 @@ if ! curl -fsS http://localhost:4444/status >/dev/null 2>&1; then
 fi
 
 echo "==> Running scripts/smoke-driver.mjs"
+set +e
 node "${REPO_ROOT}/scripts/smoke-driver.mjs" \
   --binary "${BINARY}" \
   --report-dir "${REPORT_DIR}" \
+  --fixture "${FIXTURE}" \
   --driver-url http://localhost:4444 \
   > "${REPORT_DIR}/driver.log" 2>&1
 DRIVER_EXIT=$?
+set -e
 
 if [[ ${DRIVER_EXIT} -eq 0 ]]; then
   echo "==> SMOKE PASS — ${REPORT_DIR}"
