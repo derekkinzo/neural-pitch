@@ -156,6 +156,10 @@ async function waitFor(description, predicate, opts = {}) {
 // -------- step harness -------------------------------------------------
 const SUMMARY = join(REPORT_DIR, "summary.jsonl");
 let stepIndex = 0;
+// CSS transitions in the app last `duration-150` (= 150 ms). Padding the
+// screenshot capture by a bit more than that lets every step's snapshot
+// reflect the steady-state visual rather than a mid-transition frame.
+const SCREENSHOT_SETTLE_MS = 200;
 async function step(name, fn, opts = {}) {
   stepIndex += 1;
   const id = String(stepIndex).padStart(2, "0");
@@ -163,6 +167,7 @@ async function step(name, fn, opts = {}) {
   const t0 = Date.now();
   try {
     const result = await fn();
+    await sleep(SCREENSHOT_SETTLE_MS);
     const png = await screenshot();
     await writeFile(join(REPORT_DIR, `${id}-${slug(name)}.png`), png);
     const elapsedMs = Date.now() - t0;
