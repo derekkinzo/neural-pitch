@@ -20,8 +20,8 @@ fn default_capability_parses_and_targets_main_window() {
     assert_eq!(v["windows"][0], "main");
     let perms = v["permissions"].as_array().expect("permissions array");
     assert!(perms.iter().any(|p| p == "core:default"));
-    assert!(perms.iter().any(|p| p == "log:default"));
     assert!(perms.iter().any(|p| p == "store:default"));
+    assert!(perms.iter().any(|p| p == "dialog:default"));
 }
 
 #[test]
