@@ -54,7 +54,6 @@ pub fn run() {
     // `expect_used` lint.
     #[allow(clippy::expect_used)]
     tauri::Builder::default()
-        .plugin(tauri_plugin_log::Builder::default().build())
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {

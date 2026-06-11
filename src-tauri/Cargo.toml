@@ -26,7 +26,6 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 tauri          = { version = "2", features = ["protocol-asset"] }
-tauri-plugin-log   = "2"
 tauri-plugin-store = "2"
 # Dialog plugin powers the front-end's open / save pickers for
 # `import_audio_file` / `export_midi`. The Rust shell never touches the
