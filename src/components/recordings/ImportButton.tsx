@@ -19,7 +19,7 @@ import { openAudioFileDialog } from "@/lib/dialog";
 import { useRecordingsStore } from "@/stores/recordingsStore";
 import type { Recording } from "@/types/recording";
 
-const FILTERS = [{ name: "Audio", extensions: ["wav", "flac", "mp3"] }] as const;
+const FILTERS = [{ name: "Audio", extensions: ["wav", "flac"] }] as const;
 
 export function ImportButton(): ReactNode {
   const refresh = useRecordingsStore((s) => s.refresh);

@@ -8,8 +8,9 @@
 //! the analyse / contour command surface uses).
 //!
 //! 1. [`import_audio_file_blocking`] — extension-gated to
-//!    `{wav, flac, mp3}`, stat-rejects sources `>` [`IMPORT_SIZE_LIMIT_BYTES`],
-//!    parses the WAV header inline (RIFF/WAVE/fmt /data) for the
+//!    `{wav, flac}`, stat-rejects sources `>` [`IMPORT_SIZE_LIMIT_BYTES`],
+//!    probes the source header (inline RIFF/WAVE for WAV, claxon
+//!    STREAMINFO for FLAC) for the
 //!    sample-rate / channels / duration probe, copies the source bytes into
 //!    `{recordings_dir}/imports/<uuid>.<ext>`, and stamps a row with
 //!    `instrument_profile = "Imported"`.
@@ -178,7 +179,7 @@ struct WireNoteEvent {
 /// otherwise the message is purely user-facing copy.
 #[derive(Debug, Error)]
 pub enum ImportError {
-    /// File extension is not in the gated `{wav, flac, mp3}` set.
+    /// File extension is not in the gated `{wav, flac}` set.
     #[error("unsupported extension: {0}")]
     UnsupportedExtension(String),
     /// Header parse / decode of the source file failed.
@@ -252,13 +253,15 @@ pub fn import_audio_file_blocking(
     recordings_dir: &Path,
     source_path: &Path,
 ) -> Result<RecordingId, ImportError> {
-    // 1) Extension gate.
+    // 1) Extension gate. WAV and FLAC are the two formats the downstream
+    //    `decode_audio_mono` helper handles without pulling in symphonia.
+    //    The UI's open-file filter offers the same set.
     let ext = source_path
         .extension()
         .and_then(|os| os.to_str())
         .map(str::to_ascii_lowercase)
         .unwrap_or_default();
-    if ext.as_str() != "wav" {
+    if !matches!(ext.as_str(), "wav" | "flac") {
         return Err(ImportError::UnsupportedExtension(ext));
     }
 
@@ -268,11 +271,15 @@ pub fn import_audio_file_blocking(
         return Err(ImportError::TooLarge { bytes: meta.len() });
     }
 
-    // 3) Probe the WAV header inline. The on-disk import surface is
-    //    WAV-only; FLAC sources are produced by the live-recording flow
-    //    and read directly by `decode_audio_mono` further down the
-    //    transcribe pipeline.
-    let probe = probe_wav(source_path)?;
+    // 3) Probe the source header. WAV uses the inline RIFF parser; FLAC
+    //    routes through claxon's STREAMINFO. Both populate `AudioProbe`
+    //    with the same shape so the persistence layer below does not
+    //    branch on container.
+    let probe = match ext.as_str() {
+        "wav" => probe_wav(source_path)?,
+        "flac" => probe_flac(source_path)?,
+        _ => unreachable!("extension gate restricts to wav | flac"),
+    };
 
     // 4) Mint a *file* UUIDv7 up-front so we can lock in the on-disk
     //    filename column before SQLite mints its own row id. The row id
@@ -437,6 +444,39 @@ fn probe_wav(path: &Path) -> Result<AudioProbe, ImportError> {
         .checked_div(u64::from(sample_rate_hz))
         .unwrap_or(0);
 
+    Ok(AudioProbe {
+        sample_rate_hz,
+        channels,
+        duration_ms,
+    })
+}
+
+/// Read STREAMINFO from a FLAC file via claxon and project it onto the
+/// shared [`AudioProbe`] shape.
+fn probe_flac(path: &Path) -> Result<AudioProbe, ImportError> {
+    let reader = claxon::FlacReader::open(path)
+        .map_err(|e| ImportError::DecodeFailed(format!("open flac: {e}")))?;
+    let info = reader.streaminfo();
+    let sample_rate_hz: u32 = info.sample_rate;
+    if sample_rate_hz == 0 {
+        return Err(ImportError::DecodeFailed(
+            "flac STREAMINFO reports sample_rate=0".to_string(),
+        ));
+    }
+    let channels: u16 = u16::try_from(info.channels).unwrap_or(0);
+    if channels == 0 {
+        return Err(ImportError::DecodeFailed(
+            "flac STREAMINFO reports channels=0".to_string(),
+        ));
+    }
+    // STREAMINFO `samples` is the per-channel sample count (i.e. the
+    // total number of inter-channel "frames"). Convert to milliseconds
+    // via the sample rate. `None` means the encoder did not embed a
+    // count — surface as a hard error rather than silently store 0.
+    let frames = info
+        .samples
+        .ok_or_else(|| ImportError::DecodeFailed("flac STREAMINFO missing samples".to_string()))?;
+    let duration_ms = (frames * 1000) / u64::from(sample_rate_hz);
     Ok(AudioProbe {
         sample_rate_hz,
         channels,

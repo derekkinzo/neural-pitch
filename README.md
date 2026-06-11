@@ -18,7 +18,7 @@ front end. Dual-licensed under MIT OR Apache-2.0.
 - **Range and vibrato reports.** Per-recording lowest/highest pitch,
   tessitura, and vibrato rate / extent / regularity, computed from the
   cached contour.
-- **Import and transcribe.** Drag in a WAV file, run polyphonic
+- **Import and transcribe.** Pick a WAV or FLAC file, run polyphonic
   transcription, and export the result as a Standard MIDI File.
 - **Ear-training drills.** Intervals, chord quality, scale identification,
   pitch-matching with a karaoke ribbon, and tuning practice — with
