@@ -1,4 +1,4 @@
-//! Synthetic voice signal generator for Phase 1.4 Tier-2 acceptance fixtures.
+//! Synthetic voice signal generator for the voice-acceptance fixtures.
 //!
 //! `synth_voice` produces a deterministic mono `Vec<f32>` waveform that
 //! approximates a held vocal note: a 4-partial harmonic stack with optional
@@ -12,9 +12,8 @@
 //! `synth_voice_is_deterministic` test below; this is what lets
 //! `examples/build_voice_fixtures.rs` produce reproducible FLAC fixtures.
 //!
-//! Phase 2 may add a breath-noise component; if it does, the determinism
-//! contract above is preserved by seeding any RNG from the input
-//! parameters.
+//! Any future breath-noise component must preserve the determinism
+//! contract above by seeding any RNG from the input parameters.
 //!
 //! Lint policy: this module is compiled into the production crate (under
 //! `pub mod test_utils`), so the workspace `unwrap_used`/`expect_used`/
@@ -26,7 +25,7 @@ use core::f32::consts::TAU;
 /// Maximum absolute amplitude after peak-normalisation.
 ///
 /// Mirrors `signals::PEAK` so synthetic-voice fixtures share the same
-/// headroom convention as Tier-1 unit-test signals.
+/// headroom convention as the unit-test signal generators.
 const PEAK: f32 = 0.95;
 
 /// Harmonic weights for partials 1..=4 — a coarse glottal-source spectral
@@ -50,8 +49,8 @@ const FORMANT_BANDWIDTH_HZ: f32 = 100.0;
 /// - `f0_hz`: fundamental frequency (Hz). MUST be `> 0`. Values outside
 ///   `[20.0, sample_rate / 2 / 4]` clamp the highest harmonic so it never
 ///   exceeds Nyquist.
-/// - `sample_rate`: output sample rate (Hz). Typical Phase-1.4 value is
-///   `48_000`.
+/// - `sample_rate`: output sample rate (Hz). Typical value is `48_000`,
+///   matching the live-capture rate used throughout the crate.
 /// - `n_samples`: number of output samples. The total duration is
 ///   `n_samples / sample_rate` seconds.
 /// - `vibrato`: optional `(rate_hz, depth_cents)`. When `Some`, the
@@ -59,7 +58,7 @@ const FORMANT_BANDWIDTH_HZ: f32 = 100.0;
 ///   `rate_hz` Hz. The modulator is phase-aligned so the analysis-window
 ///   centre lies on a modulator zero crossing — matches `vibrato_signal`
 ///   in `signals.rs`, so YIN and the auto-prior see the same envelope
-///   shape across Tier-1 and Tier-2 fixtures.
+///   shape across both unit-test and voice-acceptance fixtures.
 /// - `formants`: when `true`, the harmonic stack is filtered through three
 ///   cascaded biquad band-passes (F1=500 Hz, F2=1500 Hz, F3=2500 Hz). The
 ///   filter chain is intentionally crude — its purpose is to give YIN
@@ -149,7 +148,7 @@ pub fn synth_voice(
 /// = Q), one per formant in [`FORMANT_HZ`]. Single-pass, in-place. Each
 /// filter follows the RBJ Audio EQ Cookbook BPF (constant 0 dB peak gain
 /// variant); cascading approximates a vocal tract resonance pattern well
-/// enough for Tier-2 acceptance.
+/// enough for the voice-acceptance harness.
 fn apply_formants(buf: &mut [f32], sample_rate: u32) {
     if buf.is_empty() || sample_rate == 0 {
         return;

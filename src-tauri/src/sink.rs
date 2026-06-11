@@ -80,7 +80,7 @@ mod tests {
     /// can introspect after the worker has run. This intentionally does not
     /// drive a real `tauri::ipc::Channel` — instantiating one outside an
     /// active runtime is awkward. End-to-end correctness is covered by the
-    /// existing 36 Phase 1.1 worker tests plus Phase 1.2's Playwright MCP
+    /// existing worker unit tests plus the Playwright MCP
     /// suite.
     #[derive(Default)]
     struct MockChannelSink {

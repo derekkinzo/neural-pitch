@@ -1,4 +1,4 @@
-// Phase 2.1 — Analysis cache + Re-analyze spec.
+// Analysis cache + Re-analyze spec.
 //
 // Drives the wasCached → forceRefresh → wasCached=false transition through
 // the AnalysisSummary card. Two assertions:

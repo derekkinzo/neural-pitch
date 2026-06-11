@@ -1,4 +1,4 @@
-// ChordDrill — Phase 4 ear-training, chord-quality recognition.
+// ChordDrill — ear-training, chord-quality recognition.
 //
 // Three or four notes triggered simultaneously; the user picks the chord
 // quality (Major / Minor / Dim / Aug / Maj7 / Dom7 / Min7).

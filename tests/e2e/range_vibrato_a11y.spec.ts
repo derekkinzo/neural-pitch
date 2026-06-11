@@ -1,4 +1,4 @@
-// Phase 2.3 — RangeReadout + VibratoReadout accessibility scan.
+// RangeReadout + VibratoReadout accessibility scan.
 //
 // Mirrors `recording_a11y.spec.ts` but focused on the two new readouts
 // mounted between AnalysisSummary and ContourLine. We assert zero

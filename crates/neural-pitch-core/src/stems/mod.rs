@@ -1,4 +1,4 @@
-//! Phase 5 — HTDemucs ONNX stem-separation surface.
+//! HTDemucs ONNX stem-separation surface.
 //!
 //! This module sits parallel to [`crate::poly`] for the same reason
 //! [`crate::poly`] sits parallel to [`crate::pitch`]: a fundamentally
@@ -13,10 +13,9 @@
 //!
 //! HTDemucs separates a music recording into the standard four stems
 //! used across the source-separation literature: `vocals`, `drums`,
-//! `bass`, and `other`. The Phase 5 first cut is general-purpose —
-//! the four stems are returned verbatim to the caller, who decides
-//! what to do with them (per-stem playback, per-stem transcription,
-//! karaoke remix, etc.).
+//! `bass`, and `other`. The four stems are returned verbatim to the
+//! caller, who decides what to do with them (per-stem playback,
+//! per-stem transcription, karaoke remix, etc.).
 
 use std::path::{Path, PathBuf};
 

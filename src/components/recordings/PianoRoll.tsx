@@ -1,4 +1,4 @@
-// PianoRoll — Phase 3 canvas-based polyphonic transcription view.
+// PianoRoll — canvas-based polyphonic transcription view.
 //
 // Layout: 88 rows (MIDI 21..108), Y inverted so C8 is on top; X spans
 // `0..durationMs`. Each note paints as a horizontal bar with its

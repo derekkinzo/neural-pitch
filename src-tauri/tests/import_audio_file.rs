@@ -1,15 +1,9 @@
-//! Phase 3 — Tauri / persistence integration test for the file-import
-//! surface.
+//! Tauri / persistence integration test for the file-import surface.
 //!
 //! Drives [`neural_pitch_lib::transcribe::import_audio_file_blocking`]
 //! (the headless twin the Tauri command wraps) directly so the test
 //! harness does not need to spin up a full Tauri runtime — same shape as
-//! the existing `analyze_recording.rs` test that ships in Phase 2.1.
-//!
-//! TDD-RED status — the underlying blocking helper currently returns
-//! `Err(ImportError::NotImplemented)`. This test therefore fails at
-//! runtime; Phase 3 GREEN flips it green by wiring the Symphonia probe,
-//! SHA-256 dedup, file copy, and recordings-row insert.
+//! the existing `analyze_recording.rs` test.
 
 #![allow(missing_docs)]
 #![cfg(feature = "neural")]
@@ -25,8 +19,8 @@ use neural_pitch_lib::transcribe::import_audio_file_blocking;
 /// (RIFF/WAVE/fmt /data) to `path`. Inline rather than a shared
 /// `test_utils::write_wav` helper because writing the WAV byte stream
 /// out of one library function would couple the integration tests to
-/// an internal helper that has no production caller — Phase 3 imports
-/// only need the file to exist and Symphonia-probe cleanly.
+/// an internal helper that has no production caller — imports only
+/// need the file to exist and Symphonia-probe cleanly.
 fn write_440hz_sine_wav(path: &std::path::Path, sample_rate_hz: u32, duration_ms: u32) {
     use std::f32::consts::TAU;
 

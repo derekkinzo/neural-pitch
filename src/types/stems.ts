@@ -1,4 +1,4 @@
-// Stems — wire-format types for the Phase 5 HTDemucs source separation
+// Stems — wire-format types for the HTDemucs source separation
 // subsystem.
 //
 // Mirrors `src/types/transcription.ts` in shape: a finite per-recording

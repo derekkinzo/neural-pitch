@@ -7,7 +7,7 @@
     clippy::uninlined_format_args
 )]
 
-//! Phase 3 RED — resampler integration test.
+//! Basic Pitch resampler integration test.
 //!
 //! Generate the same 440 Hz tone at 48 kHz so [`BasicPitchEstimator::analyze`]
 //! must invoke the rubato resampler internally before windowing. The result

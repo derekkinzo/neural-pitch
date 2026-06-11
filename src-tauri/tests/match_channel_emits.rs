@@ -1,4 +1,4 @@
-//! Phase 4 — TDD-RED test for the live target-pitch matcher.
+//! Live target-pitch matcher emission contract.
 //!
 //! Feeds a synthetic [`PitchUpdate`] stream (440 Hz steady at MIDI 69)
 //! into a [`TargetMatcher`] with `target_midi = 69`, installs a mock
@@ -9,11 +9,6 @@
 //! verify the matcher's send-error path is `tracing::debug!` only — no
 //! panic — mirroring the `start_recording` progress-channel contract:
 //! "channel-based tests MUST tolerate the receiver closing early".
-//!
-//! TDD-RED status — [`TargetMatcher::observe`] is a no-op today;
-//! `EMIT_COUNT` stays at 0 and the assertion fails. The Phase 4 GREEN
-//! step wires the actual `cents_error` computation + `emitter.emit(...)`
-//! call.
 //!
 //! Drill / training surface is default-on (no `feature = "neural"`
 //! gate), so this test compiles against both the all-features and the
@@ -31,7 +26,7 @@ use neural_pitch_core::pipeline::target_match::{MatchEmitter, MatchUpdate, Targe
 
 /// Mock emitter that counts emissions and tolerates the receiver
 /// closing early. Mirrors the `CapturingProgressSink` shape used by
-/// the Phase 3 transcribe-cache test.
+/// the transcribe-cache test.
 struct CountingEmitter {
     count: Arc<AtomicUsize>,
 }
@@ -50,10 +45,9 @@ impl CountingEmitter {
 
 impl MatchEmitter for CountingEmitter {
     fn emit(&self, update: MatchUpdate) {
-        // Read the payload so a future Phase 4 GREEN matcher cannot
-        // accidentally emit a stub MatchUpdate without exercising
-        // every field — the test would still fail RED if the
-        // implementation degenerates to "emit but never compute".
+        // Read the payload so a matcher cannot silently swallow a
+        // malformed event — every field must round-trip through
+        // emission, even though we only assert on the count.
         let _ = update.in_window;
         let _ = update.cents_error;
         let _ = update.target_midi;

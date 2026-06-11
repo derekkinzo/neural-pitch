@@ -1,7 +1,7 @@
 // Playback-head broadcast — process-global ref + subscribe for the rAF
 // hot path between PlaybackPanel (publisher) and ContourLine (consumer).
 //
-// Phase 2.4 hot-path contract: wavesurfer's `audioprocess` event fires
+// Hot-path contract: wavesurfer's `audioprocess` event fires
 // at ~50 Hz; routing every tick through Zustand would dwarf
 // ContourLine's static-paint budget. Mirroring the RingBuffer pattern
 // used by HistoryStrip, we publish into a process-global ref and notify

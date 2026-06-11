@@ -1,10 +1,7 @@
-//! Tier-1 persistence test #2: insert one recording, list it back.
+//! Tier-1 persistence test: insert one recording, list it back.
 //!
-//! Spec: insert one `NewRecording`, list, assert exact field round-trip
+//! Insert one `NewRecording`, list, assert exact field round-trip
 //! including `a4_hz` (REAL) and `user_label = NULL`.
-//!
-//! TDD-RED: `RecordingsLibrary::new` and `insert_recording` are
-//! `unimplemented!()`, so this test panics. That panic is the red signal.
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 
 use std::path::Path;

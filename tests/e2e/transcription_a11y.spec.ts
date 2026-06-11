@@ -1,6 +1,6 @@
-// Phase 3 — TranscribePanel + PianoRoll accessibility scan.
+// TranscribePanel + PianoRoll accessibility scan.
 //
-// Mirrors `recording_a11y.spec.ts` but focused on the new Phase-3
+// Mirrors `recording_a11y.spec.ts` but focused on the transcription
 // regions: TranscribePanel (button + cached badge + Re-transcribe) and
 // PianoRoll (`role=img` canvas wrapper). The scan runs after the panel
 // settles into the "complete" branch so progress bars do not race.
@@ -72,7 +72,7 @@ const POLY: Record<string, MockPolyResult> = {
   "rec-tr-a11y-001:basicpitch-0.1.0": buildSyntheticPolyResult("rec-tr-a11y-001"),
 };
 
-test.describe("a11y — phase 3 transcription regions", () => {
+test.describe("a11y — transcription regions", () => {
   test("axe scan reports no serious or critical violations", async ({ page, mockTauri, axe }) => {
     await mockTauri.install({
       ...installRecordingsMock(SEED),

@@ -1,4 +1,4 @@
-// TuningPracticeDrill — Phase 4 sustained-pitch tuning practice.
+// TuningPracticeDrill — sustained-pitch tuning practice.
 //
 // Single-prompt session: the user picks a target MIDI (default A4)
 // and tries to hold within ±10 cents for 5 s. Live PitchUpdate frames
@@ -6,10 +6,9 @@
 // to the "passed" state once the in-window dwell exceeds the target
 // duration.
 //
-// The drill is intentionally simple — the contract for Phase 4 is the
-// presence of the surface and the a11y / lifecycle plumbing. A future
-// pass will plumb the real cents readout and the dwell scorer; today
-// the Finish button advances the session in either pass or skip mode.
+// The drill is intentionally simple — the contract is the
+// presence of the surface and the a11y / lifecycle plumbing. The
+// Finish button advances the session in either pass or skip mode.
 //
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";

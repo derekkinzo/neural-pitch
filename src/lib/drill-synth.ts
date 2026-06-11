@@ -1,6 +1,6 @@
 // Drill prompt synthesizer.
 //
-// The Phase 4 drills synthesise short sine prompts in the page itself —
+// The drills synthesise short sine prompts in the page itself —
 // either two notes (intervals), three or four (chords), or a seven-note
 // ascending pattern (scales). A real Tauri shell could ship pre-rendered
 // WAV blobs from Rust, but the WebAudio path is universally available and

@@ -1,4 +1,4 @@
-//! Phase 2.4 — capability JSON wiring test.
+//! Capability JSON wiring test.
 //!
 //! Tauri's `tauri::generate_context!` macro provides the compile-time
 //! validation: an unknown permission identifier or malformed JSON would

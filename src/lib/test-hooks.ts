@@ -1,4 +1,4 @@
-// Test-hook bridge for the Tier-5 E2E mock harness.
+// Test-hook bridge for the E2E mock harness.
 //
 // The mock harness in `tests/e2e/helpers/tauri-mock.ts` installs a
 // `window.__neuralPitchTestHooks.listeners` map keyed by channel name. Each
@@ -13,12 +13,12 @@ type Listener = (payload: unknown) => void;
 
 interface TestHooks {
   listeners: Map<string, Listener[]>;
-  /** Optional override for Tauri's `convertFileSrc()`. The Phase-2.4
+  /** Optional override for Tauri's `convertFileSrc()`. The
    *  PlaybackPanel consults this via `getTestHooks()?.convertFileSrc` so
    *  the E2E mock can resolve a sentinel path to a `page.route`-served
    *  URL without invoking the real `tauri://` bridge. */
   convertFileSrc?: (path: string) => string;
-  /** Optional sentinel for the Phase-3 file-open dialog. When set, the
+  /** Optional sentinel for the file-open dialog. When set, the
    *  `openAudioFileDialog` helper short-circuits the real Tauri plugin
    *  and resolves to this value directly. `null` simulates the user
    *  dismissing the dialog without selecting a file. */

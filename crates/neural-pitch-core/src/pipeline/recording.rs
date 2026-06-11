@@ -1,19 +1,19 @@
-//! Phase 2.0 — Audio capture / FLAC recording pipeline.
+//! Audio capture / FLAC recording pipeline.
 //!
 //! Implements the trait surface, error type, artifact shape, and worker
-//! used to encode captured audio into 24-bit / mono / 48 kHz FLAC files
-//! 48 kHz / 24-bit / mono / FLAC. The audio callback never touches this module — the DSP
+//! used to encode captured audio into 24-bit / mono / 48 kHz FLAC
+//! files. The audio callback never touches this module — the DSP
 //! worker is wired to fan hop-aligned slices out through a bounded
-//! `std::sync::mpsc::sync_channel` and the [`RecordingWorker`] drains it
-//! onto a [`RecordingSink`].
+//! `std::sync::mpsc::sync_channel` and the [`RecordingWorker`] drains
+//! it onto a [`RecordingSink`].
 //!
-//! **Status (Phase 2.0 in progress):** the [`RecordingSink`] /
-//! [`RecordingWorker`] core is fully functional and exercised by Tier-1
-//! tests. The DSP-worker fan-out and the `start_recording` /
-//! `stop_recording` Tauri commands are wired in `src-tauri/src/commands.rs`
-//! using a bounded `sync_channel`. The encoder thread receives hop-sized
-//! `Vec<f32>` slices via `try_send`; the producer-side increments the
-//! shared `dropped_windows` `AtomicU64` on `TrySendError::Full`.
+//! The [`RecordingSink`] / [`RecordingWorker`] core is exercised by the
+//! crate's unit tests. The DSP-worker fan-out and the `start_recording`
+//! / `stop_recording` Tauri commands are wired in
+//! `src-tauri/src/commands.rs` using a bounded `sync_channel`. The
+//! encoder thread receives hop-sized `Vec<f32>` slices via `try_send`;
+//! the producer-side increments the shared `dropped_windows`
+//! `AtomicU64` on `TrySendError::Full`.
 //!
 //! Design anchors:
 //! - Recording fidelity: 48 kHz / 24-bit / mono / FLAC.
@@ -90,7 +90,7 @@ pub enum RecordingSinkError {
 
 /// FLAC-backed recording sink.
 ///
-/// Production sink for Phase 2.0. `write()` converts the supplied `f32`
+/// Production recording sink. `write()` converts the supplied `f32`
 /// slice to 24-bit signed PCM packed in `i32` and appends to an in-memory
 /// buffer (`samples_i32`). On `finalize()` the partial file is truncated,
 /// the FLAC stream is encoded with `flacenc-rs` and written through the
@@ -354,7 +354,7 @@ impl Drop for FlacRecordingSink {
     }
 }
 
-/// In-memory recording sink for Tier-1 tests.
+/// In-memory recording sink for unit tests.
 ///
 /// Captures every `write()` slice into an inner `Vec<f32>` and synthesises
 /// a [`RecordingArtifact`] on `finalize()` with the caller-supplied path —
@@ -483,8 +483,8 @@ pub enum RecordingProgress {
 }
 
 /// Handle returned to the shell by `start_recording`. Holds the cancel
-/// token, the join handle, and the dropped-windows counter so the shell can
-/// surface backpressure in progress ticks.
+/// token, the join handle, and the dropped-windows counter so the shell
+/// can surface backpressure on each [`RecordingProgress::Tick`].
 pub struct RecordingHandle {
     /// Stable identifier for this recording.
     id: RecordingId,
@@ -633,7 +633,7 @@ impl Drop for RecordingHandle {
 /// Encoder-side worker that drains the fan-out channel and pushes hop
 /// slices into a [`RecordingSink`].
 ///
-/// Lives in `core` (not `src-tauri`) so the Tier-1 tests can drive the loop
+/// Lives in `core` (not `src-tauri`) so the unit tests can drive the loop
 /// against a [`MockRecordingSink`] without the Tauri shell. The production
 /// shell wraps this in `tokio::task::spawn_blocking`; the tests use a
 /// plain `std::thread::spawn`.
@@ -645,7 +645,8 @@ pub struct RecordingWorker {
     /// Cancellation token. The worker checks this between recv attempts.
     cancel: CancellationToken,
     /// Shared counter incremented by the DSP worker each time the fan-out
-    /// channel is full; surfaced in progress ticks and on `RecordingHandle`.
+    /// channel is full; surfaced on each [`RecordingProgress::Tick`] and
+    /// on `RecordingHandle`.
     dropped_windows: Arc<AtomicU64>,
 }
 

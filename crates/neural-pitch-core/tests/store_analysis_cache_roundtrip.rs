@@ -1,10 +1,8 @@
-//! Tier-1 persistence test #4: analysis cache round-trips by version.
+//! Tier-1 persistence test: analysis cache round-trips by version.
 //!
-//! Spec: `upsert v=1` then `get v=1 == Some`, `get v=2 == None`, then
-//! `upsert v=2`, then `get v=2 == Some(latest)` and `get v=1` still `Some`.
-//!
-//! TDD-RED: every store call is `unimplemented!()`, so this test panics. That
-//! panic is the red signal.
+//! `upsert v=1` then `get v=1 == Some`, `get v=2 == None`, then
+//! `upsert v=2`, then `get v=2 == Some(latest)` and `get v=1` still
+//! `Some`.
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 
 use std::path::Path;

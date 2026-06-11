@@ -1,4 +1,4 @@
-// TranscribePanel — Phase 3 polyphonic transcription affordance.
+// TranscribePanel — polyphonic transcription affordance.
 //
 // Mounts inside RecordingDetail directly below the AnalysisSummary card
 // and above the `<RangeReadout> + <VibratoReadout>` grid. Three render
@@ -8,9 +8,9 @@
 //      via `aria-disabled` (mirroring the Re-analyze button precedent)
 //      when `analysisStore.inProgress` contains the current id, or when
 //      `transcriptionStore.inProgress` already contains it.
-//   2. In progress. Renders `<progress role="progressbar" aria-label=
+//   2. Active. Renders `<progress role="progressbar" aria-label=
 //      "Transcribing recording">` driven by `transcribe-progress` events.
-//      Cancel is intentionally omitted in this phase.
+//      Cancel is intentionally omitted.
 //   3. Complete. Shows "Notes detected: N", an "Export MIDI..." button,
 //      and — when `summary.wasCached` — a "Transcription cached" badge
 //      plus a "Re-transcribe" affordance that calls
@@ -62,7 +62,7 @@ export function TranscribePanel({ recordingId }: TranscribePanelProps): ReactNod
   };
 
   const onExport = (): void => {
-    // Phase 3 destination is implicit (Rust shell decides path); we
+    // Destination is implicit (Rust shell decides path); we
     // forward the recording id and a placeholder destination string the
     // shell ignores when the caller is the front-end. The mock
     // `export_midi` handler records the call regardless of dest, so the

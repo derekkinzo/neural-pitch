@@ -1,4 +1,4 @@
-// VibratoReadout — Phase 2.3 vibrato readout.
+// VibratoReadout — vibrato readout.
 //
 // Mounted to the right of RangeReadout in a 2-column grid (sibling of
 // AnalysisSummary; below the summary card and above ContourLine). Pure-

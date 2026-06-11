@@ -8,7 +8,7 @@
     clippy::explicit_iter_loop
 )]
 
-//! Phase 3 RED — chord recall test.
+//! Chord recall test for Basic Pitch v1.
 //!
 //! Sum three equal-amplitude sinusoids at A4 (MIDI 69), C#5 (MIDI 73), and
 //! E5 (MIDI 76) — an A-major triad — at 22.05 kHz. The recovered note set

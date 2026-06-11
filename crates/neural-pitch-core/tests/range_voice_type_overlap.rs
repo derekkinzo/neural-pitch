@@ -1,4 +1,4 @@
-//! Phase 2.3 TDD-RED: voice-type hint reports overlapping types.
+//! Voice-type hint reports overlapping types.
 //!
 //! 200 voiced frames spanning C3 (MIDI 48, ~130.81 Hz) up to C5
 //! (MIDI 72, ~523.25 Hz) lands inside the New Grove range for both
@@ -7,9 +7,6 @@
 //! collapse to a single type. The test asserts that at least both
 //! `Tenor` and `Baritone` are present in the returned hint, and the
 //! order is deterministic so the assertion stays stable across runs.
-//!
-//! Until [`compute_range`] is implemented this test panics with `todo!`,
-//! which is the red signal.
 
 #![allow(missing_docs)]
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]

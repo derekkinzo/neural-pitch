@@ -1,28 +1,22 @@
-//! Phase 3 — Tauri / persistence integration test for the
-//! Basic Pitch transcribe surface.
+//! Tauri / persistence integration test for the Basic Pitch transcribe
+//! surface.
 //!
 //! Drives [`neural_pitch_lib::transcribe::transcribe_recording_blocking`]
 //! (the headless twin the Tauri command wraps) directly so the test
 //! harness does not need to spin up a full Tauri runtime.
 //!
-//! Asserts the cache contract from the Phase 3 spec:
+//! Asserts the cache contract:
 //!
 //! 1. First call (cache miss) → `was_cached == false` and a positive
 //!    `note_count` for the synthesised 1 s 440 Hz sine.
 //! 2. Second call → `was_cached == true` AND elapsed `< 100 ms`
 //!    (postcard decode + summary, no ONNX work).
 //! 3. Third call with `force_refresh = true` → `was_cached == false`
-//!    again — the spec's contract for users who tap "Re-transcribe".
+//!    again — the contract for users who tap "Re-transcribe".
 //!
 //! Channel-based assertions tolerate the receiver closing early (the
 //! [`CapturingProgressSink`] never panics on a dropped consumer);
 //! mirrors the `start_recording` progress channel contract.
-//!
-//! TDD-RED status — the underlying blocking helper currently returns
-//! `Err(TranscribeError::NotImplemented)`. This test therefore fails at
-//! runtime; Phase 3 GREEN flips it green by wiring the
-//! [`neural_pitch_core::poly::basic_pitch::BasicPitchEstimator`] +
-//! `analysis_cache` lookup paths.
 
 #![allow(missing_docs)]
 #![cfg(feature = "neural")]
@@ -105,8 +99,7 @@ fn write_440hz_sine_wav(path: &std::path::Path, sample_rate_hz: u32, duration_ms
 #[ignore = "ort cpu-fallback path is too slow on the CI matrix; runs locally"]
 #[test]
 fn transcribe_recording_caches_blob_and_force_refresh_re_runs_inference() {
-    let tmp_root =
-        PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("phase3_transcribe_recording_cache");
+    let tmp_root = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("transcribe_recording_cache");
     if tmp_root.exists() {
         let _ = std::fs::remove_dir_all(&tmp_root);
     }
@@ -125,8 +118,7 @@ fn transcribe_recording_caches_blob_and_force_refresh_re_runs_inference() {
     // 1) Cache miss — first transcribe. We don't measure wall-clock here:
     //    a 1 s clip on a CPU EP under cargo-test debug build is the
     //    benchmark's noise floor. The < 5 s acceptance budget lives on a
-    //    30 s clip (Phase 3 §6) which is the dev-laptop perf gate, not a
-    //    CI gate.
+    //    30 s clip on the dev-laptop perf gate, not the CI gate.
     let sink_first = CapturingProgressSink::default();
     let summary_first = transcribe_recording_blocking(
         &lib,
@@ -171,7 +163,7 @@ fn transcribe_recording_caches_blob_and_force_refresh_re_runs_inference() {
     );
     assert!(
         elapsed.as_millis() < 100,
-        "cache-hit summary path must complete in < 100 ms (Phase 3 spec §6); took {} ms",
+        "cache-hit summary path must complete in < 100 ms; took {} ms",
         elapsed.as_millis(),
     );
 

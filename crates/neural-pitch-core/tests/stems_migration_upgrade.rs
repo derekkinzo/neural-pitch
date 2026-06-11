@@ -1,4 +1,4 @@
-//! Phase 5 — V0003 stems-migration upgrade test.
+//! V0003 stems-migration upgrade test.
 //!
 //! Mirror image of `store_migration_upgrade.rs` for the V0003 schema:
 //!
@@ -16,7 +16,7 @@
 //!    + `analysis_cache.stem_kind` column come back, and exactly one
 //!    new row is appended to `refinery_schema_history`.
 //!
-//! The Phase 5 spec keys the new logical analysis-cache identifier on
+//! The new logical analysis-cache identifier keys on
 //! `(recording_id, analyzer_name, analyzer_version, stem_kind)` while
 //! leaving the existing PRIMARY KEY tuple intact. This test pins the
 //! invariant that `stem_kind` is added as an `ALTER TABLE … ADD COLUMN`
@@ -25,11 +25,6 @@
 //! Default-on (no `feature = "neural"` gate) so it compiles against
 //! both the all-features and the no-default-features matrices —
 //! mirrors the existing `store_migration_upgrade.rs` precedent.
-//!
-//! TDD-RED status: V0003 does not exist yet at the time these tests
-//! land alongside the schema file (`migrations/V0003__stems.sql`); on
-//! the impl phase the production migration runner will pick the file
-//! up and the assertions below will pass.
 
 #![allow(missing_docs)]
 #![allow(

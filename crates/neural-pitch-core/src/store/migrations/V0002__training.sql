@@ -1,8 +1,8 @@
--- Phase 4 ear-training drill subsystem schema.
+-- Ear-training drill subsystem schema.
 --
 -- Append-only: this file is V0002 and never edits V0001 (refinery refuses
--- modified files). The new `drill_attempts` table is non-destructive against
--- pre-Phase-4 databases — the migration only CREATEs; nothing in
+-- modified files). The new `drill_attempts` table is non-destructive
+-- against databases at V0001 — the migration only CREATEs; nothing in
 -- `recordings` or `analysis_cache` is touched.
 --
 -- The `recording_id` foreign key is NULLable so practice sessions that do

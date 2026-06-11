@@ -1,10 +1,10 @@
 #![allow(missing_docs)]
 #![cfg(feature = "cpal")]
 
-//! Tier-2 tests for the Phase 1.3 audio-backend fallbacks.
+//! Audio-backend fallback tests.
 //!
 //! These tests do **not** open a real cpal stream; they exercise the
-//! pure-function seams that the Phase 1.3 spec defines:
+//! pure-function seams the cpal layer exposes:
 //!
 //! - [`pick_buffer_size`] (Windows WASAPI buffer-size clamp)
 //! - [`AudioBackendEvent`] serialisation (the wire format the Tauri shell
@@ -12,8 +12,8 @@
 //! - [`AudioEventEmitter`] callable from background threads (the cpal
 //!   `err_fn` runs on the platform audio thread)
 //!
-//! The cpal `Stream` itself remains unmocked — the Phase 1.3 spec calls
-//! out the config-query seam as the only mockable surface.
+//! The cpal `Stream` itself remains unmocked — the config-query seam is
+//! the only mockable surface.
 
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 

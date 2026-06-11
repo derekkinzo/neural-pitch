@@ -1,7 +1,7 @@
 // Radiogroup keyboard navigation helper.
 //
 // WAI-ARIA APG radiogroup pattern requires arrow-key + Home / End focus
-// movement between radios. The Phase 4 drill choice grids (Interval /
+// movement between radios. The drill choice grids (Interval /
 // Chord / Scale) all share the same shape — a flat list of `role="radio"`
 // buttons with a `data-testid` prefix per choice — so we centralise the
 // key-handler logic here. Each drill passes `containerRef` (the element

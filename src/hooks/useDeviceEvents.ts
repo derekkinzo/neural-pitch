@@ -2,7 +2,7 @@
 // event channel. Mirrors the Rust-side `AudioBackendEvent` enum into the
 // slow Zustand store at <=1 Hz.
 //
-// Phase 1.3 wires four event variants:
+// Wires four event variants:
 //   - PriorNarrowed { rangeHz: [number, number] } -> setPriorRange
 //   - Disconnected                                -> setDeviceStatus("disconnected")
 //   - Connected                                   -> clearDeviceError +
@@ -10,7 +10,7 @@
 //   - FormatChanged { rateHz, channels }          -> setNegotiatedFormat +
 //                                                    deviceStatus = "format_changed"
 //
-// Test surface: when running under the Tier-5 mock the helper exposes
+// Test surface: when running under the E2E mock the helper exposes
 // `window.__neuralPitchTestHooks.listeners` keyed by `"audio:backend"`,
 // which a spec drives via `pushDeviceEvent(page, event)`.
 //
@@ -64,7 +64,7 @@ export function useDeviceEvents(): void {
     let unlisten: UnlistenFn | null = null;
     let cancelled = false;
 
-    // Prefer the Tauri `listen` API for production. Under the Tier-5 mock
+    // Prefer the Tauri `listen` API for production. Under the E2E mock
     // the page-side helper does not implement `plugin:event|listen`, so we
     // ALSO register through `__neuralPitchTestHooks.listeners` so specs
     // can drive synthetic events without needing the real listen wiring.

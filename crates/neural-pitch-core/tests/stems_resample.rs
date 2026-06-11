@@ -8,8 +8,8 @@
     clippy::cast_possible_wrap
 )]
 
-//! Phase 5 RED — 48 kHz → 44.1 kHz internal resample, then back to
-//! 48 kHz at the boundary.
+//! 48 kHz → 44.1 kHz internal resample, then back to 48 kHz at the
+//! boundary.
 //!
 //! Generate 2 s of pink-noise-ish content at 48 kHz, run the
 //! separator, and assert:

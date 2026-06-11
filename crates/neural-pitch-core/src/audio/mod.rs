@@ -58,9 +58,10 @@ pub enum AudioError {
 
 /// File-format-agnostic decoder trait.
 ///
-/// Phase 1 defines only the static `supported_extensions()` method. Streaming
-/// decode is intentionally deferred — see the design doc for the planned
-/// `decode_block(&mut self) -> Result<Option<AudioBlock>, AudioError>` API.
+/// Defines only the static `supported_extensions()` method today.
+/// Streaming decode is intentionally deferred — see the design doc for
+/// the planned `decode_block(&mut self) -> Result<Option<AudioBlock>, AudioError>`
+/// API.
 pub trait AudioDecoder: Send {
     /// File extensions this decoder claims to support, lowercase, without
     /// the leading dot. Used by the format-detection dispatcher to pick a

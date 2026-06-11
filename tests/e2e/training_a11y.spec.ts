@@ -1,6 +1,6 @@
-// Phase 4 — Training accessibility scan.
+// Training accessibility scan.
 //
-// Mirrors `transcription_a11y.spec.ts` but focused on the new Phase-4
+// Mirrors `transcription_a11y.spec.ts` but focused on the ear-training
 // drill subsystem. The scan runs in five passes, one per drill screen, so
 // any drill-specific axe regression surfaces with a precise pointer.
 //
@@ -24,7 +24,7 @@ const DRILLS = [
   { index: 4, testId: "tuning-practice-drill", label: "Tuning practice" },
 ] as const;
 
-test.describe("a11y — phase 4 training screens", () => {
+test.describe("a11y — training screens", () => {
   test("Training landing reports no serious or critical violations", async ({
     page,
     mockTauri,

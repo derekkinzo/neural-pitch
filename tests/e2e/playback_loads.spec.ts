@@ -1,4 +1,4 @@
-// Phase 2.4 — PlaybackPanel mount + transport (TDD-RED).
+// PlaybackPanel mount + transport spec.
 //
 // Asserts the new wavesurfer-driven panel mounts when a recording is
 // selected, exposes a play/pause toggle whose `aria-pressed` reflects

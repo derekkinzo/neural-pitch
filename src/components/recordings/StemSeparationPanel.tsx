@@ -1,4 +1,4 @@
-// StemSeparationPanel — Phase 5 four-stem HTDemucs separation affordance.
+// StemSeparationPanel — four-stem HTDemucs separation affordance.
 //
 // Mounts inside RecordingDetail directly below TranscribePanel and above
 // the Range / Vibrato readout grid. Four render branches driven by
@@ -299,10 +299,10 @@ function ProgressBranch({
         className="h-2 w-full overflow-hidden rounded-full bg-slate-800"
       />
       <div className="flex items-center justify-between gap-2">
-        <span className="text-xs text-slate-400">{reducedMotion ? "In progress…" : subLabel}</span>
+        <span className="text-xs text-slate-400">{reducedMotion ? "Working…" : subLabel}</span>
         {/* Off-screen stage name for AT users — kept readable so a
             reduced-motion user (whose visible label collapses to
-            "In progress…") still hears the per-stage name. */}
+            "Working…") still hears the per-stage name. */}
         <span className="sr-only">{stageLabel}</span>
         {showCancel ? (
           <button

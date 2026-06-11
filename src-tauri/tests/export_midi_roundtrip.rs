@@ -1,5 +1,4 @@
-//! Phase 3 — Tauri / persistence integration test for the MIDI export
-//! surface.
+//! Tauri / persistence integration test for the MIDI export surface.
 //!
 //! Drives [`neural_pitch_lib::transcribe::export_midi_blocking`] (the
 //! headless twin the Tauri command wraps) directly so the test harness
@@ -14,9 +13,6 @@
 //!    "the SMF byte stream is structurally valid AND carries actual
 //!    note content"; the exact pitch / channel / velocity arithmetic
 //!    lives in `crates/neural-pitch-core/tests/poly_*.rs`.
-//!
-//! TDD-RED status — `export_midi_blocking` returns
-//! `Err(TranscribeError::NotImplemented)` until Phase 3 GREEN ships.
 
 #![allow(missing_docs)]
 #![cfg(feature = "neural")]

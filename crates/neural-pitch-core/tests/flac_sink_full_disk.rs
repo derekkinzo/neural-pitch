@@ -1,7 +1,7 @@
 #![allow(missing_docs)]
 #![cfg(feature = "flac")]
 
-//! Tier-1 disk-full path for [`FlacRecordingSink`] (Phase 2.0).
+//! Tier-1 disk-full path for [`FlacRecordingSink`].
 //!
 //! Drives a sink whose underlying writer returns `ErrorKind::StorageFull`
 //! after a small prefix of bytes, and asserts:
@@ -102,9 +102,7 @@ fn flac_sink_disk_full_drops_partial_and_errors() {
 #[cfg(not(target_os = "linux"))]
 #[test]
 fn flac_sink_disk_full_drops_partial_and_errors() {
-    // The /dev/full disk-full proxy is Linux-specific. On other targets
-    // we still fail TDD-RED by invoking the to-be-implemented constructor
-    // — `FlacRecordingSink::create` is `todo!()` until Phase 2.0 lands.
+    // The /dev/full disk-full proxy is Linux-specific.
     let _ = FlacRecordingSink::create(
         std::path::PathBuf::from("does_not_matter.flac"),
         SAMPLE_RATE_HZ,

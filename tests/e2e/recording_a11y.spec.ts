@@ -1,4 +1,4 @@
-// Phase 2.1 — RecordingDetail accessibility scan.
+// RecordingDetail accessibility scan.
 //
 // Mirrors `recordings_a11y.spec.ts` but focused on the RecordingDetail
 // regions (header, AnalysisSummary card, ContourLine `<figure>`). The

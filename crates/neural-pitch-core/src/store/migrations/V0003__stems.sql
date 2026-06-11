@@ -1,18 +1,18 @@
--- Phase 5 stem-separation subsystem schema.
+-- Stem-separation subsystem schema.
 --
 -- Append-only: this file is V0003 and never edits V0001/V0002 (refinery
--- refuses modified files). The new `stem_results` table is non-destructive
--- against pre-Phase-5 databases — the migration only CREATEs and ADDs;
--- nothing in `recordings`, `analysis_cache`, or `drill_attempts` is
--- removed.
+-- refuses modified files). The new `stem_results` table is
+-- non-destructive against databases at V0001/V0002 — the migration only
+-- CREATEs and ADDs; nothing in `recordings`, `analysis_cache`, or
+-- `drill_attempts` is removed.
 --
 -- The `stem_results` row is the SQL pointer; the actual FLAC bytes for
 -- every stem live on disk under
 -- `$APPDATA/recordings/<recording_id>/stems/{vocals,drums,bass,other}.flac`.
 -- Putting audio on disk and the row pointer in SQLite mirrors how the
--- Phase 2 `recordings.filename` column already works — the DB stays
--- small, the WAL stays fast, and FLAC bytes can be served directly
--- through the existing asset-protocol scope.
+-- existing `recordings.filename` column works — the DB stays small,
+-- the WAL stays fast, and FLAC bytes can be served directly through
+-- the existing asset-protocol scope.
 --
 -- `separator_version` is a build-time constant
 -- (`HTDEMUCS_SEPARATOR_VERSION`) baked next to the ONNX checksum so the

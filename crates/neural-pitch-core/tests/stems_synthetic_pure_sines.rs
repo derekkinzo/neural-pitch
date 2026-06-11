@@ -7,7 +7,7 @@
     clippy::uninlined_format_args
 )]
 
-//! Phase 5 RED — synthetic pure-sine input.
+//! Stems separation on synthetic pure-sine input.
 //!
 //! 4 s of `sine 220 Hz @ 0.5` summed with `sine 440 Hz @ 0.5` at
 //! 44.1 kHz, duplicated to interleaved stereo. There is no vocal

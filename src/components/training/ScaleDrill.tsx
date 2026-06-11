@@ -1,4 +1,4 @@
-// ScaleDrill — Phase 4 ear-training, scale identification.
+// ScaleDrill — ear-training, scale identification.
 //
 // Plays an ascending 7-note scale; the user picks the church mode.
 //

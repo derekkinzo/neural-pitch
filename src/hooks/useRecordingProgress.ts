@@ -2,7 +2,7 @@
 // `recording-progress` Tauri event channel. Mirrors the Rust-side
 // `RecordingProgress` payload into the slow Zustand store at ~5 Hz.
 //
-// Test surface: when running under the Tier-5 mock the helper exposes
+// Test surface: when running under the E2E mock the helper exposes
 // `window.__neuralPitchTestHooks.listeners` keyed by `"recording-progress"`,
 // which a spec drives via `pushRecordingProgress(page, progress)`.
 //

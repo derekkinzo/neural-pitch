@@ -7,7 +7,7 @@
     clippy::uninlined_format_args
 )]
 
-//! Phase 3 RED — silence MUST yield zero notes.
+//! Basic Pitch on silence MUST yield zero notes.
 //!
 //! 1 s of pure zeros at 22.05 kHz must produce an empty `notes` vector.
 //! The simplest sanity check; also the cheapest test to drive an

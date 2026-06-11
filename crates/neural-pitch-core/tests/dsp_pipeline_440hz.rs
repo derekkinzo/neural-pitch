@@ -1,6 +1,6 @@
-//! Tier-2 deterministic test: feed a 440 Hz sine through the full Phase 1.1
-//! pipeline (MockAudioBackend → rtrb → DspWorker → ChannelFrameSink) and
-//! assert the first voiced [`PitchUpdate`] is locked to A4.
+//! Tier-2 deterministic test: feed a 440 Hz sine through the full
+//! pipeline (MockAudioBackend → rtrb → DspWorker → ChannelFrameSink)
+//! and assert the first voiced [`PitchUpdate`] is locked to A4.
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 
 use std::sync::mpsc;

@@ -1,4 +1,4 @@
-// Phase 2.1 — RecordingDetail spec.
+// RecordingDetail spec.
 //
 // Asserts the seeded recording row, when clicked, mounts the new
 // RecordingDetail component below RecordingsList in the same drawer body
@@ -12,7 +12,7 @@
 //   3. ContourLine (`<figure>` with `<canvas data-testid=contour-canvas>`)
 //      with a wrapping `role=img` aria-label composed from the summary.
 //
-// All payloads come from the Phase-2.1 mocks; no real IPC fires.
+// All payloads come from the analysis mocks; no real IPC fires.
 //
 //   src/components/CentsMeter.tsx (canonical canvas + DPR + reduced-motion pattern)
 

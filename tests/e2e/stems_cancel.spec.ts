@@ -1,4 +1,4 @@
-// Phase 5 — StemSeparationPanel cancel-flow spec (TDD-RED).
+// StemSeparationPanel cancel-flow spec.
 //
 // Drives the idle → separating → idle (cancelled) arc. Two synthetic
 // progress frames fire, then the user clicks the
@@ -41,7 +41,7 @@ const SEED: MockRecording[] = [
   },
 ];
 
-test.describe("phase 5 — stems cancel", () => {
+test.describe("stems cancel", () => {
   test("Cancel during separation returns the panel to idle", async ({ page, mockTauri }) => {
     await mockTauri.install({
       ...installRecordingsMock(SEED),

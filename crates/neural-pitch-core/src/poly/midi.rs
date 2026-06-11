@@ -70,7 +70,8 @@ const MAX_CHANNEL: u8 = 15;
 /// Serialise a [`PolyResult`] to an SMF type-1 byte buffer.
 ///
 /// The output is a single-track SMF type-1 file (header + one track) —
-/// adequate for the per-note pitch-bend isolation Phase 3 needs. The
+/// adequate for the per-note pitch-bend isolation the polyphonic
+/// transcription pipeline needs. The
 /// track preamble emits a `SetTempo` meta and a per-channel RPN 0 prelude
 /// so receivers that default to `±12` semitones reinterpret the per-note
 /// pitch bend at the model's `±2`-semitone range. Per note the emitter

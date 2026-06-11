@@ -1,4 +1,4 @@
-// Phase 5 — StemSeparationPanel progress spec (TDD-RED).
+// StemSeparationPanel progress spec.
 //
 // Drives the idle → separating transition. Five synthetic
 // `separate-progress` frames map to the documented stage cycle
@@ -56,7 +56,7 @@ const STAGE_LABEL: Record<MockSeparateProgress["stage"], RegExp> = {
   finalizing: /Finalizing/i,
 };
 
-test.describe("phase 5 — stems progress", () => {
+test.describe("stems progress", () => {
   test("progress bar tracks aria-valuenow and aria-valuetext per stage", async ({
     page,
     mockTauri,

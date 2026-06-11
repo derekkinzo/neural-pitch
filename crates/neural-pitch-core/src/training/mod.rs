@@ -1,4 +1,4 @@
-//! Phase 4 ear-training core.
+//! Ear-training core.
 //!
 //! Pure-Rust music-theory primitives that power the drill subsystem:
 //! intervals, chord-quality classification, scale/mode classification,
@@ -12,16 +12,11 @@
 //! `music::frequency_to_note`, `music::midi_to_hz`, and
 //! `pipeline::sink::PitchUpdate` from the rest of the crate — it is a
 //! leaf module and never imports `pitch::*`, `audio::*`, or `store::*`.
-//!
-//! Phase 4 RED stubs: every public item below is `todo!()`-bodied. The
-//! corresponding integration tests under `tests/` exercise the public
-//! surface and fail with `not yet implemented` panics until the GREEN
-//! implementation lands.
 
 pub mod chords;
 pub mod drill;
 pub mod intervals;
-// Phase 4 IPC stub layer (start_drill_blocking, submit_drill_attempt_blocking,
+// IPC layer (start_drill_blocking, submit_drill_attempt_blocking,
 // list_drill_history_blocking, synthesize_prompt_blocking) used by
 // `src-tauri/src/commands_drill.rs`. Distinct from the algorithm-side
 // types in `drill.rs`; the IPC structs use the `Ipc*` prefix to avoid

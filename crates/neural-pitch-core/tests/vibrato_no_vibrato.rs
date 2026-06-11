@@ -1,16 +1,12 @@
-//! Phase 2.3 TDD-RED: a constant-pitch contour produces (almost) no
-//! vibrato detections.
+//! A constant-pitch contour produces (almost) no vibrato detections.
 //!
 //! 5 s of perfectly steady 440 Hz (i.e. `smoothed_cents[i] == 0.0` for
-//! every frame) should fail the 5-cent extent floor inside every analysis
-//! window, leaving `vibrato_ratio` very near zero. Spec floor: < 0.05.
-//! Floating-point noise in the median-filter / FFT residual could cause
-//! occasional spurious peaks; the 5% allowance protects against that
-//! while still failing loudly if a future regression starts emitting
-//! vibrato out of pure DC.
-//!
-//! Until [`compute_vibrato`] is implemented this test panics with
-//! `todo!`, which is the red signal.
+//! every frame) should fail the 5-cent extent floor inside every
+//! analysis window, leaving `vibrato_ratio` very near zero (the floor
+//! is 0.05). Floating-point noise in the median-filter / FFT residual
+//! could cause occasional spurious peaks; the 5% allowance protects
+//! against that while still failing loudly if a regression starts
+//! emitting vibrato out of pure DC.
 
 #![allow(missing_docs)]
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]

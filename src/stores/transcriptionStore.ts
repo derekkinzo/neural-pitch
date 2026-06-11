@@ -1,5 +1,5 @@
-// Transcription store — slow-path Zustand state for the Phase 3
-// TranscribePanel + PianoRoll.
+// Transcription store — slow-path Zustand state for the
+// polyphonic-transcription TranscribePanel + PianoRoll.
 //
 // The hot path (canvas paint of the PolyResult) does NOT pass through
 // Zustand: PianoRoll holds the result in a ref and drives its rAF loop
@@ -39,7 +39,7 @@ import type { RecordingId } from "@/types/recording";
 import type { StemKind } from "@/types/stems";
 
 /** Snake_case wire-format mirroring serde Rust output. The TS layer accepts
- *  either casing, exactly like analysisStore — the Tier-5 mock emits
+ *  either casing, exactly like analysisStore — the E2E mock emits
  *  camelCase, the production Rust shell emits snake_case. */
 interface WireSummary {
   recordingId?: string;
@@ -137,14 +137,14 @@ function normaliseProgress(raw: WireProgress): TranscribeProgress {
 export { normaliseProgress as __normaliseTranscribeProgress };
 
 /** Composite cache key matching the `${recId}:${transcriberVersion}` shape
- *  the Tier-5 mock seeds with. Mirrors `contourKey` in analysisStore. */
+ *  the E2E mock seeds with. Mirrors `contourKey` in analysisStore. */
 export function polyResultKey(recId: RecordingId, transcriberVersion: string): string {
   return `${recId}:${transcriberVersion}`;
 }
 
 interface TranscribeOptions {
   readonly forceRefresh?: boolean;
-  /** Phase 5: optional stem kind. When set, the IPC payload carries
+  /** Optional stem kind. When set, the IPC payload carries
    *  `stemKind` so the Rust shell transcribes the stem FLAC instead of
    *  the original mix. The cache key gains `stemKind` so the four stems
    *  and the mix do not clobber each other. */

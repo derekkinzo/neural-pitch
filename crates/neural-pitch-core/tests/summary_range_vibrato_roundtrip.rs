@@ -1,5 +1,5 @@
-//! Phase 2.3 TDD-RED: `AnalysisSummary` round-trips through postcard with
-//! the new `range` / `vibrato` fields populated.
+//! `AnalysisSummary` round-trips through postcard with the
+//! `range` / `vibrato` fields populated.
 //!
 //! Construct an `AnalysisSummary` with non-trivial `RangeReport` and
 //! `VibratoReport` payloads, encode via `postcard::to_allocvec`, decode,
@@ -13,11 +13,8 @@
 //! finishes pulling from the channel, and that is a correct outcome on
 //! Windows-class platforms (project hard rule).
 //!
-//! Until both `compute_range` and `compute_vibrato` are wired we do not
-//! call them here directly; the structs are constructed manually so the
-//! test isolates the wire format. This test should PASS once the structs
-//! land (it does not depend on the algorithm impls). Until the structs
-//! exist the test fails at compile time, which is the red signal.
+//! The structs are constructed manually so the test isolates the wire
+//! format from the algorithm impls.
 
 #![allow(missing_docs)]
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]

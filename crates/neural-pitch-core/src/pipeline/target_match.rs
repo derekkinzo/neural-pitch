@@ -1,4 +1,4 @@
-//! Phase 4 — live target-pitch matcher (TDD-RED stub).
+//! Live target-pitch matcher.
 //!
 //! Sits on the Rust side of the IPC boundary so the per-frame
 //! "is the user on pitch?" decision stays on the audio-rate thread. The
@@ -76,11 +76,6 @@ pub trait MatchEmitter: Send + Sync {
 /// Live target-pitch matcher. Constructed by `start_drill` once the
 /// drill session's expected response note is known; fed every
 /// [`PitchUpdate`] the [`crate::pipeline::DspWorker`] produces.
-///
-/// # TDD-RED status
-///
-/// [`Self::observe`] is a no-op today; tests expecting at least one
-/// emission therefore fail at runtime.
 #[derive(Debug)]
 pub struct TargetMatcher {
     target_midi: i32,

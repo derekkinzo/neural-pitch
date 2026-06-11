@@ -1,4 +1,4 @@
-// KaraokeRibbon — Phase 4 sight-singing target/actual visualisation.
+// KaraokeRibbon — sight-singing target/actual visualisation.
 //
 // Mirrors the well-trodden DPR + reduced-motion pattern from `PianoRoll`.
 //   - X axis: time (left → right). Y axis: MIDI (top is high).

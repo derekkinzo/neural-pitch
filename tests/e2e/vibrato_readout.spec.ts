@@ -1,4 +1,4 @@
-// Phase 2.3 — VibratoReadout spec.
+// VibratoReadout spec.
 //
 // Asserts the seeded recording row, when clicked, mounts the new
 // VibratoReadout component to the right of RangeReadout in the same
@@ -15,7 +15,7 @@
 //   4. Empty state — `vibratoRatio < 0.05` renders the single
 //      "No vibrato detected." paragraph.
 //
-// All payloads come from the Phase-2.3 mocks; no real IPC fires.
+// All payloads come from the vocal-range / vibrato mocks; no real IPC fires.
 //
 //   src/components/CentsMeter.tsx (canonical reduced-motion pattern)
 

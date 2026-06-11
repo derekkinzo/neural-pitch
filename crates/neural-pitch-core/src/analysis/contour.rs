@@ -1,5 +1,5 @@
 #![allow(clippy::doc_markdown)]
-//! Offline pitch-contour analyser (Phase 2.1).
+//! Offline pitch-contour analyser.
 //!
 //! [`analyze_contour`] is the single entry point: feed it raw `f32` samples
 //! plus an [`EstimatorConfig`] and an `a4_hz` reference, and it returns a
@@ -24,7 +24,7 @@ use crate::pitch::{EstimatorConfig, EstimatorError, F0Frame, PitchEstimator};
 use crate::smoothing::ContourSmoother;
 
 /// Stable analyser-name constant for the pYIN backend's `analysis_cache`
-/// rows. Mirrors `analyzer_name` in the Phase 2.0 schema.
+/// rows. Mirrors `analyzer_name` in the persistence schema.
 pub const PYIN_ANALYZER_NAME: &str = "pyin";
 
 /// Stable analyser-version constant. Bump whenever pYIN's tuneables or the
@@ -53,10 +53,10 @@ const SMOOTHER_WINDOW_MS: f32 = 80.0;
 
 /// Whole-file analysis result for one recording, one analyser, one version.
 ///
-/// Serialised via `postcard` into the `analysis_cache.result_blob` column
-/// (Phase 2.0 schema). The on-the-wire shape is versioned by
-/// [`PYIN_ANALYZER_VERSION`]; bump it whenever the field set changes in a
-/// way older readers cannot ignore.
+/// Serialised via `postcard` into the `analysis_cache.result_blob`
+/// column. The on-the-wire shape is versioned by
+/// [`PYIN_ANALYZER_VERSION`]; bump it whenever the field set changes in
+/// a way older readers cannot ignore.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[must_use = "the analyzer's per-frame contour — dropping it discards the analysis"]
 pub struct ContourResult {
@@ -145,7 +145,7 @@ pub fn analyze_contour(
     // Feed in hop-aligned chunks. The estimator buffers internally and
     // ignores the hop alignment — the only reason we slice by hop_size is
     // to mirror the live-path pacing so a future bounded-lookahead variant
-    // (Phase 2.2) can drop in without re-plumbing this loop.
+    // can drop in without re-plumbing this loop.
     //
     // We pass `process_with_range` with the full `cfg.fmin_hz`/`cfg.fmax_hz`
     // range; `auto_prior::range_for_hint` is the public lookup, but the

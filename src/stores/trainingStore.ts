@@ -1,4 +1,4 @@
-// Training store — Phase 4 ear-training subsystem.
+// Training store — ear-training subsystem.
 //
 // Slow-path Zustand state for the Training landing screen + drill flows.
 // Hot-path data (the live PitchUpdate ring + the per-frame KaraokeRibbon
@@ -11,7 +11,7 @@
 // History persistence: each `recordAttempt(...)` writes the appended
 // history into `localStorage` under a single key. There is no IPC for
 // this — the history is local to the desktop install, mirrors the
-// `Phase 4 — local-only` constraint, and survives reloads. A failed
+// local-only constraint, and survives reloads. A failed
 // localStorage write degrades to in-memory only (e.g. private browsing
 // mode); the drill flow itself never blocks on persistence.
 
@@ -28,8 +28,8 @@ import type {
 const HISTORY_STORAGE_KEY = "neural-pitch.training.history.v1";
 const HISTORY_MAX_ENTRIES = 256;
 
-/** Wire-format envelope for a MatchUpdate frame. The Tier-5 mock and the
- *  Rust shell both emit snake_case; future shell-side renames to camelCase
+/** Wire-format envelope for a MatchUpdate frame. The E2E mock and the
+ *  Rust shell both emit snake_case; a shell-side rename to camelCase
  *  are absorbed by reading either spelling. Re-exported so the
  *  match-update channel listener can share the same type without
  *  redeclaring it. */
@@ -49,9 +49,9 @@ export interface WireMatchUpdate {
   ended?: boolean;
 }
 
-/** Normalise the channel payload into the camelCase TS shape. The Tier-5
+/** Normalise the channel payload into the camelCase TS shape. The E2E
  *  mock emits snake_case (mirrors the Rust serde wire-format), and a
- *  future shell-side rename to camelCase is absorbed by the same path. */
+ *  shell-side rename to camelCase is absorbed by the same path. */
 export function normaliseMatchUpdate(raw: WireMatchUpdate): MatchUpdate {
   return {
     tMs: raw.tMs ?? raw.t_ms ?? 0,

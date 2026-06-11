@@ -55,7 +55,7 @@ test.describe("auto-prior — StatusPill badge", () => {
     await page.goto("/");
     await expect(page.getByTestId("status-pill")).toHaveAttribute("data-state", "live");
 
-    // Open the drawer and switch to "Guitar". The Phase-1 staged range for
+    // Open the drawer and switch to "Guitar". The staged range for
     // Guitar is [80, 1300].
     await page.getByTestId("settings-trigger").click();
     await page.getByLabel(/Instrument hint/i).selectOption("Guitar");

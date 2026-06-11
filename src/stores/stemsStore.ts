@@ -1,5 +1,5 @@
-// Stems store — slow-path Zustand state for the Phase 5
-// StemSeparationPanel.
+// Stems store — slow-path Zustand state for the
+// HTDemucs StemSeparationPanel.
 //
 // The hot path (per-frame `percent` published at ~10–20 Hz from Rust)
 // does NOT pass through Zustand. The panel reads percent through a
@@ -45,7 +45,7 @@ interface WireSeparateResponse {
 }
 
 /** Normalise a wire-format `separate-progress` payload (snake_case from
- *  the Rust shell, camelCase from the Tier-5 mock). */
+ *  the Rust shell, camelCase from the E2E mock). */
 export function __normaliseStemsProgress(raw: WireProgress): SeparateProgress {
   return {
     recordingId: raw.recordingId ?? raw.recording_id ?? "",

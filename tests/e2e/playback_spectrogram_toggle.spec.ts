@@ -1,4 +1,4 @@
-// Phase 2.4 — Spectrogram toggle (TDD-RED).
+// Spectrogram toggle spec.
 //
 // Asserts the spectrogram host starts hidden and empty, and that
 // clicking the toggle button:

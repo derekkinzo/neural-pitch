@@ -1,4 +1,4 @@
-// Phase 3 — PianoRoll spec.
+// PianoRoll spec.
 //
 // Asserts the canvas-based piano roll mounts when a `PolyResult` is
 // available for the current recording id. Three assertions:
@@ -81,7 +81,7 @@ const POLY: Record<string, MockPolyResult> = {
   "rec-pr-001:basicpitch-0.1.0": buildSyntheticPolyResult("rec-pr-001"),
 };
 
-test.describe("phase 3 — piano roll", () => {
+test.describe("piano roll", () => {
   test("canvas mounts with role=img and aria-label embedding note count + range", async ({
     page,
     mockTauri,

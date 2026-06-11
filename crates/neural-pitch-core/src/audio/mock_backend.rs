@@ -7,8 +7,8 @@
 //! the same back-pressure semantics as the cpal callback (drop on full,
 //! incrementing an `AtomicU64` counter).
 //!
-//! This is a Tier-2 test fixture: deterministic, single-threaded,
-//! and free of any platform-specific I/O.
+//! Deterministic, single-threaded, and free of any platform-specific
+//! I/O — meant for the integration-test harness, never for production.
 
 use core::f32::consts::TAU;
 use std::sync::Arc;
@@ -72,7 +72,7 @@ impl core::fmt::Debug for SampleSource {
 #[non_exhaustive]
 pub enum Pacing {
     /// Produce samples as fast as the consumer drains them. This is the only
-    /// mode used by the Tier-2 deterministic tests today.
+    /// mode used by the deterministic integration tests today.
     #[default]
     AsFastAsPossible,
     /// Marker variant intended to simulate real-time pacing in

@@ -47,11 +47,11 @@ export function RecordingsList({ open, onOpenChange }: RecordingsListProps): Rea
   // the drawer mount so the AnalysisSummary card's progress bar reflects
   // the live percent driven by the Rust analyzer.
   useAnalysisProgress();
-  // Same wiring for the Phase-3 transcription channel — TranscribePanel
+  // Same wiring for the transcription channel — TranscribePanel
   // mounts inside RecordingDetail (a child of this drawer) so a single
   // subscription at the drawer root covers every panel instance.
   useTranscribeProgress();
-  // Phase 5 stems channel — StemSeparationPanel mounts inside the same
+  // Stems channel — StemSeparationPanel mounts inside the same
   // RecordingDetail subtree, so co-locating the subscription here keeps
   // a single fanout site for all per-recording IPC channels.
   useStemProgressSubscription();
@@ -263,14 +263,10 @@ function RecordingRow({
       <div className="mt-1 flex items-center gap-2 text-xs text-slate-300">
         {/* The row itself is the play / select control (`role=option`),
             and WAI-ARIA forbids interactive controls inside listbox
-            options. Phase 2.4 will move playback into a dedicated
-            "Play / Pause" toggle inside the PlaybackPanel header where
-            the listbox semantics no longer apply. For Phase 2.0 we keep
-            the visual affordance — a non-interactive label — so the
-            row still reads as a play target. The selection is the play
-            cue: selecting a row mounts the PlaybackPanel below the
+            options. Selecting a row mounts the PlaybackPanel below the
             list, which surfaces the actual `<audio controls>` element
-            with play/pause/seek built in. */}
+            with play/pause/seek built in; the row only carries a
+            non-interactive textual cue. */}
         <span data-testid="recording-play" aria-hidden="true" className="select-none">
           {isSelected ? "Now playing" : "Click to load"}
         </span>

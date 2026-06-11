@@ -1,10 +1,7 @@
-//! Tier-1 persistence test #3: soft delete hides rows from `ActiveOnly`.
+//! Tier-1 persistence test: soft delete hides rows from `ActiveOnly`.
 //!
-//! Spec: insert, soft-delete, `ListFilter::ActiveOnly` → empty;
+//! Insert, soft-delete, `ListFilter::ActiveOnly` → empty;
 //! `IncludingDeleted` → 1 row with `deleted_at_unix_ms.is_some()`.
-//!
-//! TDD-RED: every store call is `unimplemented!()`, so this test panics. That
-//! panic is the red signal.
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 
 use std::path::Path;

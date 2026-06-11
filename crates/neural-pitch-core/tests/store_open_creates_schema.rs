@@ -1,11 +1,7 @@
-//! Tier-1 persistence test #1: opening the library creates the v1 schema.
+//! Tier-1 persistence test: opening the library creates the v1 schema.
 //!
-//! Spec: open `:memory:`, query `schema_version`, assert `version = 1`,
+//! Open `:memory:`, query `schema_version`, assert `version = 1`,
 //! assert `recordings` and `analysis_cache` exist via `sqlite_master`.
-//!
-//! TDD-RED: `RecordingsLibrary::new` is currently `unimplemented!()`, so this
-//! test panics with a "not yet implemented" message. That panic is the red
-//! signal — the implementation lands in Phase 2.0.
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 
 use std::path::Path;

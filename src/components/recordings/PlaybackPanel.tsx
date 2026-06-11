@@ -1,4 +1,4 @@
-// PlaybackPanel — Phase 2.4 wavesurfer-driven recording playback.
+// PlaybackPanel — wavesurfer-driven recording playback.
 //
 // Mounts a WaveSurfer instance on the host div whenever
 // `currentRecordingId` flips to a non-null value, exposes Play/Pause +
@@ -26,14 +26,14 @@ const PLAYBACK_TIME_THROTTLE_MS = 33; // ~30 Hz visible readout
 /**
  * Optional props.
  *
- * `audioPath` (Phase 5): when set, the panel skips the
+ * `audioPath`: when set, the panel skips the
  * `get_recording_path` IPC and resolves the supplied path directly via
- * `convertFileSrc()` (or the test-hook override). The Phase 5 stem
+ * `convertFileSrc()` (or the test-hook override). The stem
  * cards pass each FLAC's full path explicitly so the same panel
  * component covers both the mix (where the recording id implies the
  * path) and a per-stem playback (where the path is already known).
  *
- * `variant` (Phase 5): "stem" suppresses the playback-head publish path
+ * `variant`: "stem" suppresses the playback-head publish path
  * AND the spectrogram toggle. The mix panel publishes into
  * `playback-head` so ContourLine consumes the cursor; stem panels stay
  * self-contained because no live overlay reads from them. The

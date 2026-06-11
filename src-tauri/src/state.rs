@@ -20,7 +20,7 @@
 //!   *after* the guard is dropped because `parking_lot` guards are `!Send`
 //!   and cannot cross `.await` (see `commands::persist_settings`).
 //! - `events` — slot holding the most-recently-handed-out
-//!   `tauri::ipc::Channel<AudioBackendEvent>`. Phase 1.3 wiring: the JS
+//!   `tauri::ipc::Channel<AudioBackendEvent>`. Wiring: the JS
 //!   side constructs the channel once on mount and passes it into
 //!   `start_capture`; the cpal backend's `err_fn` forwards
 //!   `Disconnected` / `Underrun` / `FormatChanged` over that channel.

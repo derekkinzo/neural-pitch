@@ -1,4 +1,4 @@
-// Accessibility checks for the Phase 1.2 tuner.
+// Accessibility checks for the live tuner.
 //
 // Asserts:
 //   1. axe-core finds no `serious` or `critical` WCAG 2.1 AA violations on
@@ -9,7 +9,7 @@
 
 import { test, expect } from "./fixtures";
 
-test.describe("a11y — Phase 1.2 tuner", () => {
+test.describe("a11y — tuner", () => {
   test("axe scan reports no serious or critical violations", async ({ page, mockTauri, axe }) => {
     await mockTauri.install();
     await page.goto("/");

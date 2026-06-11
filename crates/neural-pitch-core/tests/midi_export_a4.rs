@@ -8,7 +8,7 @@
     clippy::explicit_iter_loop
 )]
 
-//! Phase 3 RED — SMF export of a single A4 note.
+//! SMF export of a single A4 note.
 //!
 //! Hand-build a [`PolyResult`] with one A4 from 0..1000 ms, call
 //! [`poly_result_to_smf`], parse the resulting bytes back through

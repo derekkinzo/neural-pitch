@@ -1,13 +1,12 @@
 #![allow(missing_docs)]
 #![cfg(feature = "pyin")]
 
-//! Phase 2.3 TDD-RED — `analyze_recording_blocking` projects the
-//! [`RangeReport`] onto the wire `AnalysisSummary`.
+//! `analyze_recording_blocking` projects the [`RangeReport`] onto the
+//! wire `AnalysisSummary`.
 //!
-//! Spec (Phase 2.3 §1): "Both fields are `Option` so a fully-unvoiced take
-//! … can return `None`. … `summarize_cached` projects both fields onto the
-//! wire summary so the cache-hit and fresh-run paths return identical
-//! shapes."
+//! Both fields are `Option` so a fully-unvoiced take can return `None`.
+//! `summarize_cached` projects both fields onto the wire summary so the
+//! cache-hit and fresh-run paths return identical shapes.
 //!
 //! This test drives a swept sine over a known pitch interval through
 //! `analyze_recording_blocking` and pins:
@@ -16,10 +15,6 @@
 //!   * `range.full_min_midi < range.full_max_midi` — the recorded range
 //!     spans more than one MIDI semitone (i.e. `min` is strictly below
 //!     `max` on the recovered histogram).
-//!
-//! TDD-RED: `summarize_cached` currently surfaces `range: None`; the
-//! `compute_range` impl is `todo!()`. The first assertion fails until the
-//! Phase 2.3 wiring lands.
 
 #![allow(
     clippy::expect_used,
@@ -114,7 +109,7 @@ fn analyze_recording_includes_range_report() {
     let range = summary
         .range
         .as_ref()
-        .expect("Phase 2.3 — fresh analysis must populate summary.range for a voiced take");
+        .expect("fresh analysis must populate summary.range for a voiced take");
 
     // Recorded range must span more than one MIDI semitone — i.e. the
     // "min" bound is strictly below the "max" bound on the recovered

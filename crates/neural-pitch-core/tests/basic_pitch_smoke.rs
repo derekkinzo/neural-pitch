@@ -7,7 +7,7 @@
     clippy::uninlined_format_args
 )]
 
-//! Phase 3 RED — Basic Pitch v1 smoke test on a 1 s 440 Hz tone.
+//! Basic Pitch v1 smoke test on a 1 s 440 Hz tone.
 //!
 //! 1 s of 440 Hz @ 22.05 kHz must produce exactly one note at MIDI 69.
 //! `start_ms` should be near zero (allow up to 50 ms of attack latency)

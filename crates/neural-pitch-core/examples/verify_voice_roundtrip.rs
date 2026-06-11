@@ -1,9 +1,9 @@
-//! Quick round-trip verification for the Phase 1.4 Tier-2 voice fixtures.
+//! Quick round-trip verification for the Tier-2 voice fixtures.
 //!
 //! Decodes one fixture (A4 / 440 Hz) via `claxon`, runs a textbook
 //! parabolic-interpolation FFT pitch estimator, and prints the deviation
-//! in cents from the synth_voice input. Used during Phase 1.4 bring-up
-//! to confirm the FLAC encode → decode pipeline does not corrupt pitch.
+//! in cents from the synth_voice input. Confirms the FLAC encode →
+//! decode pipeline does not corrupt pitch.
 
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 #![allow(clippy::print_stdout, clippy::cast_possible_wrap)]

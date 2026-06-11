@@ -1,5 +1,5 @@
-//! Phase 5 — Tauri / persistence integration test for the
-//! cancellation path of the HTDemucs four-stem separator.
+//! Tauri / persistence integration test for the cancellation path of
+//! the HTDemucs four-stem separator.
 //!
 //! Drives [`neural_pitch_lib::stems::separate_stems_blocking`] inside a
 //! `tokio::task::spawn_blocking` worker, sleeps 50 ms to let the
@@ -13,15 +13,10 @@
 //! `transcribe_recording_cache` precedent: "channel-based tests MUST
 //! tolerate the receiver closing early."
 //!
-//! TDD-RED status — [`separate_stems_blocking`] returns
-//! `Err(StemError::NotImplemented)` today. The impl phase wires the
-//! GREEN cancellation polling between the decode / separate / encode
-//! milestones.
-//!
-//! `#[ignore]`d for the CI matrix because the GREEN path will be
-//! ONNX-driven and the wall-clock cancellation budget assumes a CPU
-//! that has the model warm in cache. Local pre-push gate runs the test
-//! via `cargo test ... -- --include-ignored`.
+//! `#[ignore]`d for the CI matrix because the path is ONNX-driven and
+//! the wall-clock cancellation budget assumes a CPU that has the model
+//! warm in cache. Local pre-push gate runs the test via
+//! `cargo test ... -- --include-ignored`.
 
 #![allow(missing_docs)]
 #![cfg(feature = "neural")]
@@ -39,7 +34,7 @@ use neural_pitch_lib::stems::{
 use neural_pitch_lib::transcribe::import_audio_file_blocking;
 use tokio_util::sync::CancellationToken;
 
-/// Drop-tolerant sink — the Phase 5 GREEN path must use
+/// Drop-tolerant sink — the production path uses
 /// `Channel::send(...).ok()` (or equivalent) so the receiver dropping
 /// mid-job is a `tracing::debug!` no-op rather than a panic. This
 /// implementation mirrors that contract by silently ignoring every

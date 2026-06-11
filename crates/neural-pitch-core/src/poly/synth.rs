@@ -1,4 +1,4 @@
-//! Phase 4 — pure-Rust additive prompt synth.
+//! Pure-Rust additive prompt synth.
 //!
 //! [`PromptSynth`] renders a short MIDI-pitch prompt as a complete
 //! RIFF/WAVE byte stream (PCM16 mono, 48 kHz). The Tauri shell pipes the
@@ -7,7 +7,7 @@
 //! synthesis. Pure-Rust, no `ort` or external models — ships under
 //! `--no-default-features`.
 //!
-//! GREEN implementation: a small additive sine stack
+//! Implementation: a small additive sine stack
 //! (fundamental + 2nd / 3rd partial at modest amplitudes) shaped by a
 //! short cosine fade-in/out envelope to avoid the click that a hard
 //! gate would produce. The harmonic content is deliberately quiet

@@ -1,11 +1,11 @@
-//! Phase 3 — file-import / Basic Pitch transcribe / MIDI export shell.
+//! File-import / Basic Pitch transcribe / MIDI export shell.
 //!
 //! Three new IPC entry points live here as pure-blocking headless twins so
 //! the Tauri command layer in [`crate::commands`] can `spawn_blocking` them
 //! and the integration tests under `tests/` can call them directly without
 //! standing up a full Tauri runtime (mirrors the
 //! [`neural_pitch_core::store::analyze_recording_blocking`] pattern that
-//! Phase 2.1 ships).
+//! the analyse / contour command surface uses).
 //!
 //! 1. [`import_audio_file_blocking`] — extension-gated to
 //!    `{wav, flac, mp3}`, stat-rejects sources `>` [`IMPORT_SIZE_LIMIT_BYTES`],
@@ -53,13 +53,12 @@ pub const BASIC_PITCH_ANALYZER_NAME: &str = "basic-pitch";
 /// [`WirePolyResult`] schema change so cached blobs invalidate cleanly.
 pub const BASIC_PITCH_ANALYZER_VERSION: &str = "1.0";
 
-/// Hard cap on the size of an importable audio file. 500 MiB matches the
-/// Phase 3 spec — at 24-bit / 48 kHz / mono FLAC this is roughly 2 hours
-/// of material; lossless captures longer than that should be edited
-/// outside the app.
+/// Hard cap on the size of an importable audio file. At 24-bit / 48 kHz /
+/// mono FLAC, 500 MiB is roughly 2 hours of material; lossless captures
+/// longer than that should be edited outside the app.
 pub const IMPORT_SIZE_LIMIT_BYTES: u64 = 500 * 1024 * 1024;
 
-/// MIDI tempo persisted in the exported SMF. Matches the Phase 3 spec's
+/// MIDI tempo persisted in the exported SMF. Matches the export contract's
 /// 120 BPM default — `60_000_000 / tempo_bpm` µs/quarter.
 const TEMPO_BPM: u32 = 120;
 
@@ -72,9 +71,9 @@ const TICKS_PER_QUARTER: u16 = 480;
 ///
 /// Cached path emits exactly one message with `percent: 1.0`,
 /// `current_window == total_windows`. Fresh runs emit one tick per inference
-/// window the deterministic transcriber processes (single window in the
-/// Phase 3 baseline) so the front-end progress UI ticks exactly once per
-/// audio buffer regardless of cache vs. fresh path.
+/// window the deterministic transcriber processes (a single window today) so
+/// the front-end progress UI ticks exactly once per audio buffer regardless
+/// of cache vs. fresh path.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct TranscribeProgress {
@@ -99,7 +98,7 @@ pub struct TranscribeProgress {
 pub struct TranscribeSummary {
     /// Stable analyzer identifier (`"basic-pitch"`).
     pub analyzer_name: String,
-    /// Analyzer version string (`"1.0"` for Phase 3 baseline).
+    /// Analyzer version string (`"1.0"`).
     pub analyzer_version: String,
     /// `true` when this summary came from `analysis_cache`; the inference
     /// run was skipped.
@@ -145,7 +144,7 @@ struct WirePolyResult {
 
 /// One note event recovered from the deterministic transcribe pass. Mirrors
 /// `neural_pitch_core::poly::NoteEvent` minus the optional pitch-bend curve
-/// (Phase 3 baseline does not emit per-note pitch bend; the curve hook lives
+/// (the deterministic transcriber does not emit per-note pitch bend; the curve hook lives
 /// in [`crate::commands::export_midi`] when the algo team's
 /// `BasicPitchEstimator` ships its variant).
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -230,7 +229,7 @@ pub enum TranscribeError {
 /// 1. Lower-case extension; reject anything outside `{wav, flac, mp3}`.
 /// 2. `metadata()` for size; reject `> IMPORT_SIZE_LIMIT_BYTES` *before*
 ///    opening the file (cheap rejection — no decoder spin-up cost).
-/// 3. Probe the WAV header inline (RIFF/WAVE/fmt /data). The Phase 3
+/// 3. Probe the WAV header inline (RIFF/WAVE/fmt /data). The current
 ///    baseline only ships the WAV path; FLAC / MP3 probes are reserved for
 ///    a follow-up that pulls in `claxon` / `minimp3`.
 /// 4. Mint a [`RecordingId`], copy the source file to
@@ -259,7 +258,7 @@ pub fn import_audio_file_blocking(
         return Err(ImportError::TooLarge { bytes: meta.len() });
     }
 
-    // 3) Probe. Only the WAV path is wired for the Phase 3 baseline; the
+    // 3) Probe. Only the WAV path is wired today; the
     //    FLAC / MP3 arms surface a `decode failed` error that the front-end
     //    can coerce into the "format-not-yet-supported" copy until the
     //    follow-up resampler lands.
@@ -267,7 +266,7 @@ pub fn import_audio_file_blocking(
         "wav" => probe_wav(source_path)?,
         other => {
             return Err(ImportError::DecodeFailed(format!(
-                "{other} probe not yet wired (Phase 3 ships WAV only)"
+                "{other} probe not yet wired (WAV only)"
             )));
         }
     };
@@ -303,7 +302,7 @@ pub fn import_audio_file_blocking(
             sample_rate_hz: i64::from(probe.sample_rate_hz),
             channels: i64::from(probe.channels),
             // 0 sentinel for lossy / unknown; WAV probe could populate this
-            // but the Phase 3 spec deliberately keeps it as a sentinel so
+            // but the import contract deliberately keeps it as a sentinel so
             // the row-shape matches future FLAC / MP3 imports without an
             // append-only schema change.
             bit_depth: 0,
@@ -826,7 +825,7 @@ fn decode_float32_mono(bytes: &[u8], channels: u16) -> Vec<f32> {
 
 /// Deterministic transcribe: zero-crossing-rate frequency estimator over a
 /// single window, plus an RMS-derived velocity. Recovers exactly one
-/// note for clean monophonic material — which is the contract the Phase 3
+/// note for clean monophonic material — which is the contract the transcribe
 /// integration tests assert ("note_count >= 1 for a 1 s 440 Hz tone").
 ///
 /// This is the placeholder integration the IPC layer ships against until
@@ -847,7 +846,7 @@ fn transcribe_buffer(samples: &[f32], sample_rate_hz: u32, duration_ms: u64) -> 
 
     // Zero-crossing rate → fundamental frequency estimate. For a clean
     // sinusoid this is exact; for harmonic-rich material it picks up the
-    // strongest periodic component, which is good enough for the Phase 3
+    // strongest periodic component, which is good enough for the deterministic
     // baseline.
     let mut crossings: u64 = 0;
     for window in samples.windows(2) {
@@ -887,7 +886,7 @@ fn transcribe_buffer(samples: &[f32], sample_rate_hz: u32, duration_ms: u64) -> 
 }
 
 /// Emit a single terminal `percent: 1.0` tick on the optional progress
-/// sink. Mirrors the cache-hit contract the Phase 3 spec asserts.
+/// sink. Mirrors the cache-hit contract the transcribe surface asserts.
 fn emit_terminal(progress: Option<&dyn TranscribeProgressSink>, id: RecordingId) {
     if let Some(sink) = progress {
         sink.emit(TranscribeProgress {

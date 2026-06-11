@@ -1,7 +1,7 @@
-//! Tier-2 deterministic test: 5 Hz vibrato of ±50 cents around 440 Hz, fed
-//! through the full pipeline. The mean absolute `smoothed_cents` over a
-//! 500 ms window must stay under 10 cents (matches the Phase 1.0
-//! `yin_vibrato_within_10_cents` test).
+//! Tier-2 deterministic test: 5 Hz vibrato of ±50 cents around 440 Hz,
+//! fed through the full pipeline. The mean absolute `smoothed_cents`
+//! over a 500 ms window must stay under 10 cents (matches the
+//! single-window `yin_vibrato_within_10_cents` unit test).
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 
 use std::sync::mpsc;
@@ -35,7 +35,7 @@ fn dsp_pipeline_vibrato_mean_under_10_cents() {
     let estimator = make_estimator(Backend::YinMpm, est_cfg, None).expect("estimator");
 
     // Pre-generate the full vibrato waveform with the same phase-centering
-    // trick that the Phase 1.0 `yin_vibrato_within_10_cents` test uses, so
+    // trick that the `yin_vibrato_within_10_cents` unit test uses, so
     // the mean instantaneous frequency over the analysed window is exactly
     // the configured centre frequency. We then feed it through the mock
     // backend via a `SampleSource::Custom` closure that reads from this
@@ -63,7 +63,7 @@ fn dsp_pipeline_vibrato_mean_under_10_cents() {
     let cancel = CancellationToken::new();
     // Smooth across a full vibrato period (200 ms at 5 Hz) so the running
     // mean of voiced f0 estimates averages the ±50 cent excursion to near
-    // zero. The Phase 1.0 single-window test only sees a single 42.7 ms
+    // zero. The single-window unit test only sees a single 42.7 ms
     // analysis window so it has the same effective averaging length; the
     // streaming test needs an explicit smoother to match that bound.
     let worker = DspWorker::new(

@@ -1,4 +1,4 @@
-// Training — wire-format types for the Phase 4 ear-training drill subsystem.
+// Training — wire-format types for the ear-training drill subsystem.
 //
 // Mirrors `src/types/transcription.ts` in shape: lightweight per-attempt
 // records (`DrillAttempt`) feed the landing-screen "last attempt" stats;

@@ -1,4 +1,4 @@
-// Phase 4 — Training landing spec.
+// Training landing spec.
 //
 // Drives the "Practice" header button into the Training screen and asserts
 // the five drill cards render with seeded "last attempt" stats:
@@ -74,7 +74,7 @@ async function pinTestNow(page: import("@playwright/test").Page, now: number): P
   }, now);
 }
 
-test.describe("phase 4 — training landing", () => {
+test.describe("training landing", () => {
   test("Practice button flips view and renders all five drill cards", async ({
     page,
     mockTauri,

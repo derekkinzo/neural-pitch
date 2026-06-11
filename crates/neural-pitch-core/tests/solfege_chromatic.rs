@@ -1,7 +1,7 @@
 #![allow(missing_docs)]
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 
-//! Phase 4 RED — chromatic movable-do with a direction hint.
+//! Chromatic movable-do with a direction hint.
 //!
 //! In C major:
 //! - MIDI 61 (C#4 / Db4) → `Di` (raised Do, ascending direction default).

@@ -192,8 +192,9 @@ pub fn ensure_model(name: &str, dest_dir: &Path) -> Result<PathBuf, ResolverErro
     //    manifest we must NOT delete: the manifest's sha is the all-zeros
     //    sentinel which can never match a real file, so a blanket "delete
     //    on mismatch" would burn any user-supplied hand-placed blob the
-    //    moment Phase 2.5 lands. Leave the cached file alone in that case
-    //    and surface NotConfigured in step 6.
+    //    moment a real manifest entry replaces the placeholder. Leave the
+    //    cached file alone in that case and surface NotConfigured in
+    //    step 6.
     if target.exists() && !entry.is_placeholder() {
         let actual = hash_file(&target)?;
         if actual == entry.sha256 {

@@ -381,14 +381,15 @@ pub fn get_contour_blocking(
         return Ok(None);
     };
     tracing::Span::current().record("blob_bytes", blob.len() as u64);
-    // Phase 2.3 cache-bump back-compat: pre-`0.2` blobs use an
-    // older `ContourResult` field set that the current postcard schema can
+    // Cache-bump back-compat: pre-`0.2` blobs use an older
+    // `ContourResult` field set that the current postcard schema can
     // no longer round-trip. Rather than treating them as hard
     // [`AnalysisError::CacheCorrupted`] (which would force the front-end
     // to manually purge the row), surface a structurally-empty
-    // `ContourResult` so the back-compat fetch path (`get_contour(.., "0.1")`)
-    // returns `Ok(Some(_))`. Spec §3: "0.1 rows stay in `analysis_cache`
-    // and remain fetchable via `get_contour(.., "0.1")` for back-compat."
+    // `ContourResult` so the back-compat fetch path
+    // (`get_contour(.., "0.1")`) returns `Ok(Some(_))`. Per the
+    // persistence contract: "0.1 rows stay in `analysis_cache` and
+    // remain fetchable via `get_contour(.., "0.1")` for back-compat."
     //
     // The placeholder carries the requested analyzer name/version and an
     // empty per-frame track. Down-stream callers that need real data are
@@ -843,8 +844,8 @@ fn summarize_cached(
         reading.midi
     });
     let computed_at_unix_ms = meta.map_or(0, |(ts, _)| ts);
-    // Phase 2.3 — derive range + vibrato reports from the cached contour.
-    // Both are pure functions over the contour, so cache-hit and fresh-run
+    // Derive range + vibrato reports from the cached contour. Both
+    // are pure functions over the contour, so cache-hit and fresh-run
     // paths produce structurally identical summaries.
     //
     // Range works directly on the per-frame `f0_hz` track and is unaffected

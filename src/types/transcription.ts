@@ -1,11 +1,11 @@
-// Transcription — wire-format types for the Phase 3 Basic Pitch backend.
+// Transcription — wire-format types for the Basic Pitch backend.
 //
 // Mirrors `src/types/analysis.ts` in shape: a small `TranscribeSummary`
 // for the panel header + a heavy `PolyResult` (3-N notes with per-note
 // pitch_bend_curve polylines) for the canvas-based PianoRoll. The Rust
 // shell emits camelCase per the existing recording.ts convention; the
 // IPC boundary (`transcribe_recording`, `get_poly_result`, `export_midi`,
-// `transcribe-progress`) shares this shape with the Tier-5 Tauri-mock
+// `transcribe-progress`) shares this shape with the E2E Tauri-mock
 // under tests/e2e/helpers.
 
 import type { RecordingId } from "@/types/recording";

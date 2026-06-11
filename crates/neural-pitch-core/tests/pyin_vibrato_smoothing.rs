@@ -1,12 +1,11 @@
 #![allow(missing_docs)]
 #![cfg(feature = "pyin")]
 
-//! Phase 2.1 TDD-RED: pYIN + smoother together must average vibrato.
+//! pYIN + smoother together must average vibrato.
 //!
-//! 5 Hz vibrato ±50 cents around 440 Hz over 1 s → median cents within 5 of
-//! the true centre, range < 60 cents. The smoother is what compresses the
-//! ±50 c excursion; until `analyze_contour` is implemented the test panics
-//! with `todo!`.
+//! 5 Hz vibrato ±50 cents around 440 Hz over 1 s → median cents within
+//! 5 of the true centre, range < 60 cents. The smoother is what
+//! compresses the ±50 c excursion.
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 
 use neural_pitch_core::analysis::contour::analyze_contour;

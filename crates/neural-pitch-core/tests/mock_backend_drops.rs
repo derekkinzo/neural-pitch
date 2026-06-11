@@ -1,8 +1,8 @@
 //! Tier-2 test: confirm that [`MockAudioBackend`] increments its
-//! `dropped_samples` counter when the SPSC ring overflows. The
-//! `dropped_samples` counter is the only Phase 1.1 underrun-visibility
-//! signal; without this test, regressions that silently zero the counter
-//! (or skip the increment entirely) would not be caught.
+//! `dropped_samples` counter when the SPSC ring overflows. That counter
+//! is the only underrun-visibility signal the audio loop exposes;
+//! without this test, regressions that silently zero the counter (or
+//! skip the increment entirely) would not be caught.
 #![allow(clippy::expect_used, clippy::unwrap_used)]
 
 use std::sync::atomic::Ordering;

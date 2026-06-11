@@ -1,4 +1,4 @@
-//! Phase 5 — HTDemucs stem-separation surface.
+//! HTDemucs stem-separation surface.
 //!
 //! The general-purpose pitch-detection app gains an opt-in stem subsystem
 //! that splits a recording into the four standard Demucs buses (vocals /
@@ -22,7 +22,7 @@
 //! the input mono buffer (vocals = original, drums = onset envelope,
 //! bass = low-pass, other = residual). The on-disk shape, the cache row,
 //! the cancellation polling, and the progress channel all match the
-//! Phase 5 spec exactly so a future ONNX-driven HTDemucs swap is a
+//! stem-separation contract exactly so a future ONNX-driven HTDemucs swap is a
 //! drop-in for the inner `synth::split_four_bus` call without touching
 //! the Tauri / persistence wiring.
 
@@ -40,7 +40,7 @@ use tokio_util::sync::CancellationToken;
 /// `stem_results.separator_version` and on the cache key. Bumped in
 /// lock-step with any HTDemucs model swap or the on-the-wire
 /// [`SeparateProgress`] / [`StemSummary`] schema change so cached blobs
-/// invalidate cleanly when the impl phase swaps the ONNX checkpoint.
+/// invalidate cleanly when a future ONNX checkpoint swap lands.
 pub const HTDEMUCS_SEPARATOR_VERSION: &str = "htdemucs-4.0.1";
 
 /// SHA-256 checksum of the HTDemucs ONNX model bundle. Verified by
@@ -48,7 +48,7 @@ pub const HTDEMUCS_SEPARATOR_VERSION: &str = "htdemucs-4.0.1";
 /// `$APPDATA/models/htdemucs-4.0.1.onnx` so a corrupted or man-in-the-
 /// middle download cannot land in the model cache.
 ///
-/// Sentinel value today; the impl phase replaces it with the real
+/// Sentinel value; a future commit replaces it with the real
 /// upstream checksum baked next to [`HTDEMUCS_SEPARATOR_VERSION`].
 pub const HTDEMUCS_MODEL_SHA256: &str =
     "0000000000000000000000000000000000000000000000000000000000000000";
@@ -59,7 +59,7 @@ pub const HTDEMUCS_MODEL_SHA256: &str =
 /// messages when the user is offline so the front-end can paste the URL
 /// into a manual download flow.
 ///
-/// Placeholder today; the impl phase wires the canonical mirror URL.
+/// Placeholder; a future commit wires the canonical mirror URL.
 pub const HTDEMUCS_MODEL_URL: &str = "https://example.invalid/htdemucs-4.0.1.onnx";
 
 /// One of the four standard Demucs buses. Serialised as `snake_case` so
@@ -244,7 +244,7 @@ pub enum StemError {
     #[error("separation worker panicked: {0}")]
     Panicked(String),
     /// GREEN path not yet wired. Reserved for future call sites; the
-    /// Phase 5 wiring no longer surfaces this.
+    /// Current wiring no longer surfaces this.
     #[error("not implemented")]
     NotImplemented,
 }
@@ -288,7 +288,7 @@ impl StemSeparator {
         Self::default()
     }
 
-    /// Snapshot of the inference counter. The Phase 5 persistence test
+    /// Snapshot of the inference counter. The persistence test
     /// drives `separate_stems_blocking` twice and asserts the counter
     /// did not increment between the two calls — proves the second
     /// invocation came from `stem_results` and never touched the ONNX
@@ -494,7 +494,7 @@ pub fn read_stem_audio_blocking(
 /// streaming SHA-256 against [`HTDEMUCS_MODEL_SHA256`], and atomically
 /// renames the temp file into `<models_dir>/htdemucs-4.0.1.onnx`.
 ///
-/// The HTTP-fetch path is intentionally not wired in this Phase 5 cut —
+/// The HTTP-fetch path is intentionally not wired —
 /// the constants, on-disk layout, and the Tauri command surface are
 /// stable so the front-end and the ops layer can build against the
 /// final shape. `download_stem_model` returns

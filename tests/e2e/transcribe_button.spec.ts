@@ -1,4 +1,4 @@
-// Phase 3 — TranscribePanel button spec.
+// TranscribePanel button spec.
 //
 // Drives the idle → in-progress → complete transition of the new
 // TranscribePanel that mounts inside RecordingDetail directly below
@@ -85,7 +85,7 @@ const POLY: Record<string, MockPolyResult> = {
   "rec-tr-001:basicpitch-0.1.0": buildSyntheticPolyResult("rec-tr-001"),
 };
 
-test.describe("phase 3 — transcribe button", () => {
+test.describe("transcribe button", () => {
   test("Transcribe to MIDI swaps in progress bar then renders Notes detected: 3", async ({
     page,
     mockTauri,

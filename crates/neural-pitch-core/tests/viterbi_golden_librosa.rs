@@ -1,23 +1,21 @@
 #![allow(missing_docs)]
 #![cfg(feature = "neural")]
 
-//! Phase 2.2 RED — Viterbi golden-trace fixture against a pYIN/librosa
-//! reference path.
+//! Viterbi golden-trace fixture against a pYIN/librosa reference path.
 //!
-//! Cross-implementation parity is the strongest guarantee we can make for
-//! a numerical recurrence: the algorithm must, byte-for-byte, return the
-//! same state sequence as a trusted reference on a fixed input. Our
-//! reference is `librosa.sequence.viterbi` (BSD-3, the same recurrence as
-//! `librosa.pyin`'s HMM smoother). The fixture is a 50-frame emission
-//! matrix on a 24-state grid.
+//! Cross-implementation parity is the strongest guarantee we can make
+//! for a numerical recurrence: the algorithm must, byte-for-byte,
+//! return the same state sequence as a trusted reference on a fixed
+//! input. Our reference is `librosa.sequence.viterbi` (BSD-3, the same
+//! recurrence as `librosa.pyin`'s HMM smoother). The fixture is a
+//! 50-frame emission matrix on a 24-state grid.
 //!
-//! TDD-RED: panics in `decode`'s `todo!()`. The reference path written
-//! below is a **placeholder** — Phase 2.2 GREEN MUST replace it with the
-//! actual `librosa.sequence.viterbi` output for the same fixture, captured
-//! once and committed inline. The replacement script is documented in
-//! `crates/neural-pitch-core/src/test_utils/onnx.rs` (the same approach as
-//! the synthetic ONNX bytes — keep generation offline, embed the result
-//! as a Rust literal so tests stay hermetic).
+//! The reference path written below is a placeholder; the eventual
+//! replacement is captured once via `librosa.sequence.viterbi` on the
+//! same fixture and committed inline. The replacement procedure is
+//! documented in `crates/neural-pitch-core/src/test_utils/onnx.rs`
+//! (same approach as the synthetic ONNX bytes — keep generation
+//! offline, embed the result as a Rust literal so tests stay hermetic).
 
 #![allow(
     clippy::expect_used,

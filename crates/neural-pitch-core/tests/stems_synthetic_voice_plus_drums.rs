@@ -7,7 +7,7 @@
     clippy::uninlined_format_args
 )]
 
-//! Phase 5 RED — synthetic voice + synthetic drums mix.
+//! Stems separation on a synthetic voice + synthetic drums mix.
 //!
 //! Build a clean voice signal at MIDI 69 (A4) using
 //! [`crate::test_utils::voice::synth_voice`] and sum it with a

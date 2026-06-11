@@ -1,12 +1,11 @@
-//! Phase 5 — Tauri / persistence integration test for the HTDemucs
-//! four-stem separation surface.
+//! Tauri / persistence integration test for the HTDemucs four-stem
+//! separation surface.
 //!
 //! Drives [`neural_pitch_lib::stems::separate_stems_blocking`] (the
 //! headless twin the Tauri command wraps) directly so the test harness
-//! does not need to spin up a full Tauri runtime — same shape as the
-//! Phase 3 `transcribe_recording_cache.rs` test.
+//! does not need to spin up a full Tauri runtime.
 //!
-//! Asserts the persistence + cache contract from the Phase 5 spec:
+//! Asserts the persistence + cache contract:
 //!
 //! 1. First call (cache miss) → returns a `StemSummary` with
 //!    `was_cached == false` and the four canonical stem paths
@@ -24,14 +23,8 @@
 //! [`CapturingProgressSink`] never panics on a dropped consumer);
 //! mirrors the `start_recording` progress channel contract.
 //!
-//! TDD-RED status — the underlying blocking helper currently returns
-//! `Err(StemError::NotImplemented)`. This test therefore fails at
-//! runtime; the impl phase flips it green by wiring the
-//! HTDemucs ONNX session, the four-bus FLAC encoder, and the
-//! `stem_results` upsert path.
-//!
-//! `#[ignore]`d for the CI matrix because the GREEN path will be
-//! ONNX-driven; the local pre-push gate runs the test via
+//! `#[ignore]`d for the CI matrix because the path is ONNX-driven; the
+//! local pre-push gate runs the test via
 //! `cargo test ... -- --include-ignored`.
 
 #![allow(missing_docs)]
@@ -57,8 +50,8 @@ use neural_pitch_lib::transcribe::import_audio_file_blocking;
 use tokio_util::sync::CancellationToken;
 
 /// Test-side `SeparateProgressSink` that captures every tick AND
-/// proves the sink tolerates a dropped consumer (the impl-phase GREEN
-/// path is required to be `tracing::debug!`-only on send failure).
+/// proves the sink tolerates a dropped consumer (the production path
+/// is required to be `tracing::debug!`-only on send failure).
 #[derive(Default)]
 struct CapturingProgressSink {
     captured: Mutex<Vec<SeparateProgress>>,
@@ -82,8 +75,8 @@ impl CapturingProgressSink {
     }
 }
 
-/// 1 s 440 Hz mono 16-bit PCM WAV — same shape as the Phase 3 transcribe
-/// test fixture.
+/// 1 s 440 Hz mono 16-bit PCM WAV — same shape as the transcribe test
+/// fixture.
 fn write_440hz_sine_wav(path: &std::path::Path, sample_rate_hz: u32, duration_ms: u32) {
     use std::f32::consts::TAU;
 
@@ -231,7 +224,7 @@ fn separate_stems_persists_four_flacs_and_stem_results_row_then_caches() {
     );
     assert!(
         elapsed.as_millis() < 50,
-        "cache-hit separate path must complete in < 50 ms (Phase 5 spec §8); took {} ms",
+        "cache-hit separate path must complete in < 50 ms; took {} ms",
         elapsed.as_millis(),
     );
 

@@ -1,5 +1,4 @@
-//! Phase 2.1 — Tauri / persistence integration tests for the analysis
-//! surface.
+//! Tauri / persistence integration tests for the analysis surface.
 //!
 //! The Tauri command layer (`commands::analyze_recording` etc.) is a thin
 //! `spawn_blocking` wrapper around `neural_pitch_core::store::*_blocking`.

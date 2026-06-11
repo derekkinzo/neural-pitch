@@ -1,13 +1,10 @@
-//! Tier-1 persistence test #5: concurrent inserts via shared `Arc` are safe.
+//! Tier-1 persistence test: concurrent inserts via shared `Arc` are safe.
 //!
-//! Spec: 4 `std::thread::spawn` × 50 inserts each via cloned `Arc<…>`, join
-//! all, assert `list_recordings(Active).len() == 200` with no panic and no
-//! `SQLITE_BUSY`. The single connection sits behind a `Mutex` inside the
-//! library, and WAL mode keeps readers off the writer's critical section.
-//!
-//! TDD-RED: every store call is `unimplemented!()`, so the spawned threads
-//! panic. The harness surfaces those panics on `join()`, which fails the test.
-//! That panic is the red signal.
+//! 4 `std::thread::spawn` × 50 inserts each via cloned `Arc<…>`, join
+//! all, assert `list_recordings(Active).len() == 200` with no panic and
+//! no `SQLITE_BUSY`. The single connection sits behind a `Mutex` inside
+//! the library, and WAL mode keeps readers off the writer's critical
+//! section.
 #![allow(
     clippy::expect_used,
     clippy::unwrap_used,

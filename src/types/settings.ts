@@ -9,7 +9,7 @@
 
 export type InstrumentHint = "Generic" | "Voice" | "Guitar" | "Bass" | "Piano" | "Violin";
 
-/** Note-label rendering mode shared between the live tuner and the Phase 4
+/** Note-label rendering mode shared between the live tuner and the
  *  drill subsystem. Letter is the default (C, D, E, …); movable-do renders
  *  solfege relative to the active drill's tonic; fixed-do anchors solfege
  *  to C. Outside the drill subsystem the rest of the app keeps Letter
@@ -27,8 +27,8 @@ export const INSTRUMENT_HINTS: ReadonlyArray<InstrumentHint> = [
   "Violin",
 ];
 
-/** Static Phase-1 prior ranges per InstrumentHint, sourced from
- *  Staged Phase-1 instrument ranges. Used by the StatusPill explicit-prior
+/** Static prior ranges per InstrumentHint, sourced from the staged
+ *  instrument-range table. Used by the StatusPill explicit-prior
  *  badge so the user can see the active search window without waiting for
  *  the first PriorNarrowed event from the engine. The "Generic" entry is the
  *  *fallback* shown before the auto-prior narrows; once a real range arrives
@@ -78,7 +78,7 @@ export interface TunerSettings {
   instrumentHint: InstrumentHint;
   /** Smoothing window in milliseconds (100–500). */
   smoothingMs: number;
-  /** Note-label rendering mode. Read by the Phase 4 drill UI; the rest of
+  /** Note-label rendering mode. Read by the ear-training drill UI; the rest of
    *  the app ignores this and renders letter names unconditionally. */
   noteLabelMode: NoteLabelMode;
   /** Read-only audio params populated after capture starts. */

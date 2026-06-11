@@ -1,4 +1,4 @@
-// Phase 2.3 — RangeReadout spec.
+// RangeReadout spec.
 //
 // Asserts the seeded recording row, when clicked, mounts the new
 // RangeReadout component as a sibling of AnalysisSummary inside
@@ -15,7 +15,7 @@
 //      recording open; the cached summary carries `range` directly so
 //      no second IPC round-trip happens.
 //
-// All payloads come from the Phase-2.3 mocks; no real IPC fires.
+// All payloads come from the vocal-range / vibrato mocks; no real IPC fires.
 //
 //   tests/e2e/recording_detail.spec.ts (sibling spec; same row → click flow)
 

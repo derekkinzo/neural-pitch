@@ -1,21 +1,17 @@
 #![allow(missing_docs)]
 #![cfg(feature = "pyin")]
 
-//! Phase 2.3 TDD-RED — `analyze_recording_blocking` projects the
-//! [`VibratoReport`] onto the wire `AnalysisSummary`.
+//! `analyze_recording_blocking` projects the [`VibratoReport`] onto the
+//! wire `AnalysisSummary`.
 //!
-//! Spec (Phase 2.3 §1): the analyzer's vibrato detector must surface a
-//! populated [`VibratoReport`] for a take that contains a clean 4–7 Hz /
+//! The analyzer's vibrato detector must surface a populated
+//! [`VibratoReport`] for a take that contains a clean 4–7 Hz /
 //! ≥5-cents vibrato across the full recording.
 //!
 //! Fixture: 1.5 s of a 440 Hz carrier modulated at 5 Hz / ±50 cents — the
 //! same shape used by the live-pipeline `dsp_pipeline_vibrato_*` test.
 //! Almost every 1-second analysis window should detect vibrato, so the
 //! aggregate `vibrato_ratio` must clear `0.5`.
-//!
-//! TDD-RED: `summarize_cached` currently surfaces `vibrato: None`; the
-//! `compute_vibrato` impl is `todo!()`. The first assertion fails until
-//! the Phase 2.3 wiring lands.
 
 #![allow(
     clippy::expect_used,
@@ -101,7 +97,7 @@ fn analyze_recording_includes_vibrato_report() {
     let vibrato = summary
         .vibrato
         .as_ref()
-        .expect("Phase 2.3 — fresh analysis must populate summary.vibrato for a vibrato take");
+        .expect("fresh analysis must populate summary.vibrato for a vibrato take");
 
     assert!(
         vibrato.vibrato_ratio > 0.5,

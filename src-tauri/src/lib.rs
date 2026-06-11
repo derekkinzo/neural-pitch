@@ -11,14 +11,14 @@ pub mod commands;
 pub mod commands_drill;
 pub mod sink;
 pub mod state;
-// Phase 3 — file-import / Basic Pitch transcribe / MIDI export.
+// File-import / Basic Pitch transcribe / MIDI export.
 // Gated behind `feature = "neural"` because the GREEN path depends on
 // `neural-pitch-core/poly` (which itself only compiles under
 // `neural-pitch-core/neural`). Under `--no-default-features` the module
 // is compiled out entirely so the classical-only build stays clean.
 #[cfg(feature = "neural")]
 pub mod transcribe;
-// Phase 5 — HTDemucs four-stem separation surface (vocals / drums /
+// HTDemucs four-stem separation surface (vocals / drums /
 // bass / other). Same gating story as `transcribe`: the headless twin
 // in `stems.rs` decodes recordings + writes FLACs through APIs that
 // only compile under `neural`, so the whole module is compiled out

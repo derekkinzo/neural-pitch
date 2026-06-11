@@ -17,7 +17,7 @@
 // The rAF readers in `CentsMeter` / `HistoryStrip` read the ring
 // directly — no setState on per-frame updates.
 //
-// Test surface: when running under the Tier-5 E2E mock, the helper exposes
+// Test surface: when running under the E2E mock, the helper exposes
 // `window.__neuralPitchTestHooks.pushPitchUpdate(frame)` which routes through
 // the same Channel callback wiring.
 //
@@ -118,7 +118,7 @@ export function usePitchStream(): UsePitchStreamApi {
     channel.onmessage = handleMessage;
     channelRef.current = channel;
     // Out-of-band device events (Disconnected / Underrun / FormatChanged).
-    // The Rust shell wires this into the cpal `err_fn`; Phase 1.3 surfaces
+    // The Rust shell wires this into the cpal `err_fn`; the UI surfaces
     // `Disconnected` as a toast in `tunerStore.setDeviceStatus("disconnected")`.
     const events = new Channel<AudioBackendEvent>();
     events.onmessage = (ev: AudioBackendEvent) => {

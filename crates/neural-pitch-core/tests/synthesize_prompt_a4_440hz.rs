@@ -1,14 +1,9 @@
-//! Phase 4 — TDD-RED test for [`PromptSynth::render_wav`].
+//! [`PromptSynth::render_wav`] tone-fidelity test.
 //!
 //! Renders A4 (MIDI 69) for 500 ms at 48 kHz mono PCM16, parses the WAV
 //! byte stream that comes back, runs the always-on [`YinMpmEstimator`] on
 //! three centred analysis windows, and asserts the median estimated
 //! frequency is within 1 cent of 440 Hz.
-//!
-//! TDD-RED status — [`PromptSynth::render_wav`] currently returns
-//! `Err(SynthError::NotImplemented)`. This test therefore fails at
-//! runtime; the Phase 4 GREEN step flips it green by wiring the actual
-//! additive synth + WAV writer.
 //!
 //! Drill / training surface is default-on (no `feature = "neural"`
 //! gate), so this test compiles against both the all-features and the

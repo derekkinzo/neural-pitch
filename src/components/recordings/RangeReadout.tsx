@@ -1,4 +1,4 @@
-// RangeReadout — Phase 2.3 pitch-range readout.
+// RangeReadout — pitch-range readout.
 //
 // Mounted inside RecordingDetail as a sibling of AnalysisSummary, *below*
 // the summary card and above ContourLine, in a 2-column grid alongside

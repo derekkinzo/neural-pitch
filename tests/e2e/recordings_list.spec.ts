@@ -1,4 +1,4 @@
-// Phase 2.0 — RecordingsList drawer spec.
+// RecordingsList drawer spec.
 //
 // Asserts the seeded list renders in descending createdAt order with
 // per-row metadata (filename, duration, instrument profile). The drawer
@@ -92,7 +92,7 @@ test.describe("recordings list — seed render + ordering", () => {
     await expect(list.locator("li")).toHaveCount(0);
 
     // The empty-state lives in a `role="status"` region adjacent to the
-    // (empty) list per the Phase-2.0 brief.
+    // (empty) list per the recordings-drawer contract.
     const empty = page.getByRole("status").filter({ hasText: /No recordings yet/i });
     await expect(empty).toBeVisible();
     await expect(empty).toContainText(/press the red dot/i);
@@ -106,8 +106,8 @@ test.describe("recordings list — seed render + ordering", () => {
     await page.goto("/");
     await page.getByTestId("library-trigger").click();
 
-    // The shared per-row test id is referenced by future Phase-2.4 specs
-    // (waveform / scrubber). It must be present in Phase 2.0 so the row
+    // The shared per-row test id is referenced by the playback / scrubber
+    // specs (waveform / scrubber). It must be present so the row
     // contract is locked in early.
     const rows = page.getByTestId("recording-row");
     await expect(rows).toHaveCount(3);

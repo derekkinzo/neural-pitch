@@ -1,4 +1,4 @@
-// RecordingDetail — Phase 2.1 detail panel below RecordingsList.
+// RecordingDetail — detail panel below RecordingsList.
 //
 // Mounts inside the Recordings drawer body (sibling of PlaybackPanel) when
 // `currentRecordingId` is set. Three vertically stacked regions:

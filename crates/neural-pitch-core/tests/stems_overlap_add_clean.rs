@@ -7,8 +7,7 @@
     clippy::uninlined_format_args
 )]
 
-//! Phase 5 RED — overlap-add boundary cleanliness on a 12 s sustained
-//! sine.
+//! Overlap-add boundary cleanliness on a 12 s sustained sine.
 //!
 //! 12 s of 440 Hz at 44.1 kHz forces the segmenter to emit exactly
 //! three 8 s windows with 50 % overlap. Assertions:

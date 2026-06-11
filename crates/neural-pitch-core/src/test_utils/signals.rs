@@ -2,8 +2,8 @@
 //!
 //! All generators return owned `Vec<f32>` and normalise to a peak amplitude
 //! of `0.95` (leaving headroom for downstream gain). Random noise uses a
-//! deterministic LCG so tests do not pull in the `rand` crate at the
-//! day-1 dependency budget.
+//! deterministic LCG so the test fixtures do not pull in the `rand` crate
+//! as a transitive dependency.
 
 use core::f32::consts::TAU;
 

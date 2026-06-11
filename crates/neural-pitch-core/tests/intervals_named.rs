@@ -1,8 +1,8 @@
 #![allow(missing_docs)]
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 
-//! Phase 4 RED — named intervals expose semitone, cents, and
-//! `up_from_midi` / `down_from_midi` helpers.
+//! Named intervals expose semitone, cents, and `up_from_midi` /
+//! `down_from_midi` helpers.
 //!
 //! Spec ties:
 //! - `Interval::MinorThird.up_from_midi(60) == 63`

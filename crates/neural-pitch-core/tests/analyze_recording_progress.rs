@@ -1,15 +1,13 @@
 #![allow(missing_docs)]
 #![cfg(feature = "flac")]
 
-//! Phase 2.1 — `AnalysisProgress` channel emit shape test.
+//! `AnalysisProgress` channel emit-shape test.
 //!
-//! The plan says:
-//!
-//! > Cached path emits exactly one message with `percent: 1.0,
-//! > was_cached: true`. Fresh runs spawn a `tokio::time::interval(...)`
-//! > ticker that snapshots an `Arc<AtomicU64>` updated by the analyzer
-//! > worker. The ticker exits when `frames_done == frames_total` or the
-//! > cancel token flips.
+//! Cached path emits exactly one message with `percent: 1.0,
+//! was_cached: true`. Fresh runs spawn a `tokio::time::interval(...)`
+//! ticker that snapshots an `Arc<AtomicU64>` updated by the analyzer
+//! worker. The ticker exits when `frames_done == frames_total` or the
+//! cancel token flips.
 //!
 //! This test pins those assertions on the public surface
 //! (`analyze_recording_blocking` + `ProgressSink` trait):
@@ -22,9 +20,6 @@
 //! - **Cached run** — *exactly one* tick is observed, with
 //!   `percent == 1.0`, `was_cached == true`, and
 //!   `frames_done == frames_total`.
-//!
-//! TDD-RED: `analyze_recording_blocking` is `todo!()`. The first invocation
-//! panics — that panic is the red signal.
 
 #![allow(
     clippy::expect_used,

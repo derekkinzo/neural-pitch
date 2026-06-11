@@ -1,4 +1,4 @@
-// SightSingingDrill — Phase 4 sight-singing flow.
+// SightSingingDrill — sight-singing flow.
 //
 // Mounts the karaoke ribbon over an active melody (loaded from the
 // training mock or a future built-in catalogue), arms the

@@ -1,5 +1,5 @@
-//! Phase 2.3 TDD-RED: 5 Hz / ±50 cent vibrato is recovered from the
-//! synthetic smoothed-cents track.
+//! 5 Hz / ±50 cent vibrato is recovered from the synthetic
+//! smoothed-cents track.
 //!
 //! 5 s of contour at 93.75 fps with `smoothed_cents[i] = 50.0 *
 //! sin(2*pi*5*t)` — i.e. a 5 Hz sinusoidal modulation of ±50 cents around
@@ -10,9 +10,6 @@
 //!   * `(median_extent_cents - 50.0).abs() < 5.0` — 10% relative
 //!     tolerance accounts for FFT sidelobe leakage from the rectangular
 //!     window without admitting a 30 cent or 80 cent answer.
-//!
-//! Until [`compute_vibrato`] is implemented this test panics with
-//! `todo!`, which is the red signal.
 
 #![allow(missing_docs)]
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]

@@ -1,4 +1,4 @@
-// useDrillMatchStream — Phase 4 match-update channel listener.
+// useDrillMatchStream — drill match-update channel listener.
 //
 // Mirrors `usePitchStream`'s test-bridge wiring: the page-side hook
 // registers itself on `__neuralPitchTestHooks.listeners.get("match-update")`

@@ -7,7 +7,7 @@
     clippy::uninlined_format_args
 )]
 
-//! Phase 3 RED — Issue #190 frame-drift mitigation regression test.
+//! Issue #190 frame-drift mitigation regression test.
 //!
 //! A 5 s 440 Hz tone at 22.05 kHz spans roughly four `WINDOW_HOP =
 //! AUDIO_N_SAMPLES - OVERLAP_FRAMES * FFT_HOP = 36_164` sample windows.

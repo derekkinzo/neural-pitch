@@ -1,4 +1,4 @@
-// Phase 4 — Solfege label-mode toggle.
+// Solfege label-mode toggle.
 //
 // Drives the new Settings drawer "Note labels" select through the three
 // modes and asserts:
@@ -21,7 +21,7 @@ import {
 
 const SEED_HISTORY: MockDrillAttempt[] = [];
 
-test.describe("phase 4 — solfege label toggle", () => {
+test.describe("solfege label toggle", () => {
   test("switching to Movable-do swaps IntervalDrill P5 for Sol", async ({ page, mockTauri }) => {
     await mockTauri.install({
       ...installTrainingMock(SEED_HISTORY, buildSyntheticMelody()),

@@ -1,4 +1,4 @@
-// App root — mounts the live tuner OR the Phase 4 ear-training screen
+// App root — mounts the live tuner OR the ear-training screen
 // based on `tunerStore.view`. The header's Practice button flips the
 // view; a `/#training` URL hash also routes into the training screen so
 // Playwright (and a power-user with a bookmark) can deep-link past the

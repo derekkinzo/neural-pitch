@@ -2,7 +2,7 @@
 //
 // Native sliders are accessible by default (arrow-key fine adjustment, Home/
 // End extremes, screen-reader value-now). The shadcn package's Slider primitive
-// wraps Radix Slider for visual richness; for Phase 1.2 the native control is
+// wraps Radix Slider for visual richness; the native control is
 // the right balance of low surface area + correct semantics.
 //
 

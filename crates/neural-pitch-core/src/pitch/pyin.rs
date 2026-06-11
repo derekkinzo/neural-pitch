@@ -1,7 +1,7 @@
 #![allow(clippy::doc_markdown)]
 //! pYIN (Mauch & Dixon 2014) offline pitch estimator.
 //!
-//! Phase 2.1 wires the `Sytronik/pyin = "1.2"` crate (pure Rust, MIT,
+//! Wires the `Sytronik/pyin = "1.2"` crate (pure Rust, MIT,
 //! ICSI-published pYIN algorithm) behind `feature = "pyin"`. The estimator
 //! buffers all incoming samples, runs Viterbi over the full sequence on
 //! [`PYinEstimator::finalize`], and emits a contour. The live tuner DSP
@@ -184,10 +184,10 @@ impl PYinEstimator {
             // distribution along the bin grid can be skewed by a fraction
             // of a bin owing to the asymmetric Hz <-> cent mapping. The
             // naive median over that series can sit between two non-truth
-            // bins and miss the Tier-2 5-cent acceptance budget on upper-
-            // octave fixtures (F5 in our voice corpus). A 9-frame mean
+            // bins and miss the 5-cent voice-acceptance budget on upper-
+            // octave fixtures (F5 in the voice corpus). A 9-frame mean
             // filter (≈190 ms at the 46.875 Hz default frame rate, one
-            // period of the 5 Hz vibrato modulator in the Tier-2 corpus)
+            // period of the 5 Hz vibrato modulator in the voice corpus)
             // converts each frame into the *centre of mass* of its local
             // neighbourhood. By symmetry of the modulator the local mean
             // tracks the true pitch, and the median over the smoothed
@@ -215,7 +215,8 @@ impl PYinEstimator {
                 .map(|(&v, &hz)| v && hz.is_finite() && hz > 0.0)
                 .collect();
             // 9-frame mean filter (~190 ms at the 46.875 Hz default frame
-            // rate, roughly one period of the 5 Hz vibrato Tier-2 corpus).
+            // rate, roughly one period of the 5 Hz vibrato in the voice
+            // corpus).
             let smoothed_f0 = rolling_mean_voiced(&raw_f0, &raw_voiced, 9);
 
             let mut frames = Vec::with_capacity(f0.len());
@@ -269,8 +270,9 @@ fn clamp_unit(x: f32) -> f32 {
 /// per bin); on a sine-modulated vibrato whose total swing is not an
 /// integer multiple of the bin width, the time series spends arcsine-
 /// distributed time at the extreme bins. The naive median of that series
-/// can sit between two non-truth bins and miss the Tier-2 5-cent budget at
-/// upper-octave fixtures (F5 in our voice corpus). A short mean filter
+/// can sit between two non-truth bins and miss the 5-cent voice-acceptance
+/// budget at upper-octave fixtures (F5 in the voice corpus). A short mean
+/// filter
 /// converts each frame into the *centre of mass* of its local
 /// neighbourhood, dragging the global median toward the long-window mean
 /// — which, by symmetry of the modulator, tracks the true pitch.

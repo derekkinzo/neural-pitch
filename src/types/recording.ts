@@ -1,4 +1,4 @@
-// Recording — wire-format and progress event types for the Phase 2.0 recorder.
+// Recording — wire-format and progress event types for the recorder.
 //
 // Field names are camelCase on the TS side; the IPC boundary maps from
 // snake_case Rust per the existing `audio-event.ts` convention.

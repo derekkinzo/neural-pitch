@@ -1,4 +1,4 @@
-// Tuner — top-level container for the Phase 1.2 / 1.3 / 2.0 tuner view.
+// Tuner — top-level container for the live tuner view.
 //
 // Owns:
 //   - usePitchStream() — Channel<PitchUpdate> + ring buffer + retry()
@@ -57,7 +57,7 @@ export function Tuner(): ReactNode {
         <header className="relative z-50 flex items-center justify-between px-6 py-4">
           <StatusPill />
           <div className="flex items-center gap-2">
-            {/* Phase-3 toolbar: co-locates the record + import controls
+            {/* Toolbar: co-locates the record + import controls
                 under a single `role="toolbar"` group so AT users land on
                 a labelled landmark before navigating into either control.
                 The drawer and settings triggers stay outside the toolbar

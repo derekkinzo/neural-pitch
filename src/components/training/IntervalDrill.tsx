@@ -1,4 +1,4 @@
-// IntervalDrill — Phase 4 ear-training, interval recognition.
+// IntervalDrill — ear-training, interval recognition.
 //
 // Single-screen flow:
 //   1. Pick a deterministic-but-shuffled prompt from the 12 interval

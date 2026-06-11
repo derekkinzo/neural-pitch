@@ -8,7 +8,7 @@
     clippy::uninlined_format_args
 )]
 
-//! Phase 3 RED — pitch-bend curve round-trip.
+//! Pitch-bend curve round-trip through SMF export.
 //!
 //! Hand-build a [`PolyResult`] with a single A4 note carrying a linear
 //! 0 → 50 cents pitch-bend curve over 500 ms (≈ 43 contour samples at

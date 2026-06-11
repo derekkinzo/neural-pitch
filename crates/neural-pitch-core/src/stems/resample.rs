@@ -6,11 +6,10 @@
 //! 22.05 kHz from a Basic Pitch round-trip) at any channel count
 //! (1 or 2; >2 is rejected with [`StemError::Configuration`]).
 //!
-//! GREEN: uses [`rubato::FftFixedIn`] for the sample-rate conversion
-//! (chosen for compatibility with the existing `poly::basic_pitch`
-//! resampler call site — handles arbitrary input lengths via
-//! `process_partial`). Mono → stereo is a channel duplication; >2
-//! channels is an error.
+//! Uses [`rubato::FftFixedIn`] for the sample-rate conversion (chosen
+//! for compatibility with the existing `poly::basic_pitch` resampler
+//! call site — handles arbitrary input lengths via `process_partial`).
+//! Mono → stereo is a channel duplication; >2 channels is an error.
 
 #![cfg(feature = "neural")]
 

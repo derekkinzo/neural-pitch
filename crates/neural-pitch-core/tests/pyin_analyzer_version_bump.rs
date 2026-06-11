@@ -1,7 +1,7 @@
 #![allow(missing_docs)]
 #![cfg(feature = "pyin")]
 
-//! Phase 2.1 TDD-RED: bumping `PYIN_ANALYZER_VERSION` invalidates old rows.
+//! Bumping `PYIN_ANALYZER_VERSION` invalidates old rows.
 //!
 //! Schema invariant: `analysis_cache` rows are keyed on
 //! `(recording_id, analyzer_name, analyzer_version)`. A row written at
@@ -16,9 +16,6 @@
 //! 4. Run `analyze_contour` again, upsert at version `"0.1"`.
 //! 5. `get_analysis(.., "0.1")` → `Some(latest_blob)`. (cache hit.)
 //! 6. The original `"0.0"` row is still there — versions are independent.
-//!
-//! `analyze_contour` is `todo!()` until Phase 2.1 implementation lands; the
-//! first call here panics, which is the red signal.
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 
 use std::path::Path;
@@ -32,12 +29,11 @@ use neural_pitch_core::test_utils::signals::sine_wave;
 
 #[test]
 fn pyin_analyzer_version_bump_invalidates_cache() {
-    // Assert the active wire-version constant. Phase 2.1 cold-start shipped
-    // at "0.1"; the bump to "0.2" added `hop_size` / `window_size` fields
-    // to `ContourResult` (the per-blob analyzer params, not the live-tuner
-    // defaults). Any further bump MUST move in lock-step with a wire-shape
-    // change to ContourResult so old blobs do not silently decode against
-    // a new layout.
+    // Assert the active wire-version constant. The bump to "0.2" added
+    // `hop_size` / `window_size` fields to `ContourResult` (the per-blob
+    // analyzer params, not the live-tuner defaults). Any further bump
+    // MUST move in lock-step with a wire-shape change to ContourResult
+    // so old blobs do not silently decode against a new layout.
     assert_eq!(
         PYIN_ANALYZER_VERSION, "0.2",
         "PYIN_ANALYZER_VERSION must match the current ContourResult wire shape; \
@@ -61,10 +57,9 @@ fn pyin_analyzer_version_bump_invalidates_cache() {
     // non-trivial contour blob.
     let samples = sine_wave(440.0, cfg.sample_rate_hz, (cfg.sample_rate_hz / 2) as usize);
 
-    // Build the postcard-encoded blob via the production analyzer. This
-    // panics until Phase 2.1 is wired — the TDD-RED signal.
+    // Build the postcard-encoded blob via the production analyzer.
     let result = analyze_contour(&samples, &cfg, 440.0)
-        .expect("analyze_contour should succeed once Phase 2.1 ships");
+        .expect("analyze_contour should succeed on this fixture");
     let blob_v0_1: Vec<u8> =
         postcard::to_allocvec(&result).expect("postcard::to_allocvec must serialise ContourResult");
 

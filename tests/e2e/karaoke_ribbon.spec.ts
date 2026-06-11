@@ -1,4 +1,4 @@
-// Phase 4 — Karaoke ribbon spec.
+// Karaoke ribbon spec.
 //
 // Drives the SightSingingDrill flow and asserts the KaraokeRibbon paints:
 //
@@ -77,7 +77,7 @@ const MATCH_FRAMES: MockMatchUpdate[] = [
   },
 ];
 
-test.describe("phase 4 — karaoke ribbon", () => {
+test.describe("karaoke ribbon", () => {
   test("canvas mounts and figure aria-label ends with live cents readout", async ({
     page,
     mockTauri,

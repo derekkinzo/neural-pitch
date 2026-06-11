@@ -1,4 +1,4 @@
-// ImportButton — Phase 3 file-import affordance.
+// ImportButton — file-import affordance.
 //
 // Lives in the `RecordingsList` drawer-header toolbar beside `RecordButton`.
 // Flat React component with no local state — the open/close lifecycle of

@@ -1,12 +1,12 @@
-//! Phase 4 — Tauri / persistence integration test for the
-//! ear-training drill subsystem.
+//! Tauri / persistence integration test for the ear-training drill
+//! subsystem.
 //!
 //! Drives the headless `*_blocking` helpers
 //! [`neural_pitch_core::training::start_drill_blocking`],
 //! [`neural_pitch_core::training::submit_drill_attempt_blocking`], and
 //! [`neural_pitch_core::training::list_drill_history_blocking`]
 //! directly so the test harness does not need to spin up a full Tauri
-//! runtime — same shape as the Phase 2.1 / Phase 3 integration tests.
+//! runtime — same shape as the analyse / transcribe integration tests.
 //!
 //! Asserts the V0002 schema contract:
 //!

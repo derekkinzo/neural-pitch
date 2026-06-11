@@ -1,4 +1,4 @@
-// ContourLine — Phase 2.1 pitch-contour plot.
+// ContourLine — pitch-contour plot.
 //
 // Time on the x-axis, cents-off-from-median on the y-axis (clamped to ±100¢
 // default, expanding only if the trace exceeds it). Voiced spans drawn as a

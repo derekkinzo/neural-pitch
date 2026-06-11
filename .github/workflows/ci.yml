@@ -117,7 +117,7 @@ jobs:
       - name: Build frontend (Tauri requires dist/ for generate_context!)
         run: npm run build
       - uses: Swatinem/rust-cache@v2
-      # Phase 2.2 hygiene — guard against feature-gating regressions where
+      # Feature-gating hygiene — guard against regressions where
       # a future change forgets to wrap an `ort` / `ndarray` / `rubato`
       # import in `#[cfg(feature = "neural")]` (or removes `optional =
       # true` from one of those deps). Mirrors the reasoning in the
@@ -307,9 +307,9 @@ jobs:
           # pitch-detection app for musicians. The forbidden phrases
           # appearing in marketing or copy would re-introduce the
           # singer-specific framing that was explicitly dropped.
-          # no-leak: regex-source. 'sight-singing' is a Phase-4 ear-training drill ID — allowlisted under training/ sub-trees.
+          # no-leak: regex-source. 'sight-singing' is an ear-training drill ID — allowlisted under training/ sub-trees.
           SINGER_PATTERN='for singers|sight-singing|app for singers' # no-leak: regex-source
-          # Path allowlist for Phase-4 ear-training drill code — must
+          # Path allowlist for ear-training drill code — must
           # be precise; do NOT blanket-exclude src/components/.
           TRAINING_ALLOWLIST='^crates/neural-pitch-core/src/training/|^src-tauri/src/commands_drill\.rs$|^src-tauri/tests/(drill_history_persists|match_channel_emits)\.rs$|^src/components/training/|^src/hooks/useDrillMatchStream\.ts$|^src/lib/drill-synth\.ts$|^src/stores/trainingStore\.ts$|^src/types/training\.ts$|^tests/e2e/[a-z0-9_]*(training|karaoke|sight_singing|interval_drill|chord_drill|scale_drill|solfege)[a-z0-9_]*\.spec\.ts$|^tests/e2e/helpers/tauri-mock\.ts$'
           hits="$(git ls-files \

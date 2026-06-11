@@ -1,11 +1,11 @@
-//! Phase 4 — ear-training drill subsystem.
+//! Ear-training drill subsystem IPC surface.
 //!
 //! This module owns the drill spec types, the persisted attempt row
 //! shape, and the `*_blocking` helpers the Tauri shell wraps in
 //! `spawn_blocking`. It mirrors the
-//! [`crate::store::analyze_recording_blocking`] layout from Phase 2.1
-//! and the [`neural_pitch_lib::transcribe`](../../../src-tauri/src/transcribe.rs)
-//! layout from Phase 3 so the IPC surface stays uniform across phases.
+//! [`crate::store::analyze_recording_blocking`] layout and the
+//! [`neural_pitch_lib::transcribe`](../../../src-tauri/src/transcribe.rs)
+//! layout so the IPC surface stays uniform across subsystems.
 //!
 //! # Behaviour
 //!
@@ -30,17 +30,16 @@ use thiserror::Error;
 
 use crate::store::{NewDrillAttempt, RecordingId, RecordingsLibrary, StoreError};
 
-/// Server-side cap on `HistoryFilter::limit`. Mirrors the Phase 4 spec:
-/// requests above this clamp silently to 200 so a buggy front-end
-/// cannot starve the IPC thread on a giant SELECT.
+/// Server-side cap on `HistoryFilter::limit`. Requests above this
+/// clamp silently to 200 so a buggy front-end cannot starve the IPC
+/// thread on a giant SELECT.
 pub const HISTORY_LIMIT_CAP: u32 = 200;
 
 /// Bounded LRU capacity for the in-memory drill-session map kept on
-/// `AppState`. Matches the Phase 4 spec — the session map only holds
-/// sessions that have not yet been submitted, so 64 in flight is
-/// generous for any realistic drill cadence. Exported so a future
-/// `AppState::drill_sessions` initialiser picks up the same constant
-/// the IPC contract documents.
+/// `AppState`. The session map only holds sessions that have not yet
+/// been submitted, so 64 in flight is generous for any realistic drill
+/// cadence. Exported so a future `AppState::drill_sessions` initialiser
+/// picks up the same constant the IPC contract documents.
 pub const SESSION_LRU_CAPACITY: usize = 64;
 
 /// Stable handle to an in-flight drill session.
@@ -144,9 +143,9 @@ impl DrillKind {
 ///
 /// Distinct from the algorithm-side
 /// [`crate::training::DrillSpec`] (re-exported from
-/// `training/drill.rs`). The IPC stub layer pre-dates the Phase 4
-/// algorithm split-out and stays under its own name to keep both
-/// surfaces compilable side by side.
+/// `training/drill.rs`). Both surfaces stay under their own names so
+/// the IPC structs and the algorithm structs remain compilable side
+/// by side without name collision.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct IpcDrillSpec {
     /// Drill kind discriminator.
@@ -181,8 +180,8 @@ pub struct DrillSession {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AttemptPayload {
     /// Per-frame cents-error samples captured during the user's
-    /// response. The Phase 4 GREEN scorer reduces this to
-    /// `mean_cents_error` and `time_on_pitch_ratio`.
+    /// response. The scorer reduces this to `mean_cents_error` and
+    /// `time_on_pitch_ratio`.
     pub cents_error_frames: Vec<f32>,
     /// Per-frame voiced flags aligned with `cents_error_frames`.
     pub voiced_frames: Vec<bool>,
@@ -256,14 +255,14 @@ pub struct DrillAttempt {
     pub recording_id: Option<String>,
 }
 
-/// Errors returned by the Phase 4 blocking helpers.
+/// Errors returned by the drill blocking helpers.
 #[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum DrillError {
-    /// The Phase 4 GREEN implementation has not landed yet. Returned
-    /// by every helper today; the TDD-RED tests assert against the
-    /// `Ok(_)` arm and therefore fail at runtime.
-    #[error("drill subsystem not yet implemented (Phase 4 GREEN pending)")]
+    /// Sentinel for code paths that have no implementation. No helper
+    /// returns this today; kept as an `#[non_exhaustive]` slot so the
+    /// IPC surface can grow without a breaking change.
+    #[error("drill subsystem path not implemented")]
     NotImplemented,
     /// SQLite library failure.
     #[error("library: {0}")]

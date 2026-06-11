@@ -1,7 +1,7 @@
 #![allow(missing_docs)]
 #![cfg(feature = "pyin")]
 
-//! Phase 2.1 — sub-window input for `analyze_contour`.
+//! Sub-window input for `analyze_contour`.
 //!
 //! `analysis::contour::analyze_contour` documents that "a degenerate
 //! (window > samples) input is allowed — pYIN's Center framing pads the

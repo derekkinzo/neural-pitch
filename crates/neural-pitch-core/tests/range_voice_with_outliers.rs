@@ -1,4 +1,4 @@
-//! Phase 2.3 TDD-RED: comfortable-range trim discards 1% outliers.
+//! Comfortable-range trim discards 1% outliers.
 //!
 //! 990 voiced frames at 220 Hz (MIDI 57, A3) plus 10 voiced frames at
 //! 880 Hz (MIDI 81, A5). The 1% trim used by the comfortable range MUST
@@ -7,9 +7,6 @@
 //!     the top tail; the 10 outliers fall just inside the trim).
 //!   * `full_max_midi == 81` (0.1% of 1000 = 1 frame trimmed; the 10
 //!     outliers survive the full-range trim).
-//!
-//! Until [`compute_range`] is implemented this test panics with `todo!`,
-//! which is the red signal.
 
 #![allow(missing_docs)]
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]

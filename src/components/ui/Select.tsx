@@ -1,10 +1,10 @@
 // Select — native <select> styled for the dark theme.
 //
 // We deliberately wrap the native element rather than build a Listbox: the
-// Phase 1.2 surface has fewer than ten options per dropdown, the keyboard
+// surface has fewer than ten options per dropdown, the keyboard
 // model is exactly what users expect, and the screen-reader experience is
-// "free". Phase 4 may swap this for a Combobox if the movable-do solfege
-// formatter introduces typeahead requirements.
+// "free". A Combobox is a possible swap if the movable-do solfege
+// formatter ever introduces typeahead requirements.
 //
 
 import {

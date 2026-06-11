@@ -4,7 +4,7 @@
 // Mirrors `crates/neural-pitch-core/src/pipeline/sink.rs::PitchUpdate`. The
 // fields are serde-serialised with default (snake_case) Rust field names, so
 // the TypeScript surface keeps that exact casing rather than rewriting it on
-// the hot path. The Tier-5 mock (`tests/e2e/helpers/tauri-mock.ts`) emits the
+// the hot path. The E2E mock (`tests/e2e/helpers/tauri-mock.ts`) emits the
 // same shape via `pushPitchUpdate`.
 //
 

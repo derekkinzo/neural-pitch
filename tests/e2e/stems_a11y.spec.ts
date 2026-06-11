@@ -1,4 +1,4 @@
-// Phase 5 — StemSeparationPanel accessibility spec (TDD-RED).
+// StemSeparationPanel accessibility spec.
 //
 // Mirrors `playback_a11y.spec.ts` and `training_a11y.spec.ts` but scans
 // three discrete states of the StemSeparationPanel:
@@ -46,7 +46,7 @@ async function selectSeededRecording(page: import("@playwright/test").Page): Pro
   await page.getByTestId("recording-row").first().click();
 }
 
-test.describe("a11y — phase 5 stems panel", () => {
+test.describe("a11y — stems panel", () => {
   test("idle stems panel reports no serious or critical violations", async ({
     page,
     mockTauri,

@@ -1,12 +1,12 @@
-// Custom Playwright test fixtures for the Tier-5 harness.
+// Custom Playwright test fixtures for the end-to-end harness.
 //
 //
 // Provides:
 //   - mockTauri: installs the @tauri-apps/api/mocks bridge before navigation
 //   - axe: a configured AxeBuilder bound to the current page
 //   - setLocale: navigates with a ?locale= query param so locale-switching
-//     specs survive Phase-0 (where no locale UI exists yet) and the
-//     Phase-4 movable-do solfege drop-in.
+//     specs survive both the no-locale-UI baseline and the
+//     movable-do solfege drop-in.
 
 import { test as base, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";

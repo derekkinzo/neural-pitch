@@ -1,11 +1,10 @@
-//! Phase 4 — Tauri command surface for the ear-training drill subsystem.
+//! Tauri command surface for the ear-training drill subsystem.
 //!
 //! Each command is a thin async wrapper over the matching `*_blocking`
 //! helper in [`neural_pitch_core::training`]: validate the IPC argument,
 //! hop onto a `spawn_blocking` worker, flatten the typed error to
 //! `Result<T, String>` at the boundary. Mirrors the analyse / contour
-//! command shape from Phase 2.1 and the transcribe shape from Phase 3
-//! so the IPC surface stays uniform.
+//! and transcribe command shapes so the IPC surface stays uniform.
 //!
 //! - `start_drill` validates the spec, renders the prompt audio via
 //!   [`neural_pitch_core::poly::synth::PromptSynth`], and mints a fresh

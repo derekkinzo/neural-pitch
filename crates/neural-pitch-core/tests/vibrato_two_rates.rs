@@ -1,4 +1,4 @@
-//! Phase 2.3 TDD-RED: two distinct vibrato rates appear in `per_window`.
+//! Two distinct vibrato rates appear in `per_window`.
 //!
 //! 6 s contour at 93.75 fps, with a 50 cent extent throughout. The first
 //! 3 s carries 5 Hz vibrato; the second 3 s carries 7 Hz vibrato. The
@@ -10,9 +10,6 @@
 //! 0.3 Hz is well above the FFT bin width (~0.092 Hz at 1024-bin /
 //! 93.75 fps) but tight enough to keep a 5 Hz reading from
 //! masquerading as 7 Hz.
-//!
-//! Until [`compute_vibrato`] is implemented this test panics with
-//! `todo!`, which is the red signal.
 
 #![allow(missing_docs)]
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]

@@ -1,8 +1,8 @@
 #![allow(missing_docs)]
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 
-//! Phase 4 RED — `DrillResult::from_attempts` aggregates per-attempt
-//! outcomes into `accuracy()` and `mean_cents_error_abs`.
+//! `DrillResult::from_attempts` aggregates per-attempt outcomes into
+//! `accuracy()` and `mean_cents_error_abs`.
 //!
 //! Eight attempts with six correct and a mean absolute error of
 //! 7.5 cents must yield `accuracy() == 0.75` and

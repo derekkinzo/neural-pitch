@@ -9,8 +9,8 @@
 // reported once after `start_capture` resolves and live read-only on the same
 // store for cheap UI consumption.
 //
-// Persistence: `noteLabelMode` is persisted to localStorage (the Phase 4
-// drill UI's only persistent setting on the page side). `a4Hz`,
+// Persistence: `noteLabelMode` is persisted to localStorage (the
+// ear-training drill UI's only persistent setting on the page side). `a4Hz`,
 // `instrumentHint`, and `smoothingMs` are persisted via the Rust shell
 // through the debounced `configure` IPC, so they intentionally live
 // outside the partialize whitelist below.

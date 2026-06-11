@@ -1,4 +1,4 @@
-// Visual regression — Phase 1.2 tuner states.
+// Visual regression — tuner states.
 //
 // Three canonical states are snapshotted on Chromium-Linux only. The single-OS
 // pin is required by Playwright issue #13873 ("Not planned" 2026-05): even
@@ -33,7 +33,7 @@ import {
   type MockVibratoReport,
 } from "./helpers/tauri-mock";
 
-test.describe("visual — Phase 1.2 tuner states", () => {
+test.describe("visual — tuner states", () => {
   test.skip(
     ({ browserName }) => browserName !== "chromium",
     "visual baselines pinned to chromium-linux",
@@ -86,7 +86,7 @@ test.describe("visual — Phase 1.2 tuner states", () => {
   });
 });
 
-test.describe("visual — Phase 2.1 RecordingDetail", () => {
+test.describe("visual — RecordingDetail", () => {
   test.skip(
     ({ browserName }) => browserName !== "chromium",
     "visual baselines pinned to chromium-linux",
@@ -170,7 +170,7 @@ test.describe("visual — Phase 2.1 RecordingDetail", () => {
     await expect(page).toHaveScreenshot("recording-detail-cached.png", { fullPage: true });
   });
 
-  // Phase 2.3 — RecordingDetail with both new readouts mounted between
+  // RecordingDetail with both readouts mounted between
   // the summary card and the contour figure. The seeded summary carries
   // both `range` and `vibrato` so the 2-column grid is fully populated.
   test("recording-detail-with-range-vibrato — both readouts steady", async ({
@@ -240,7 +240,7 @@ test.describe("visual — Phase 2.1 RecordingDetail", () => {
     });
   });
 
-  // Phase 2.4 — RecordingDetail + PlaybackPanel mounted together. The
+  // RecordingDetail + PlaybackPanel mounted together. The
   // wavesurfer waveform `<canvas>` is gated on the `ready` event landing
   // before the snapshot. Spectrogram stays hidden so the layout matches
   // the steady-state first-paint case.
@@ -274,13 +274,13 @@ test.describe("visual — Phase 2.1 RecordingDetail", () => {
     // pixel gate the previous revision used did not survive the move
     // from local Playwright runner to the official Microsoft Playwright
     // Docker image. Aligning on the project-wide ratio keeps the visual
-    // contract uniform with the other Phase-2 snapshots.
+    // contract uniform with the other RecordingDetail snapshots.
     await expect(page).toHaveScreenshot("recording-detail-with-playback.png", {
       fullPage: true,
     });
   });
 
-  // Phase 3 — RecordingDetail with TranscribePanel + PianoRoll mounted.
+  // RecordingDetail with TranscribePanel + PianoRoll mounted.
   // The piano-roll canvas is painted statically (no rAF loop while
   // paused) so the snapshot is byte-stable across runs once the panel
   // settles into the complete branch.
@@ -330,7 +330,7 @@ test.describe("visual — Phase 2.1 RecordingDetail", () => {
     });
   });
 
-  // Phase 5 — RecordingDetail with the StemSeparationPanel in its
+  // RecordingDetail with the StemSeparationPanel in its
   // `complete` branch: four StemCards mounted (vocals → drums → bass →
   // other) with their nested PlaybackPanels. Each stem panel must finish
   // mounting (aria-busy="false") so the wavesurfer canvas paints

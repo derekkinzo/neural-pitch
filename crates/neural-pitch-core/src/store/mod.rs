@@ -1,6 +1,6 @@
-//! Phase 2.0 persistence layer: `RecordingsLibrary`.
+//! Persistence layer: `RecordingsLibrary`.
 //!
-//! Module shape (per the Phase 2.0 persistence spec):
+//! Module shape:
 //!
 //! * `library.rs` — [`RecordingsLibrary`] (open, insert, list, soft delete,
 //!   hard purge, analysis cache).

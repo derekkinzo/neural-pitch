@@ -1,4 +1,4 @@
-// Analysis store — slow-path Zustand state for the Phase 2.1 RecordingDetail.
+// Analysis store — slow-path Zustand state for the RecordingDetail panel.
 //
 // The hot path (live PitchUpdate frames) lives in a RingBuffer,
 // not Zustand. Analysis is intrinsically slow (one IPC per row click, one
@@ -44,11 +44,11 @@ import type { RecordingId } from "@/types/recording";
 
 /** Snake_case wire format mirroring serde Rust output. The TS layer accepts
  *  either casing so the IPC boundary works for both the production Rust
- *  shell and the camelCase Tier-5 mock.
+ *  shell and the camelCase E2E mock.
  *
  *  Production Rust shell (snake_case) sends `median_midi` / `median_cents_off`
  *  / `analyzer_version` and lacks `recording_id` (the front-end already knows
- *  the id it asked about). The Tier-5 mock sends camelCase `medianMidi` /
+ *  the id it asked about). The E2E mock sends camelCase `medianMidi` /
  *  `medianCents` / `analyzerVersion` / `recordingId`. `normaliseSummary`
  *  reads either flavour and falls through to `medianHzVoiced + a4Hz`-derived
  *  values when neither MIDI nor cents-off is present.
@@ -108,7 +108,7 @@ interface WireSummary {
   was_cached?: boolean;
   analyzerVersion?: string;
   analyzer_version?: string;
-  // Phase 2.3 — both casings accepted; either is forwarded into the
+  // Range / vibrato — both casings accepted; either is forwarded into the
   // already-existing `byRecording` Map entry, so RangeReadout /
   // VibratoReadout read from the same store entry as the summary card.
   range?: WireRangeReport | null;
@@ -246,7 +246,7 @@ function normaliseContour(raw: WireContour): ContourResult {
 }
 
 /** Composite cache key matching the `${recId}:${analyzerVersion}` shape the
- *  Tier-5 mock seeds with. Two analyzer versions of the same recording
+ *  E2E mock seeds with. Two analyzer versions of the same recording
  *  coexist as separate entries until eviction. */
 export function contourKey(recId: RecordingId, analyzerVersion: string): string {
   return `${recId}:${analyzerVersion}`;
@@ -323,7 +323,7 @@ export const useAnalysisStore = create<AnalysisStore>((set, get) => ({
     });
 
     // For the forced-refresh path, we await both the IPC and a "100%"
-    // progress event. The Tier-5 mock returns the summary synchronously,
+    // progress event. The E2E mock returns the summary synchronously,
     // but the spec drives the progress bar through 25 / 75 / 100 ticks
     // and asserts the bar disappears only after the final tick.
     const completion = force

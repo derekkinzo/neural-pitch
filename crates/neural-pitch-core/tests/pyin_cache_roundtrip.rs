@@ -1,12 +1,11 @@
 #![allow(missing_docs)]
 #![cfg(feature = "pyin")]
 
-//! Phase 2.1 TDD-RED: postcard round-trip of `ContourResult`.
+//! Postcard round-trip of `ContourResult`.
 //!
-//! `analyze_contour` → `postcard::to_allocvec` → `postcard::from_bytes` must
-//! reproduce the contour frame-by-frame within a 0.1 cent tolerance. Until
-//! `analyze_contour` is implemented the test panics with `todo!` long before
-//! the round-trip; that is the red signal.
+//! `analyze_contour` → `postcard::to_allocvec` → `postcard::from_bytes`
+//! must reproduce the contour frame-by-frame within a 0.1 cent
+//! tolerance.
 //!
 //! `F0Frame` deliberately does not derive `PartialEq` (NaN), so the
 //! comparison goes through a cents-tolerance helper.
@@ -52,7 +51,7 @@ fn pyin_cache_roundtrip_postcard_preserves_contour() {
     let samples = sine_wave(440.0, cfg.sample_rate_hz, cfg.sample_rate_hz as usize);
 
     let original = analyze_contour(&samples, &cfg, 440.0)
-        .expect("analyze_contour should succeed once Phase 2.1 ships");
+        .expect("analyze_contour should succeed on a clean 1 s sine fixture");
 
     // Serialise → bytes → deserialise.
     let bytes: Vec<u8> = postcard::to_allocvec(&original)

@@ -12,6 +12,10 @@ ignore = []
 
 [licenses]
 confidence-threshold = 0.93
+# `allow` lists licenses required by some feature configuration; under
+# `--no-default-features` the ISC-only crates are not pulled in, so the
+# entry stays unmatched. Treat as informational instead of warning.
+unused-allowed-license = "allow"
 allow = [
   "MIT",
   "Apache-2.0",

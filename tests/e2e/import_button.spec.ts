@@ -1,4 +1,4 @@
-// Phase 3 — ImportButton spec.
+// ImportButton spec.
 //
 // Drives the import flow through the mock IPC + dialog bridge:
 //
@@ -28,7 +28,7 @@ import {
 
 const SEED: MockRecording[] = [];
 
-test.describe("phase 3 — import button", () => {
+test.describe("import button", () => {
   test("clicking Import invokes import_audio_file and the row appears", async ({
     page,
     mockTauri,

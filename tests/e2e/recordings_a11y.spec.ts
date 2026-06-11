@@ -1,4 +1,4 @@
-// Phase 2.0 — recordings drawer accessibility scan.
+// Recordings drawer accessibility scan.
 //
 // Asserts that the recordings drawer (open, populated) has zero
 // serious or critical axe-core violations against WCAG 2.1 AA. Mirrors

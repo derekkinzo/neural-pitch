@@ -1,4 +1,4 @@
-// Phase 4 — Interval drill spec.
+// Interval drill spec.
 //
 // Drives the IntervalDrill flow:
 //
@@ -21,7 +21,7 @@ import {
 
 const SEED_HISTORY: MockDrillAttempt[] = [];
 
-test.describe("phase 4 — interval drill", () => {
+test.describe("interval drill", () => {
   test.beforeEach(async ({ page, mockTauri }) => {
     await mockTauri.install({
       ...installTrainingMock(SEED_HISTORY, buildSyntheticMelody()),

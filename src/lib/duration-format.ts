@@ -60,7 +60,7 @@ export function formatDurationToast(durationMs: number): string {
   return `${minutes}m${ss}s`;
 }
 
-/** Verbose relative-time renderer used by the Phase 4 Training landing
+/** Verbose relative-time renderer used by the Training landing
  *  cards. Mirrors `formatRelative` but expands the unit suffix to match the
  *  natural-language copy on the cards (e.g. "2 days ago", "8 hours ago").
  *  Returns "—" when the input is non-finite so empty cards render the
@@ -105,7 +105,7 @@ export function formatRelative(timestampMs: number, nowMs: number): string {
   const days = Math.floor(hours / 24);
   if (days < 7) return `${days}d ago`;
   // Fall back to a plain ISO calendar date so the row stays readable
-  // without dragging a locale-aware formatter into Phase 2.0.
+  // without dragging a locale-aware formatter into the recorder UI.
   const d = new Date(timestampMs);
   const yyyy = d.getUTCFullYear().toString().padStart(4, "0");
   const mm = (d.getUTCMonth() + 1).toString().padStart(2, "0");

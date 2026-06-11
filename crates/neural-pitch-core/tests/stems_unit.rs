@@ -9,7 +9,7 @@
     clippy::cast_possible_wrap
 )]
 
-//! Phase 5 — deterministic non-ONNX stems unit tests.
+//! Deterministic non-ONNX stems unit tests.
 //!
 //! Covers the pure-Rust paths that do NOT need a real HTDemucs model
 //! and therefore must run on the default CI matrix (no `#[ignore]`):

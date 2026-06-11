@@ -1,5 +1,4 @@
-//! Polyphonic transcription surface (Phase 3) and the Phase 4 prompt
-//! synth.
+//! Polyphonic transcription surface and the prompt synth.
 //!
 //! This module sits parallel to [`crate::pitch`] so the existing monophonic
 //! [`crate::pitch::PitchEstimator`] surface stays untouched. Polyphonic
@@ -12,9 +11,9 @@
 //!
 //! The Basic Pitch / MIDI surface (and the supporting [`NoteEvent`] /
 //! [`PolyResult`] / [`PolyEstimator`] types) is gated behind
-//! `feature = "neural"` because the GREEN implementation depends on `ort`
-//! and `ndarray`. The Phase 4 [`synth::PromptSynth`] surface is
-//! pure-Rust additive synthesis and ships unconditionally.
+//! `feature = "neural"` because the implementation depends on `ort`.
+//! The [`synth::PromptSynth`] surface is pure-Rust additive synthesis
+//! and ships unconditionally.
 
 #[cfg(feature = "neural")]
 use crate::pitch::EstimatorError;
@@ -95,8 +94,8 @@ pub trait PolyEstimator: Send {
     /// Run polyphonic transcription on a mono audio buffer.
     ///
     /// `audio` is interpreted as mono PCM at `sample_rate_hz`. If the
-    /// caller has stereo audio, it MUST mono-sum before calling — Phase 3
-    /// keeps `analyze` mono-only by contract.
+    /// caller has stereo audio, it MUST mono-sum before calling —
+    /// `analyze` is mono-only by contract.
     fn analyze(&mut self, audio: &[f32], sample_rate_hz: u32)
     -> Result<PolyResult, EstimatorError>;
 }

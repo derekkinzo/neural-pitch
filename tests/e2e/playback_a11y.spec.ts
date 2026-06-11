@@ -1,4 +1,4 @@
-// Phase 2.4 — PlaybackPanel axe scan (TDD-RED).
+// PlaybackPanel axe scan.
 //
 // Mirrors `recording_a11y.spec.ts` but focused on the new wavesurfer
 // surface. After the panel mounts we run axe-core scoped via the

@@ -1,10 +1,9 @@
-//! Phase 2.3 — vibrato detector (4–7 Hz residual FFT).
+//! Vibrato detector (4–7 Hz residual FFT).
 //!
 //! [`compute_vibrato`] consumes a
 //! [`crate::analysis::contour::ContourResult`] and emits a
 //! [`VibratoReport`] describing per-window vibrato rate and extent in the
-//! 4–7 Hz band, plus whole-recording aggregate medians. See the Phase 2.3
-//! algorithm memo for the full specification.
+//! 4–7 Hz band, plus whole-recording aggregate medians.
 //!
 //! Algorithm overview:
 //!   1. Slide a 1-second window with 50% overlap across

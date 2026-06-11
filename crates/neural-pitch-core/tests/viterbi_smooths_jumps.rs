@@ -1,8 +1,8 @@
 #![allow(missing_docs)]
 #![cfg(feature = "neural")]
 
-//! Phase 2.2 RED — Viterbi rejects high-frequency state jumps under a
-//! Gaussian transition prior.
+//! Viterbi rejects high-frequency state jumps under a Gaussian
+//! transition prior.
 //!
 //! Build emissions where alternate frames pull toward two distant
 //! states (`A = 100`, `B = 200`, `delta = 100` bins). The per-frame argmax
@@ -11,10 +11,6 @@
 //! dwarfing the modest emission preference for the alternating peak. The
 //! optimal path therefore parks on whichever state has the larger sum of
 //! emission log-probs across the sequence.
-//!
-//! TDD-RED: panics inside `decode`'s `todo!()`. Phase 2.2 GREEN flips this
-//! to green by wiring the log-domain forward pass with the default
-//! Gaussian transition kernel.
 
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 

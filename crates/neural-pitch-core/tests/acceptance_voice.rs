@@ -50,9 +50,8 @@ use neural_pitch_core::voicing::VoiceActivityGate;
 use tokio_util::sync::CancellationToken;
 
 /// Compile-time-bound manifest content. A malformed manifest fails
-/// compilation, not at runtime — this is the same invariant the spec calls
-/// out (Phase 1.4 §4 "Manifest loading"): the manifest is part of the build
-/// graph.
+/// compilation, not at runtime — the manifest is part of the build
+/// graph, not a runtime asset.
 const MANIFEST_TEXT: &str = include_str!("fixtures/voice/MANIFEST.toml");
 
 /// One row from `MANIFEST.toml`. Only the fields the harness needs are
@@ -221,8 +220,8 @@ fn run_fixture_through_pipeline(
     // it via `AutoPrior::default()`, which is identical to the no-hint
     // state). The `EstimatorConfig::instrument_hint` field below is
     // currently unused by `YinMpmEstimator` — it is plumbed for forward
-    // compatibility only. If Phase 2 wires the hint into the estimator,
-    // this harness will need to set it explicitly via
+    // compatibility only. If a future change wires the hint into the
+    // estimator, this harness will need to set it explicitly via
     // `DspWorker::with_instrument_hint(None)` to keep the no-hint
     // contract.
     let est_cfg = EstimatorConfig {
@@ -405,7 +404,7 @@ fn render_aggregate_json(
 /// than this acceptance harness — close enough to "Tier-1 invariant test
 /// targets" for the closeout audience and stable across `cargo test
 /// --list` invocations. A more precise count belongs in a dedicated
-/// `cargo test -- --list`-driven script if Phase 2 needs it.
+/// `cargo test -- --list`-driven script if it becomes load-bearing.
 fn count_tier_1_targets() -> usize {
     // Walk the same `tests/` directory the harness lives in; count `*.rs`
     // files except this one. Symlinks and subdirectories are ignored —

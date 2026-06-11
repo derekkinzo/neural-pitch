@@ -1,9 +1,8 @@
-//! Phase 2.3 — vocal-range histogram report.
+//! Vocal-range histogram report.
 //!
 //! [`compute_range`] consumes a [`crate::analysis::contour::ContourResult`]
 //! and emits a [`RangeReport`] describing the median, comfortable, and full
-//! pitch range of the voiced frames in the contour. See the Phase 2.3
-//! algorithm memo for the full specification.
+//! pitch range of the voiced frames in the contour.
 //!
 //! Public contract:
 //!   * `a4_hz` is a parameter (no module-level A4 state).

@@ -1,7 +1,7 @@
 #![allow(missing_docs)]
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 
-//! Phase 4 RED — movable-do solfege mapping.
+//! Movable-do solfege mapping.
 //!
 //! In C major, MIDI 60 (C4) → `Do`. In A major, MIDI 69 (A4) → `Do`.
 //! That is, the tonic is always `Do` regardless of which key root is

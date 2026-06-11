@@ -66,7 +66,7 @@ pub struct NewRecording {
     pub channels: i64,
     /// Bit depth of the captured PCM samples.
     pub bit_depth: i64,
-    /// Container/codec format string. `"flac"` for Phase 2.0.
+    /// Container/codec format string. `"flac"` for FLAC recordings.
     pub format: String,
     /// Reference pitch for A4 in Hz (typically `440.0`).
     pub a4_hz: f64,

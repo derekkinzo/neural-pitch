@@ -1,13 +1,12 @@
 #![allow(missing_docs)]
 #![cfg(feature = "pyin")]
 
-//! Phase 2.3 TDD-RED — bumping `PYIN_ANALYZER_VERSION` from `"0.1"` to
-//! `"0.2"` is non-destructive on the cache layer.
+//! Bumping `PYIN_ANALYZER_VERSION` from `"0.1"` to `"0.2"` is
+//! non-destructive on the cache layer.
 //!
-//! Spec (Phase 2.3 §3): "0.1 rows stay in `analysis_cache` and remain
-//! fetchable via `get_contour(.., "0.1")` for back-compat. New analyses
-//! write under `(recording_id, "pyin", "0.2")` alongside any existing 0.1
-//! row."
+//! 0.1 rows stay in `analysis_cache` and remain fetchable via
+//! `get_contour(.., "0.1")` for back-compat. New analyses write under
+//! `(recording_id, "pyin", "0.2")` alongside any existing 0.1 row.
 //!
 //! This test:
 //!   1. Hand-writes a postcard blob keyed `(id, "pyin", "0.1")` so the
@@ -17,14 +16,6 @@
 //!   3. Asserts both blobs coexist (`list_analyses_blocking` length == 2).
 //!   4. Asserts the legacy 0.1 blob still decodes through
 //!      `get_contour_blocking(.., "0.1")` — the back-compat path.
-//!
-//! TDD-RED: until Phase 2.3's `compute_range` / `compute_vibrato` stubs
-//! are wired into `summarize_cached`, the analyzer at version `"0.2"`
-//! still produces a populated wire summary; the assertion that fails is
-//! the back-compat decode of the hand-written 0.1 blob through the
-//! current `ContourResult` shape (the 0.1 blob format predates the
-//! `range` / `vibrato` fields). The test is RED until the
-//! `Option`-tolerant decode path lands.
 
 #![allow(
     clippy::expect_used,

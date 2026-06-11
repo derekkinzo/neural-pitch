@@ -7,7 +7,7 @@
     clippy::uninlined_format_args
 )]
 
-//! Phase 5 RED — cancellation token short-circuits the segment loop.
+//! Cancellation token short-circuits the stems segment loop.
 //!
 //! Feed 30 s of silence (forces multiple inference segments), spawn
 //! a background thread that fires [`CancellationToken::cancel`]

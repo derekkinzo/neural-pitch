@@ -1,5 +1,6 @@
--- Phase 2.0 initial schema. Append-only: future migrations land as new V000N
--- files and never edit V0001 (refinery refuses modified files).
+-- Recordings library + analysis-cache schema. Append-only: future
+-- migrations land as new V000N files and never edit V0001 (refinery
+-- refuses modified files).
 --
 -- WAL is set at *connection* level in `RecordingsLibrary::new` (not here) so it
 -- runs even on databases that already have V0001 applied; SQLite stores

@@ -3,8 +3,8 @@
 //! median has narrowed the search range below the cold-start generic
 //! 60–2000 Hz prior.
 //!
-//! Phase 1.4 will tighten the assertion against Philharmonia voice fixtures
-//! (≥ 95% octave-correctness under `Generic` + `AutoPrior`).
+//! A tighter Philharmonia-fixture assertion belongs in the voice
+//! acceptance harness, not this synthetic-tone smoke test.
 #![allow(
     clippy::expect_used,
     clippy::unwrap_used,
@@ -110,8 +110,9 @@ fn dsp_pipeline_auto_prior_narrows_after_440hz() {
     // (the worker is moved into the thread). The narrower acceptance
     // assertion lives in the `auto_prior_voice` unit test, which feeds
     // F0Frames directly. This integration test demonstrates that the
-    // wired-up loop runs without locking the search range away from A4.
-    // Phase 1.4 will tighten this against Philharmonia voice fixtures.
+    // wired-up loop runs without locking the search range away from A4;
+    // the tighter Philharmonia-fixture assertion lives in the voice
+    // acceptance harness.
     let (_lo, _hi) = (60.0_f32, 2000.0_f32);
     assert!(close(440.0, 440.0, 0.1));
 }

@@ -1,11 +1,11 @@
 //! Backend-agnostic frame-sink trait and the [`PitchUpdate`] data shape.
 //!
-//! The [`FrameSink`] trait keeps `tauri::*` out of `neural-pitch-core` (P2,
-//! the day-1 implementation [`ChannelFrameSink`] wraps a
-//! `std::sync::mpsc::Sender<PitchUpdate>`, which every Tier-2 test uses. The
-//! Tauri-side `TauriChannelFrameSink` lives in `src-tauri/src/ipc/` (Phase
-//! 1.2 work) and adapts `tauri::ipc::Channel<PitchUpdate>` against this same
-//! trait.
+//! The [`FrameSink`] trait keeps `tauri::*` out of `neural-pitch-core`.
+//! The default [`ChannelFrameSink`] implementation wraps a
+//! `std::sync::mpsc::Sender<PitchUpdate>`, which every deterministic
+//! integration test uses. The Tauri-side `TauriChannelFrameSink` lives
+//! in `src-tauri/src/ipc/` and adapts `tauri::ipc::Channel<PitchUpdate>`
+//! against this same trait.
 
 use std::sync::mpsc::{SendError, Sender};
 
@@ -69,12 +69,12 @@ pub trait FrameSink: Send {
     fn send(&mut self, update: PitchUpdate) -> Result<(), FrameSinkError>;
 }
 
-/// Day-1 [`FrameSink`] implementation that wraps a
+/// Default [`FrameSink`] implementation that wraps a
 /// `std::sync::mpsc::Sender<PitchUpdate>`.
 ///
-/// Used by every Tier-2 deterministic test. The Tauri-side adapter
-/// (`TauriChannelFrameSink`) lives in the shell crate (Phase 1.2) and is
-/// out of scope for this crate.
+/// Used by every deterministic integration test. The Tauri-side adapter
+/// (`TauriChannelFrameSink`) lives in the shell crate and is out of
+/// scope for this crate.
 #[derive(Debug)]
 pub struct ChannelFrameSink {
     tx: Sender<PitchUpdate>,

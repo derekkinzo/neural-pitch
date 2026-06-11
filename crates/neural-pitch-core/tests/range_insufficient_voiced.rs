@@ -1,14 +1,11 @@
-//! Phase 2.3 TDD-RED: insufficient-voicing returns the sentinel report.
+//! Insufficient-voicing returns the sentinel report.
 //!
-//! 30 voiced frames is below the 50-frame floor that `compute_range` uses
-//! to guard against under-sampled histogram tails. The expected output is
-//! exactly `RangeReport::insufficient()` — every numeric field at zero,
-//! `voice_type_hint == None`. The `voiced_frame_count` is zero on the
-//! sentinel by spec (the report is opaque; callers MUST treat it as
+//! 30 voiced frames is below the 50-frame floor that `compute_range`
+//! uses to guard against under-sampled histogram tails. The expected
+//! output is exactly `RangeReport::insufficient()` — every numeric field
+//! at zero, `voice_type_hint == None`. The `voiced_frame_count` is zero
+//! on the sentinel (the report is opaque; callers MUST treat it as
 //! "no answer", not "answer with 30 frames").
-//!
-//! Until [`compute_range`] is implemented this test panics with `todo!`,
-//! which is the red signal.
 
 #![allow(missing_docs)]
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]

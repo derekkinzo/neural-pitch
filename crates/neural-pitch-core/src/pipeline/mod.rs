@@ -1,4 +1,4 @@
-//! Phase 1.1 capture-to-update pipeline.
+//! Capture-to-update pipeline.
 //!
 //! The pipeline crate-internally couples three pieces:
 //!

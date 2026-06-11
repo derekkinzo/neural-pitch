@@ -1,4 +1,4 @@
-//! Phase 2.3 TDD-RED: vocal-range histogram on a single-pitch fixture.
+//! Vocal-range histogram on a single-pitch fixture.
 //!
 //! Construct a synthetic `ContourResult` of 100 voiced frames at exactly
 //! 220 Hz with `a4_hz = 440.0`. The expected outputs are derived from the
@@ -9,9 +9,6 @@
 //!     reach a different bin.
 //!   * `voiced_frame_count == 100` — above the 50-frame insufficiency
 //!     threshold, so the report is *not* the `insufficient()` sentinel.
-//!
-//! Until [`compute_range`] is implemented this test panics with `todo!`,
-//! which is the red signal.
 
 #![allow(missing_docs)]
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]

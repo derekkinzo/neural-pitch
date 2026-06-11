@@ -1,11 +1,11 @@
 #![allow(missing_docs)]
 #![cfg(feature = "pyin")]
 
-//! Phase 2.1 TDD-RED: pYIN end-to-end through a real FLAC fixture.
+//! pYIN end-to-end through a real FLAC fixture.
 //!
-//! Decode `069_A4_synthvoice_clean.flac` via `claxon`, run `analyze_contour`,
-//! and assert the median voiced F0 is within 5 cents of 440 Hz. Until
-//! `analyze_contour` is implemented the test panics with `todo!`.
+//! Decode `069_A4_synthvoice_clean.flac` via `claxon`, run
+//! `analyze_contour`, and assert the median voiced F0 is within 5 cents
+//! of 440 Hz.
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 
 use std::path::PathBuf;
@@ -70,7 +70,7 @@ fn pyin_offline_a4_voice_fixture_within_5_cents() {
     let (sr, samples) = decode_flac(&path);
     assert_eq!(
         sr, 48_000,
-        "fixture sample rate is {sr} (expected 48000) — Phase 2.1 cfg is hard-coded for 48 kHz"
+        "fixture sample rate is {sr} (expected 48000) — analyzer cfg is hard-coded for 48 kHz"
     );
 
     let cfg = EstimatorConfig {

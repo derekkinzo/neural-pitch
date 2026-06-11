@@ -1,4 +1,4 @@
-// Phase 5 — StemSeparationPanel landing spec (TDD-RED).
+// StemSeparationPanel landing spec.
 //
 // Asserts the idle state of the new StemSeparationPanel that mounts
 // inside RecordingDetail as a sibling of TranscribePanel. With no
@@ -31,7 +31,7 @@ const SEED: MockRecording[] = [
   },
 ];
 
-test.describe("phase 5 — stems landing", () => {
+test.describe("stems landing", () => {
   test("idle StemSeparationPanel surfaces a Separate stems button", async ({ page, mockTauri }) => {
     await mockTauri.install({
       ...installRecordingsMock(SEED),

@@ -2,9 +2,9 @@
 //
 // Vendored under `components/ui/`. The shadcn `Drawer` primitive
 // wraps Radix Dialog; we implement the same surface in ~80 lines because the
-// Phase 1.2 use case is exactly one drawer, exactly one trigger, exactly one
-// modal pattern. Phase 1.4 polish may switch to Radix once we add a second
-// drawer surface (e.g. Phase-2 metronome side-panel).
+// use case is exactly one drawer, exactly one trigger, exactly one
+// modal pattern. A future polish pass may switch to Radix once we add a second
+// drawer surface (e.g. a metronome side-panel).
 //
 // Implementation:
 //   - role="dialog" aria-modal="true" on the panel.
@@ -26,7 +26,7 @@ export interface DrawerProps {
    *  modal-dialog pattern: focus trap, `inert` on every sibling of the
    *  drawer-root, role="dialog" + aria-modal="true". Non-modal drops the
    *  focus trap and inert chain so the user can still interact with the
-   *  underlying surface (e.g. the Phase-2.0 Recordings drawer keeps the
+   *  underlying surface (e.g. the Recordings drawer keeps the
    *  RecordButton in the header reachable while the list is open). The
    *  Escape-to-close keybinding is preserved either way. */
   modal?: boolean;

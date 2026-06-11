@@ -1,7 +1,7 @@
 #![allow(missing_docs)]
 #![cfg(feature = "flac")]
 
-//! Phase 2.1 — `analyze_recording` cache lifecycle integration test.
+//! `analyze_recording` cache lifecycle integration test.
 //!
 //! Drives the public `analyze_recording_blocking` surface through its four
 //! observable transitions:
@@ -30,10 +30,6 @@
 //! Fixture strategy: synthesize 1.0 s of a 440 Hz sine, write it through
 //! `FlacRecordingSink`, insert a matching `recordings` row, and drive
 //! `analyze_recording_blocking` against the resulting library.
-//!
-//! TDD-RED: every entry point in `neural_pitch_core::store::analysis_runtime`
-//! is `todo!()`. The first call to `analyze_recording_blocking` panics with
-//! "not yet implemented" — that panic is the red signal.
 
 #![allow(
     clippy::expect_used,

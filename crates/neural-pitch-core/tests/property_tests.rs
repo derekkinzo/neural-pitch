@@ -1,5 +1,4 @@
-//! Property tests for music-theory math. These run on day 1 — the
-//! underlying math is real and is not gated on Phase 1 work.
+//! Property tests for music-theory math.
 
 use neural_pitch_core::music::{frequency_to_note, midi_to_hz};
 use proptest::prelude::*;

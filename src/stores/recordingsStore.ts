@@ -1,4 +1,4 @@
-// Recordings store — slow-path Zustand state for the Phase 2.0 recorder.
+// Recordings store — slow-path Zustand state for the recorder.
 //
 // Per the RingBuffer contract, hot-path frames
 // (`PitchUpdate`) DO NOT pass through Zustand. Recording state is intrinsically

@@ -1,9 +1,9 @@
 // Performance budget stub.
 //
-// Phase-0 has no real hot path: the placeholder page is a single static
+// The current placeholder page has no real hot path: it is a single static
 // React tree. Web-Vitals targets (LCP < 2.0 s,
-// CLS < 0.05, p95 FPS > 55, no `longtask` > 50 ms) gain teeth in Phase 1.2
-// when the tuner needle is the actual measurement subject.
+// CLS < 0.05, p95 FPS > 55, no `longtask` > 50 ms) gain teeth once the
+// tuner needle is the actual measurement subject.
 //
 // This stub records the intended shape:
 //   - capture LargestContentfulPaint via PerformanceObserver
@@ -17,10 +17,10 @@ interface NavigationTimingSubset {
   responseEnd: number;
 }
 
-test.describe("perf — Phase-0 stub", () => {
+test.describe("perf — placeholder stub", () => {
   test.skip(
     true,
-    "Phase 1.2 adds tuner UI; budgets defined when there is a real hot path to measure.",
+    "Tuner UI does not yet expose a real hot path; budgets are defined once one exists to measure.",
   );
 
   test("LCP under relaxed CI budget", async ({ page, mockTauri }) => {

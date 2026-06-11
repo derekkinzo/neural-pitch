@@ -11,7 +11,7 @@ export type Accidental = "" | "#" | "b";
 export interface NoteName {
   /** "A", "C", etc. — the natural-letter component. */
   letter: string;
-  /** "" for naturals, "#" for sharps. (Phase 1.2 always returns sharps.) */
+  /** "" for naturals, "#" for sharps. (Flats are not emitted; the formatter always returns the sharp spelling.) */
   accidental: Accidental;
   /** Octave number (scientific pitch notation). */
   octave: number;
@@ -55,7 +55,7 @@ export function formatMidiNote(midi: number, a4Hz: number): string {
 }
 
 // ---------------------------------------------------------------------------
-// Solfege rendering — Phase 4 ear-training subsystem.
+// Solfege rendering — ear-training subsystem.
 //
 // Two modes are supported beyond the default letter names:
 //   - movable-do: solfege relative to the active drill's tonic. Tests rely
@@ -64,7 +64,7 @@ export function formatMidiNote(midi: number, a4Hz: number): string {
 //   - fixed-do:   solfege anchored to C, regardless of tonic. Same syllable
 //     table; the relative-to-C semitone is the index.
 //
-// The drill UI passes its own tonic into the formatter so a future
+// The drill UI passes its own tonic into the formatter so a
 // transposing drill (or a movable-do tonic drift) does not require a
 // global setting change.
 

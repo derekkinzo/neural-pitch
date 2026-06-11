@@ -1,4 +1,4 @@
-// Phase 5 — StemSeparationPanel complete-branch spec (TDD-RED).
+// StemSeparationPanel complete-branch spec.
 //
 // Drives the full idle → separating → complete arc. After the parked
 // `separate_stems` promise resolves via `pushStemsComplete`, the panel
@@ -45,7 +45,7 @@ const SEED: MockRecording[] = [
 
 const STEM_KINDS: readonly MockStemKind[] = ["vocals", "drums", "bass", "other"];
 
-test.describe("phase 5 — stems complete", () => {
+test.describe("stems complete", () => {
   test("four StemCards mount in fixed order with playback + transcribe + export", async ({
     page,
     mockTauri,

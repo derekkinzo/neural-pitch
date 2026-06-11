@@ -1,4 +1,4 @@
-// Training — Phase 4 ear-training landing + drill router.
+// Training — ear-training landing + drill router.
 //
 // Mounted as a sibling of the Tuner's `<main>` from `App.tsx`. The Practice
 // header button sets `tunerStore.view = "training"` and the Tuner yields its
