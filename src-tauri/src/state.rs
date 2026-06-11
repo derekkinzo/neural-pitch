@@ -126,6 +126,13 @@ pub struct AppState {
     /// without taking the library lock.
     pub(crate) recordings_dir: PathBuf,
 
+    /// Directory where downloaded ONNX models are cached
+    /// (`htdemucs.onnx`, …). Resolved at startup as the sibling of
+    /// `recordings_dir` under the per-platform app-data root. Held on
+    /// `AppState` so commands can pass it into the core stem-separator
+    /// without re-resolving the platform path on every call.
+    pub(crate) models_dir: PathBuf,
+
     /// Persistent settings store handle (`tauri-plugin-store`).
     pub(crate) store: Arc<Store<Wry>>,
 
@@ -181,12 +188,14 @@ impl AppState {
         settings: TunerSettings,
         library: Arc<RecordingsLibrary>,
         recordings_dir: PathBuf,
+        models_dir: PathBuf,
     ) -> Self {
         Self {
             dsp: Mutex::new(None),
             recording: Mutex::new(None),
             library,
             recordings_dir,
+            models_dir,
             store,
             settings: RwLock::new(settings),
             events: Mutex::new(None),

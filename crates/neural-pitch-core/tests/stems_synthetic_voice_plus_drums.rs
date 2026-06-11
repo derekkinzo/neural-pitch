@@ -54,7 +54,7 @@ fn synth_kicks(sample_rate: u32, n_samples: usize) -> Vec<f32> {
     out
 }
 
-#[ignore = "ort cpu-fallback path is too slow on the CI matrix; HTDEMUCS_MODEL_URL/SHA256 are also placeholders until the upstream commit is pinned, so this test only exercises a sideloaded model on the local gate"]
+#[ignore = "htdemucs onnx path is too slow on the CI matrix; runs locally"]
 #[test]
 fn stems_voice_plus_drums_isolates_voice_into_vocals() {
     let n_samples = (SR_HZ as u64 * DURATION_MS / 1_000) as usize;

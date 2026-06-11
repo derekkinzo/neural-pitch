@@ -18,7 +18,7 @@ front end. Dual-licensed under MIT OR Apache-2.0.
 - **Range and vibrato reports.** Per-recording lowest/highest pitch,
   tessitura, and vibrato rate / extent / regularity, computed from the
   cached contour.
-- **Import and transcribe.** Drag in a WAV / FLAC / MP3, run polyphonic
+- **Import and transcribe.** Drag in a WAV file, run polyphonic
   transcription, and export the result as a Standard MIDI File.
 - **Ear-training drills.** Intervals, chord quality, scale identification,
   pitch-matching with a karaoke ribbon, and tuning practice — with
@@ -26,10 +26,9 @@ front end. Dual-licensed under MIT OR Apache-2.0.
 - **Stem separation.** Split a recording into vocals, drums, bass, and
   other, play each stem, and run polyphonic transcription on any stem.
   The HTDemucs ONNX model (~316 MB on first use) is downloaded from
-  huggingface.co/StemSplitio/htdemucs-onnx and pinned by SHA-256; the
-  runtime falls back to a deterministic four-bus splitter when the model
-  is unavailable so persistence, playback, and per-stem transcribe still
-  work end-to-end.
+  huggingface.co/StemSplitio/htdemucs-onnx and pinned by SHA-256; if the
+  model is unavailable and the host is offline, separation surfaces a
+  typed error with the manual-download URL.
 
 The `neural-pitch-core` crate is pure Rust, has no Tauri dependency, and
 can be reused as a library. The default build pulls in only the classical

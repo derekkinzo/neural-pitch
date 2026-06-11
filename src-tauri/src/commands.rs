@@ -873,33 +873,26 @@ pub async fn get_vibrato_report(
 
 /// Wire shape for the requested pitch backend.
 ///
-/// `tag = "kind"` so the front-end matches exhaustively on the discriminant
-/// rather than the field set; `untagged` would let a typo silently fall
-/// into a different arm. The IPC currently exposes the four shipping backends; the
-/// neural arms carry the resolved on-disk path so the resolver stays
-/// out of the IPC boundary.
+/// `tag = "kind"` so the front-end matches exhaustively on the
+/// discriminant rather than the field set; `untagged` would let a typo
+/// silently fall into a different arm. The IPC exposes only the
+/// backends the offline analyzer dispatcher actually routes; YIN/MPM
+/// is the live-tuner backend (driven by `start_capture`, not by this
+/// surface), and the CREPE-tiny ONNX inference path is not part of the
+/// shipping offline pipeline.
 ///
-/// Discriminant naming: each variant carries an explicit `#[serde(rename)]`
-/// so the on-the-wire `kind` matches the value persisted in
-/// `analysis_cache.analyzer_name` (e.g. `"pyin"`, `"crepe-tiny"`). Without
-/// the explicit rename, `rename_all = "snake_case"` would coin `p_yin` /
-/// `crepe_tiny`, splitting the IPC discriminant from the cache key and
+/// Discriminant naming: each variant carries an explicit
+/// `#[serde(rename)]` so the on-the-wire `kind` matches the value
+/// persisted in `analysis_cache.analyzer_name` (e.g. `"pyin"`).
+/// Without the explicit rename, `rename_all = "snake_case"` would coin
+/// `p_yin`, splitting the IPC discriminant from the cache key and
 /// burning the front-end engineer who joins the two.
 #[derive(serde::Deserialize, Debug, Clone)]
 #[serde(tag = "kind")]
 pub enum BackendKind {
-    /// Plain YIN (de Cheveigne & Kawahara 2002).
-    #[serde(rename = "yin")]
-    Yin,
     /// pYIN (Mauch & Dixon 2014). Requires `feature = "pyin"` in core.
     #[serde(rename = "pyin")]
     PYin,
-    /// CREPE-tiny neural backend. Requires `feature = "neural"` in core.
-    #[serde(rename = "crepe-tiny")]
-    CrepeTiny {
-        /// Resolved on-disk path to the CREPE-tiny ONNX file.
-        onnx_path: PathBuf,
-    },
 }
 
 impl BackendKind {
@@ -908,9 +901,7 @@ impl BackendKind {
     /// string round-trips between IPC and SQLite.
     fn analyzer_name(&self) -> &'static str {
         match self {
-            Self::Yin => "yin",
             Self::PYin => "pyin",
-            Self::CrepeTiny { .. } => "crepe-tiny",
         }
     }
 
@@ -919,26 +910,20 @@ impl BackendKind {
     /// shape changes so cached blobs invalidate cleanly.
     fn analyzer_version(&self) -> &'static str {
         match self {
-            Self::Yin | Self::PYin => DEFAULT_ANALYZER_VERSION,
-            Self::CrepeTiny { .. } => "0.1",
+            Self::PYin => DEFAULT_ANALYZER_VERSION,
         }
     }
 }
 
 /// Run a backend-selected analysis on a previously-recorded file.
 ///
-/// Routing reality: the underlying analyzer plumbing in
-/// [`neural_pitch_core::store::analyze_recording_blocking`] is hard-wired
-/// to pYIN — `run_analyzer_with_progress` constructs a `PYinEstimator`
-/// unconditionally and ignores the supplied `analyzer_name`. To prevent
-/// silent data-mislabelling (pYIN-derived contour bytes persisted under
-/// `analyzer_name = "crepe-tiny"`), this command short-circuits every
-/// backend other than [`BackendKind::PYin`] with `Err("backend not yet
-/// routed: <name>")`. YIN is also refused for the same reason: the live
-/// tuner uses YIN/MPM, but the offline path here would still execute pYIN
-/// under the YIN cache key. Remove the guard once the per-backend
-/// dispatcher in core honours `analyzer_name`; the `BackendKind` arms are
-/// already shaped to route to the matching `make_estimator` arm.
+/// The underlying analyzer plumbing in
+/// [`neural_pitch_core::store::analyze_recording_blocking`] dispatches
+/// on `analyzer_name`; the offline pipeline today only routes pYIN, so
+/// [`BackendKind`] only carries that arm. Adding a new analyzer means
+/// adding a new variant *and* extending the core dispatcher in the
+/// same change so the cache key, the IPC discriminant, and the
+/// computed bytes stay in lock-step.
 #[tauri::command]
 #[tracing::instrument(
     skip(state, progress, backend),
@@ -954,17 +939,6 @@ pub async fn analyze_recording_with_backend(
     let parsed: neural_pitch_core::store::RecordingId = recording_id
         .parse()
         .map_err(|e| format!("invalid recording id: {e}"))?;
-
-    // Refuse every backend other than pYIN. The cache row would otherwise
-    // be stamped with the requested analyzer_name but the bytes inside
-    // would still be pYIN-derived. See the doc-comment above for the
-    // routing-gap rationale.
-    match &backend {
-        BackendKind::PYin => {}
-        other => {
-            return Err(format!("backend not yet routed: {}", other.analyzer_name()));
-        }
-    }
 
     let analyzer_name = backend.analyzer_name();
     let analyzer_version = backend.analyzer_version();
@@ -1074,9 +1048,11 @@ pub enum ModelStatus {
 /// Inspect the on-disk + manifest state for a single model.
 ///
 /// Calls [`neural_pitch_core::models::peek`] (a non-fetching variant of
-/// `ensure_model`) and maps the result onto [`ModelStatus`]. The
-/// workspace `models.toml` carries placeholder rows today, so this
-/// command always surfaces [`ModelStatus::MissingNotConfigured`].
+/// `ensure_model`) and maps the result onto [`ModelStatus`]. Returns
+/// [`ModelStatus::Cached`] when the on-disk SHA-256 matches the
+/// manifest, [`ModelStatus::MissingButFetchable`] when the manifest
+/// carries a real URL but no on-disk match, or
+/// [`ModelStatus::MissingNotConfigured`] for placeholder manifest rows.
 #[tauri::command]
 #[tracing::instrument(skip(state), fields(model_name = %name))]
 #[allow(clippy::needless_pass_by_value)]
@@ -1086,13 +1062,7 @@ pub fn get_model_status(
 ) -> Result<ModelStatus, String> {
     use neural_pitch_core::models::{ResolverError, peek};
 
-    // Resolve the per-platform models directory. We reuse the recordings
-    // dir's parent (the app-data dir) and append `models/` so the cache
-    // sits next to `recordings/` and `library.sqlite`.
-    let models_dir = state
-        .recordings_dir
-        .parent()
-        .map_or_else(|| PathBuf::from("models"), |p| p.join("models"));
+    let models_dir = state.models_dir.clone();
 
     match peek(&name, &models_dir) {
         Ok(p) => {
@@ -1708,15 +1678,19 @@ pub async fn separate_stems(
         }
     }
 
-    // Lazy initialisation of the shared `Arc<StemSeparator>`. The ONNX
-    // session is heavy; the constructor is cheap today but we still
-    // share it across calls so the inference-count counter persists.
+    // Lazy initialisation of the shared `Arc<StemSeparator>`. The
+    // outer wrapper is cheap to construct; the inner ONNX session is
+    // built on the first cache-miss separation pass. Sharing the `Arc`
+    // across calls keeps the warm session and the inference-count
+    // counter alive for cache-hit fast paths.
     let separator: Arc<crate::stems::StemSeparator> = {
         let mut g = state.stem_separator.lock();
         if let Some(existing) = g.as_ref() {
             Arc::clone(existing)
         } else {
-            let fresh = Arc::new(crate::stems::StemSeparator::new());
+            let fresh = Arc::new(crate::stems::StemSeparator::with_models_dir(
+                state.models_dir.clone(),
+            ));
             *g = Some(Arc::clone(&fresh));
             fresh
         }
@@ -1879,12 +1853,7 @@ pub async fn download_stem_model(
     state: State<'_, AppState>,
     progress: Channel<crate::stems::DownloadProgress>,
 ) -> Result<(), String> {
-    // Resolve the per-platform models directory — same convention as
-    // `get_model_status`: app-data dir / models.
-    let models_dir = state
-        .recordings_dir
-        .parent()
-        .map_or_else(|| PathBuf::from("models"), |p| p.join("models"));
+    let models_dir = state.models_dir.clone();
     let sink_owned = ChannelDownloadSink { channel: progress };
     tokio::task::spawn_blocking(move || {
         let sink_ref: &dyn crate::stems::DownloadProgressSink = &sink_owned;
@@ -1922,22 +1891,15 @@ mod tests {
         assert_eq!(json["code"], "no_input_device");
     }
 
-    /// Lock in the on-the-wire `kind` discriminant for every BackendKind
-    /// variant so a future serde rename (e.g. accidentally re-introducing
+    /// Lock in the on-the-wire `kind` discriminant so a future serde
+    /// rename (e.g. accidentally re-introducing
     /// `rename_all = "snake_case"`) cannot silently flip `pyin` to
-    /// `p_yin` or `crepe-tiny` to `crepe_tiny`. This is the contract the
-    /// front-end joins to `analysis_cache.analyzer_name` rows.
+    /// `p_yin`. This is the contract the front-end joins to
+    /// `analysis_cache.analyzer_name` rows.
     #[test]
     fn backend_kind_wire_discriminants_match_analyzer_names() {
-        let yin: BackendKind =
-            serde_json::from_str(r#"{"kind":"yin"}"#).expect("yin should deserialize");
         let pyin: BackendKind =
             serde_json::from_str(r#"{"kind":"pyin"}"#).expect("pyin should deserialize");
-        let crepe: BackendKind =
-            serde_json::from_str(r#"{"kind":"crepe-tiny","onnx_path":"/tmp/c.onnx"}"#)
-                .expect("crepe-tiny should deserialize");
-        assert_eq!(yin.analyzer_name(), "yin");
         assert_eq!(pyin.analyzer_name(), "pyin");
-        assert_eq!(crepe.analyzer_name(), "crepe-tiny");
     }
 }

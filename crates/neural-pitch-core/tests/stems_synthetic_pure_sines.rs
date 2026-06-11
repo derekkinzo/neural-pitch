@@ -30,7 +30,7 @@ fn rms(buf: &[f32]) -> f32 {
     (s / buf.len() as f32).sqrt()
 }
 
-#[ignore = "ort cpu-fallback path is too slow on the CI matrix; HTDEMUCS_MODEL_URL/SHA256 are also placeholders until the upstream commit is pinned, so this test only exercises a sideloaded model on the local gate"]
+#[ignore = "htdemucs onnx path is too slow on the CI matrix; runs locally"]
 #[test]
 fn stems_pure_sines_have_silent_vocals_and_reconstructable_residual() {
     let n_samples = (SR_HZ as u64 * TONE_DURATION_MS / 1_000) as usize;

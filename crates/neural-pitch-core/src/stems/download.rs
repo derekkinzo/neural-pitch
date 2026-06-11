@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use parking_lot::Mutex;
 use sha2::{Digest, Sha256};
+use tokio_util::sync::CancellationToken;
 
 use crate::stems::{HTDEMUCS_MODEL_URL, HTDEMUCS_SHA256, StemError};
 
@@ -82,12 +83,34 @@ fn hex_encode(bytes: &[u8]) -> String {
 /// [`StemError::OfflineFirstUse`] with the public URL the user
 /// should hand-download from and the destination they should drop
 /// the file at.
-pub fn ensure_at<F: FnMut(f32)>(dest_dir: &Path, mut progress: F) -> Result<PathBuf, StemError> {
+///
+/// Convenience wrapper that forwards to [`ensure_at_with_cancel`]
+/// with an unset cancellation token.
+pub fn ensure_at<F: FnMut(f32)>(dest_dir: &Path, progress: F) -> Result<PathBuf, StemError> {
+    ensure_at_with_cancel(dest_dir, progress, &CancellationToken::new())
+}
+
+/// Cancellation-aware variant of [`ensure_at`]. Polls `cancel`
+/// between every chunk read so a tripped token short-circuits the
+/// streamed download instead of waiting for the full ~316 MB blob to
+/// finish.
+pub fn ensure_at_with_cancel<F: FnMut(f32)>(
+    dest_dir: &Path,
+    mut progress: F,
+    cancel: &CancellationToken,
+) -> Result<PathBuf, StemError> {
+    if cancel.is_cancelled() {
+        return Err(StemError::Cancelled);
+    }
     fs::create_dir_all(dest_dir)?;
 
     let target = dest_dir.join(MODEL_FILENAME);
     let lock = download_lock_for(&target);
     let _guard = lock.lock();
+
+    if cancel.is_cancelled() {
+        return Err(StemError::Cancelled);
+    }
 
     // Re-check on disk under the lock — first thread to win the race
     // may have already populated the file.
@@ -100,13 +123,17 @@ pub fn ensure_at<F: FnMut(f32)>(dest_dir: &Path, mut progress: F) -> Result<Path
         fs::remove_file(&target).ok();
     }
 
-    download_and_verify(&target, &mut progress)?;
+    download_and_verify(&target, &mut progress, cancel)?;
     Ok(target)
 }
 
 /// Run the streamed download → atomic rename → sha verify pipeline
 /// against `target`. Splits out so [`ensure_at`] stays linear.
-fn download_and_verify<F: FnMut(f32)>(target: &Path, progress: &mut F) -> Result<(), StemError> {
+fn download_and_verify<F: FnMut(f32)>(
+    target: &Path,
+    progress: &mut F,
+    cancel: &CancellationToken,
+) -> Result<(), StemError> {
     let partial = target.with_file_name(PARTIAL_FILENAME);
     // Best-effort cleanup of any prior partial.
     fs::remove_file(&partial).ok();
@@ -142,6 +169,14 @@ fn download_and_verify<F: FnMut(f32)>(target: &Path, progress: &mut F) -> Result
         let mut reader = response;
         let mut buf = vec![0u8; STREAM_CHUNK_BYTES].into_boxed_slice();
         loop {
+            // Poll the cancel token at every chunk boundary so a tripped
+            // token short-circuits within ~one STREAM_CHUNK_BYTES read of
+            // wall-clock latency. The partial file is removed before the
+            // typed Cancelled error is surfaced.
+            if cancel.is_cancelled() {
+                fs::remove_file(&partial).ok();
+                return Err(StemError::Cancelled);
+            }
             let n = reader.read(&mut buf)?;
             if n == 0 {
                 break;

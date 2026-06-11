@@ -77,8 +77,8 @@ fn matcher_emits_at_least_one_match_update_for_steady_a4_target_69() {
     let started = Instant::now();
     let mut frames_fed = 0_u64;
     // At hop=512 / 48 kHz the live worker emits ~93 frames/sec; 200 ms
-    // is ~18 frames. Feed up to 32 to leave headroom for any internal
-    // warm-up the GREEN matcher introduces.
+    // is ~18 frames. Feed up to 32 to leave headroom for the matcher's
+    // warm-up frames.
     while started.elapsed() < Duration::from_millis(200) && frames_fed < 32 {
         matcher.observe(
             pitch_update_a4(frames_fed * 512),

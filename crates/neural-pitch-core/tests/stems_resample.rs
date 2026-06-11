@@ -25,7 +25,7 @@ use tokio_util::sync::CancellationToken;
 const CAPTURE_SR_HZ: u32 = 48_000;
 const DURATION_MS: u64 = 2_000;
 
-#[ignore = "ort cpu-fallback path is too slow on the CI matrix; HTDEMUCS_MODEL_URL/SHA256 are also placeholders until the upstream commit is pinned, so this test only exercises a sideloaded model on the local gate"]
+#[ignore = "htdemucs onnx path is too slow on the CI matrix; runs locally"]
 #[test]
 fn stems_resamples_48khz_input_back_to_48khz_output() {
     let n_samples = (CAPTURE_SR_HZ as u64 * DURATION_MS / 1_000) as usize;

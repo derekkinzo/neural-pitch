@@ -70,7 +70,7 @@ fn import_audio_file_inserts_imported_row_and_returns_id() {
     std::fs::create_dir_all(&tmp_root).expect("create tmp root");
 
     // Library + recordings_dir share the same parent so the imports/
-    // sub-directory the GREEN path creates lives under the same
+    // sub-directory the import path creates lives under the same
     // app-data root the production shell uses.
     let db_path = tmp_root.join("library.sqlite");
     let lib = RecordingsLibrary::new(&db_path).expect("open library");

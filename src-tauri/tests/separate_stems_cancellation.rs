@@ -128,7 +128,7 @@ fn separate_stems_returns_cancelled_when_token_trips_mid_job() {
         )
     });
 
-    // Sleep 50 ms so the GREEN separator has a chance to pass its first
+    // Sleep 50 ms so the separator has a chance to pass its first
     // checkpoint (decode start) before the token trips. The cancellation
     // budget in the spec is "<500 ms" wall-clock from `cancel()` to
     // `Err(Cancelled)` so the deadline below covers it with margin.

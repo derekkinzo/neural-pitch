@@ -12,7 +12,14 @@ default-run = "neural-pitch"
 
 [lib]
 name       = "neural_pitch_lib"
-crate-type = ["staticlib", "cdylib", "rlib"]
+# Tauri desktop targets need `cdylib` (the shell loads the lib at
+# runtime) and `rlib` (the integration tests link against the headless
+# `*_blocking` helpers). `staticlib` is intentionally omitted: it
+# duplicates the `.rlib` outputs under `target/{debug,release}/deps/`
+# and produces "output filename collision" warnings on every test
+# build, which the workspace's `-D warnings` policy turns into a
+# hard failure.
+crate-type = ["cdylib", "rlib"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }

@@ -142,9 +142,9 @@ fn separate_stems_persists_four_flacs_and_stem_results_row_then_caches() {
     let separator = Arc::new(StemSeparator::new());
     let baseline_invocations = separator.onnx_invocation_count().count;
 
-    // 1) Cache miss — first separate. Drives the GREEN path through
-    //    decode → separate → encode and persists four FLACs + one
-    //    stem_results row.
+    // 1) Cache miss — first separate. Drives the
+    //    decode → separate → encode pipeline and persists four FLACs
+    //    plus one `stem_results` row.
     let sink_first = CapturingProgressSink::default();
     let cancel_first = CancellationToken::new();
     let summary_first: StemSummary = separate_stems_blocking(
@@ -190,8 +190,8 @@ fn separate_stems_persists_four_flacs_and_stem_results_row_then_caches() {
         );
     }
 
-    // GREEN must have invoked the ONNX session exactly once during the
-    // cache-miss path.
+    // The cache-miss path must have invoked the ONNX session at least
+    // once.
     let after_first = separator.onnx_invocation_count().count;
     assert!(
         after_first > baseline_invocations,
@@ -238,17 +238,17 @@ fn separate_stems_persists_four_flacs_and_stem_results_row_then_caches() {
     );
 
     // The four cache-hit paths must equal the cache-miss paths
-    // verbatim — the `stem_results` row is the source of truth, so a
-    // GREEN reshuffle of the on-disk filenames between the two calls
-    // would drift the cache and surface here.
+    // verbatim — the `stem_results` row is the source of truth, so any
+    // reshuffle of the on-disk filenames between the two calls would
+    // drift the cache and surface here.
     assert_eq!(summary_second.vocals_path, summary_first.vocals_path);
     assert_eq!(summary_second.drums_path, summary_first.drums_path);
     assert_eq!(summary_second.bass_path, summary_first.bass_path);
     assert_eq!(summary_second.other_path, summary_first.other_path);
 
     // Cache-hit path emits at most one terminal tick (or zero — the
-    // spec leaves the choice to the GREEN path; this assertion is a
-    // sanity guard against a runaway emit loop).
+    // spec leaves the choice to the implementation; this assertion is
+    // a sanity guard against a runaway emit loop).
     let ticks = sink_second.snapshot();
     assert!(
         ticks.len() <= 1,
@@ -257,7 +257,7 @@ fn separate_stems_persists_four_flacs_and_stem_results_row_then_caches() {
     );
 
     // The cache-miss path emitted at least one tick covering decode,
-    // separate, or encode — an empty tick set means the GREEN path
+    // separate, or encode — an empty tick set means the implementation
     // forgot to wire the progress sink.
     let first_ticks = sink_first.snapshot();
     assert!(

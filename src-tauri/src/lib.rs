@@ -12,8 +12,8 @@ pub mod commands_drill;
 pub mod sink;
 pub mod state;
 // File-import / Basic Pitch transcribe / MIDI export.
-// Gated behind `feature = "neural"` because the GREEN path depends on
-// `neural-pitch-core/poly` (which itself only compiles under
+// Gated behind `feature = "neural"` because the implementation depends
+// on `neural-pitch-core/poly` (which itself only compiles under
 // `neural-pitch-core/neural`). Under `--no-default-features` the module
 // is compiled out entirely so the classical-only build stays clean.
 #[cfg(feature = "neural")]
@@ -75,6 +75,7 @@ pub fn run() {
                 PathBuf::from(".")
             });
             let recordings_dir = app_data.join("recordings");
+            let models_dir = app_data.join("models");
             // Best-effort: ensure the recordings dir exists. The library
             // open below also creates the parent directory if needed.
             if let Err(e) = std::fs::create_dir_all(&recordings_dir) {
@@ -84,12 +85,25 @@ pub fn run() {
                     "could not create recordings directory at startup",
                 );
             }
+            if let Err(e) = std::fs::create_dir_all(&models_dir) {
+                tracing::warn!(
+                    error = %e,
+                    path = %models_dir.display(),
+                    "could not create models directory at startup",
+                );
+            }
             let db_path = recordings_dir.join("library.sqlite");
             let library = Arc::new(
                 RecordingsLibrary::new(&db_path)
                     .map_err(|e| format!("open recordings library: {e:#}"))?,
             );
-            let state = AppState::new(Arc::clone(&store), settings, library, recordings_dir);
+            let state = AppState::new(
+                Arc::clone(&store),
+                settings,
+                library,
+                recordings_dir,
+                models_dir,
+            );
             app.manage(state);
             Ok(())
         })

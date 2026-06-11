@@ -1,13 +1,14 @@
 #![allow(clippy::doc_markdown)]
 //! Backend factory for [`PitchEstimator`] instances.
 //!
-//! Currently exposes the classical time-domain backends `Backend::YinMpm`
-//! (YIN with parabolic interpolation) and `Backend::Mpm` (McLeod Pitch
+//! Exposes the classical time-domain backends `Backend::YinMpm` (YIN
+//! with parabolic interpolation) and `Backend::Mpm` (McLeod Pitch
 //! Method, sharing the same [`yin::YinMpmEstimator`] struct via
 //! [`yin::YinAlgorithm`]). The pYIN and neural backends
 //! ([`crate::pitch::pyin::PYinEstimator`],
-//! [`crate::pitch::crepe::CrepeTinyEstimator`]) are constructed directly
-//! by callers and are not yet routed through this factory.
+//! [`crate::pitch::crepe::CrepeTinyEstimator`]) are constructed
+//! directly by callers; this factory exposes only the time-domain
+//! backends.
 
 use std::path::Path;
 

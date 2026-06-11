@@ -16,9 +16,11 @@
 //!
 //! 2. [`transcribe_recording_blocking`] — looks up the recording row, hits
 //!    the `analysis_cache` (`("basic-pitch", "1.0")` key), and on a cache
-//!    miss decodes the on-disk WAV, runs a deterministic mono pitch + onset
-//!    extractor over the buffer, persists the postcard-encoded
-//!    [`WirePolyResult`], and returns [`TranscribeSummary`].
+//!    miss decodes the on-disk audio file into a mono `f32` buffer, hands
+//!    it to the bundled Basic Pitch v1 ONNX model (Bittner et al.,
+//!    ICASSP 2022) for polyphonic note extraction, persists the
+//!    postcard-encoded [`WirePolyResult`], and returns
+//!    [`TranscribeSummary`].
 //!
 //! 3. [`export_midi_blocking`] — postcard-decodes the cached blob, emits an
 //!    SMF type-1 byte stream via the always-on `midly` dependency, and
@@ -32,12 +34,17 @@
 use std::fs::OpenOptions;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 
 use midly::num::{u4, u7, u15, u24, u28};
 use midly::{Format, Header, MetaMessage, MidiMessage, Smf, Timing, TrackEvent, TrackEventKind};
+use neural_pitch_core::pitch::EstimatorError;
+use neural_pitch_core::poly::PolyEstimator;
+use neural_pitch_core::poly::basic_pitch::BasicPitchEstimator;
 use neural_pitch_core::store::{
     ListFilter, NewRecording, Recording, RecordingId, RecordingsLibrary,
 };
+use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -70,10 +77,11 @@ const TICKS_PER_QUARTER: u16 = 480;
 /// Per-tick progress message emitted on the transcribe channel.
 ///
 /// Cached path emits exactly one message with `percent: 1.0`,
-/// `current_window == total_windows`. Fresh runs emit one tick per inference
-/// window the deterministic transcriber processes (a single window today) so
-/// the front-end progress UI ticks exactly once per audio buffer regardless
-/// of cache vs. fresh path.
+/// `current_window == total_windows`. Fresh runs emit a single terminal
+/// tick once Basic Pitch finishes — the underlying ONNX session owns the
+/// inner window loop, so per-window progress would require restructuring
+/// the estimator's API. The front-end progress UI ticks exactly once per
+/// audio buffer regardless of cache vs. fresh path.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct TranscribeProgress {
@@ -142,11 +150,13 @@ struct WirePolyResult {
     duration_ms: u64,
 }
 
-/// One note event recovered from the deterministic transcribe pass. Mirrors
-/// `neural_pitch_core::poly::NoteEvent` minus the optional pitch-bend curve
-/// (the deterministic transcriber does not emit per-note pitch bend; the curve hook lives
-/// in [`crate::commands::export_midi`] when the algo team's
-/// `BasicPitchEstimator` ships its variant).
+/// One note event recovered from a Basic Pitch transcribe pass. Mirrors
+/// `neural_pitch_core::poly::NoteEvent` minus the optional pitch-bend
+/// curve — the IPC wire shape stores discrete note events; the curve
+/// (when present on the upstream `NoteEvent`) is dropped during the
+/// `PolyResult -> WirePolyResult` conversion because the SMF emitter
+/// writes a single `NoteOn` / `NoteOff` pair per note (no per-sample
+/// pitch-bend track).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct WireNoteEvent {
     /// MIDI note number (`0..=127`).
@@ -226,12 +236,12 @@ pub enum TranscribeError {
 /// Headless twin of the `import_audio_file` Tauri command.
 ///
 /// Workflow:
-/// 1. Lower-case extension; reject anything outside `{wav, flac, mp3}`.
+/// 1. Lower-case extension; reject anything outside `{wav}`.
 /// 2. `metadata()` for size; reject `> IMPORT_SIZE_LIMIT_BYTES` *before*
 ///    opening the file (cheap rejection — no decoder spin-up cost).
-/// 3. Probe the WAV header inline (RIFF/WAVE/fmt /data). The current
-///    baseline only ships the WAV path; FLAC / MP3 probes are reserved for
-///    a follow-up that pulls in `claxon` / `minimp3`.
+/// 3. Probe the WAV header inline (RIFF/WAVE/fmt /data). FLAC sources
+///    are read by the live-recording flow only — the on-disk import
+///    flow accepts WAV. MP3 is out of scope.
 /// 4. Mint a [`RecordingId`], copy the source file to
 ///    `{recordings_dir}/imports/<uuid>.<ext>` (preserves bytes),
 /// 5. Insert a `NewRecording` with `instrument_profile = "Imported"`,
@@ -248,7 +258,7 @@ pub fn import_audio_file_blocking(
         .and_then(|os| os.to_str())
         .map(str::to_ascii_lowercase)
         .unwrap_or_default();
-    if !matches!(ext.as_str(), "wav" | "flac" | "mp3") {
+    if ext.as_str() != "wav" {
         return Err(ImportError::UnsupportedExtension(ext));
     }
 
@@ -258,18 +268,11 @@ pub fn import_audio_file_blocking(
         return Err(ImportError::TooLarge { bytes: meta.len() });
     }
 
-    // 3) Probe. Only the WAV path is wired today; the
-    //    FLAC / MP3 arms surface a `decode failed` error that the front-end
-    //    can coerce into the "format-not-yet-supported" copy until the
-    //    follow-up resampler lands.
-    let probe = match ext.as_str() {
-        "wav" => probe_wav(source_path)?,
-        other => {
-            return Err(ImportError::DecodeFailed(format!(
-                "{other} probe not yet wired (WAV only)"
-            )));
-        }
-    };
+    // 3) Probe the WAV header inline. The on-disk import surface is
+    //    WAV-only; FLAC sources are produced by the live-recording flow
+    //    and read directly by `decode_audio_mono` further down the
+    //    transcribe pipeline.
+    let probe = probe_wav(source_path)?;
 
     // 4) Mint a *file* UUIDv7 up-front so we can lock in the on-disk
     //    filename column before SQLite mints its own row id. The row id
@@ -447,11 +450,11 @@ fn probe_wav(path: &Path) -> Result<AudioProbe, ImportError> {
 /// `analysis_cache` row, emit one terminal `TranscribeProgress` tick, and
 /// return [`TranscribeSummary`] with `was_cached = true`.
 ///
-/// Cache miss / `force_refresh`: open the WAV under `recordings_dir`,
-/// run a deterministic mono pitch-and-onset extractor on the buffer to
-/// produce one or more [`WireNoteEvent`]s, postcard-encode the result,
-/// upsert via `library.upsert_analysis(..)`, and return
-/// [`TranscribeSummary`] with `was_cached = false`.
+/// Cache miss / `force_refresh`: open the audio file under
+/// `recordings_dir`, run Basic Pitch v1 (Bittner et al., ICASSP 2022)
+/// over the mono buffer to produce a [`Vec<WireNoteEvent>`], postcard-
+/// encode the result, upsert via `library.upsert_analysis(..)`, and
+/// return [`TranscribeSummary`] with `was_cached = false`.
 ///
 /// `stem_kind` keys the analysis cache on the four-tuple
 /// `(recording_id, "basic-pitch", "1.0", stem_kind)`. `None` round-trips
@@ -530,7 +533,8 @@ pub fn transcribe_recording_blocking(
     }
     let duration_ms = (samples.len() as u64).saturating_mul(1_000) / u64::from(sample_rate_hz);
 
-    let notes = transcribe_buffer(&samples, sample_rate_hz, duration_ms);
+    let notes = transcribe_buffer(&samples, sample_rate_hz)
+        .map_err(|e| TranscribeError::AnalyzerFailed(format!("{e:#}")))?;
     let wire = WirePolyResult { notes, duration_ms };
     let blob = postcard::to_allocvec(&wire)
         .map_err(|e| TranscribeError::AnalyzerFailed(format!("postcard encode: {e:#}")))?;
@@ -823,66 +827,58 @@ fn decode_float32_mono(bytes: &[u8], channels: u16) -> Vec<f32> {
     out
 }
 
-/// Deterministic transcribe: zero-crossing-rate frequency estimator over a
-/// single window, plus an RMS-derived velocity. Recovers exactly one
-/// note for clean monophonic material — which is the contract the transcribe
-/// integration tests assert ("note_count >= 1 for a 1 s 440 Hz tone").
+/// Process-wide cache of the bundled Basic Pitch v1 ONNX session.
 ///
-/// This is the placeholder integration the IPC layer ships against until
-/// the algo team's `BasicPitchEstimator::from_bundled` polyphonic
-/// transcriber lands; the Tauri command surface, the cache key, the wire
-/// shape, and the front-end progress contract are stable across the swap.
-fn transcribe_buffer(samples: &[f32], sample_rate_hz: u32, duration_ms: u64) -> Vec<WireNoteEvent> {
-    if samples.is_empty() || duration_ms == 0 {
-        return Vec::new();
-    }
+/// The estimator carries an `ort::Session` (~17 MB of weights + a
+/// platform-specific execution provider) that is expensive to spin up
+/// per call. The inner [`Mutex`] serialises concurrent transcribes —
+/// [`PolyEstimator::analyze`] takes `&mut self` and `ort::Session` is
+/// `Send` but not `Sync`. Concurrent transcribes of distinct
+/// recordings serialise behind this lock; that is acceptable in the
+/// single-user desktop UX, where only one transcribe runs at a time.
+///
+/// Initialisation is fallible (ONNX Runtime may fail to load the
+/// platform shared library), so we cache the constructed estimator
+/// behind a `OnceLock<Mutex<_>>` only on success — a failed first call
+/// surfaces the [`EstimatorError`] to the caller AND leaves the cell
+/// empty so the next call retries the construction.
+static BASIC_PITCH: OnceLock<Mutex<BasicPitchEstimator>> = OnceLock::new();
 
-    // RMS gates near-silence so we do not emit a note for a recording that
-    // is just background noise.
-    let rms = (samples.iter().map(|s| s * s).sum::<f32>() / samples.len() as f32).sqrt();
-    if rms < 0.01 {
-        return Vec::new();
+/// Run Basic Pitch v1 (Bittner et al., ICASSP 2022) over a mono `f32`
+/// buffer and project the resulting note events onto the IPC wire shape.
+///
+/// The estimator owns the resampling step internally — it accepts mono
+/// PCM at any rate and resamples to its native 22.05 kHz before
+/// inference (zero-copy when the input already matches). Per-note
+/// pitch-bend curves on the upstream `NoteEvent` are dropped during the
+/// projection because the SMF emitter writes a single `NoteOn` /
+/// `NoteOff` pair per note (no per-sample pitch-bend track).
+fn transcribe_buffer(
+    samples: &[f32],
+    sample_rate_hz: u32,
+) -> Result<Vec<WireNoteEvent>, EstimatorError> {
+    if BASIC_PITCH.get().is_none() {
+        let estimator = BasicPitchEstimator::from_bundled()?;
+        // `set` only fails if another thread won the race; in that case
+        // we silently drop our local copy and use the winner on the
+        // `get()` below.
+        let _ = BASIC_PITCH.set(Mutex::new(estimator));
     }
-
-    // Zero-crossing rate → fundamental frequency estimate. For a clean
-    // sinusoid this is exact; for harmonic-rich material it picks up the
-    // strongest periodic component, which is good enough for the deterministic
-    // baseline.
-    let mut crossings: u64 = 0;
-    for window in samples.windows(2) {
-        let prev = window[0];
-        let curr = window[1];
-        if prev.signum() != curr.signum() && (prev != 0.0 || curr != 0.0) {
-            crossings += 1;
-        }
-    }
-    if crossings == 0 {
-        return Vec::new();
-    }
-    let seconds = samples.len() as f32 / sample_rate_hz as f32;
-    if seconds <= 0.0 {
-        return Vec::new();
-    }
-    let freq_hz = crossings as f32 / (2.0 * seconds);
-    if !(27.5..=4_186.0).contains(&freq_hz) {
-        // Outside the 88-key piano range; reject as noise.
-        return Vec::new();
-    }
-
-    // Hz → MIDI. 440 Hz → 69, +1 per semitone.
-    let midi_f = 69.0 + 12.0 * (freq_hz / 440.0).log2();
-    let midi = midi_f.round().clamp(0.0, 127.0) as u8;
-
-    // Velocity from RMS, scaled into the standard MIDI range.
-    let vel_f = (rms * 4.0 * 127.0).clamp(1.0, 127.0);
-    let velocity = vel_f.round() as u8;
-
-    vec![WireNoteEvent {
-        midi,
-        start_ms: 0,
-        end_ms: duration_ms,
-        velocity,
-    }]
+    let cell = BASIC_PITCH
+        .get()
+        .ok_or_else(|| EstimatorError::Ort("basic-pitch session unavailable".to_string()))?;
+    let mut guard = cell.lock();
+    let result = guard.analyze(samples, sample_rate_hz)?;
+    Ok(result
+        .notes
+        .into_iter()
+        .map(|n| WireNoteEvent {
+            midi: n.midi,
+            start_ms: n.start_ms,
+            end_ms: n.end_ms,
+            velocity: n.velocity,
+        })
+        .collect())
 }
 
 /// Emit a single terminal `percent: 1.0` tick on the optional progress

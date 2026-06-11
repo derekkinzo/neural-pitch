@@ -1,7 +1,13 @@
 //! HTDemucs ONNX session wrapper and per-segment forward pass.
 //!
 //! Holds an `ort::Session` and exposes a single-segment
-//! `forward(stereo_44k1: [1, 2, 352_800]) -> [1, 4, 2, 352_800]` call.
+//! `forward(stereo_44k1: [1, 2, SEGMENT_SAMPLES]) -> [1, 4, 2, SEGMENT_SAMPLES]`
+//! call. The input tensor's third dim is verified against
+//! [`crate::stems::segment::SEGMENT_SAMPLES`] at session-open time so
+//! a future model-export drift surfaces as a typed
+//! [`StemError::Configuration`] error rather than as a cryptic shape-
+//! mismatch error during the first inference.
+//!
 //! The I/O signature is resolved defensively at construction time so
 //! exports that emit four named outputs (one per stem) instead of one
 //! stacked tensor still resolve cleanly — same defensive name-suffix
@@ -92,11 +98,12 @@ impl Session {
             .commit_from_memory(&bytes)
             .map_err(|e| StemError::Ort(format!("commit_from_memory: {e}")))?;
 
-        let input_name = session
+        let input_meta = session
             .inputs()
             .first()
-            .map(|i| i.name().to_string())
             .ok_or_else(|| StemError::Ort("htdemucs onnx has no inputs".to_string()))?;
+        let input_name = input_meta.name().to_string();
+        verify_input_segment_dim(input_meta)?;
 
         let output_binding = resolve_output_binding(&session)?;
 
@@ -163,6 +170,35 @@ impl Session {
             }),
         }
     }
+}
+
+/// Constructor-time guard: if the input tensor's third dim is fixed in
+/// the model metadata and disagrees with [`SEGMENT_SAMPLES`], surface a
+/// typed [`StemError::Configuration`] with both expected + observed
+/// values so a future model-export drift fails fast at session-open
+/// time rather than as a cryptic shape-mismatch error during the first
+/// inference.
+///
+/// Models that export the third dim as a symbolic / dynamic axis
+/// (`-1`) are accepted without a check; the run-time `forward` call
+/// still feeds exactly `2 * SEGMENT_SAMPLES` floats so a dynamic export
+/// is functionally equivalent.
+fn verify_input_segment_dim(input: &ort::value::Outlet) -> Result<(), StemError> {
+    let Some(shape) = input.dtype().tensor_shape() else {
+        return Ok(());
+    };
+    let dims: &[i64] = shape;
+    if let Some(&third) = dims.get(2)
+        && third > 0
+        && i64::try_from(SEGMENT_SAMPLES).is_ok_and(|expected| third != expected)
+    {
+        return Err(StemError::Configuration(format!(
+            "htdemucs onnx input expects {third} samples on axis 2, but \
+             SEGMENT_SAMPLES = {SEGMENT_SAMPLES}; the bundled model and \
+             the segmenter must agree",
+        )));
+    }
+    Ok(())
 }
 
 /// Inspect the session's output metadata and decide whether the model

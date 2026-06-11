@@ -173,6 +173,18 @@ impl StemSeparator {
         download::ensure_at(dest_dir, progress)
     }
 
+    /// Cancellation-aware variant of [`Self::ensure_model_at`]. The
+    /// cancel token is polled inside the streaming-read loop so a
+    /// tripped token short-circuits the download mid-blob rather than
+    /// waiting for the full ~316 MB to finish.
+    pub fn ensure_model_at_with_cancel<F: FnMut(f32)>(
+        dest_dir: &Path,
+        progress: F,
+        cancel: &CancellationToken,
+    ) -> Result<PathBuf, StemError> {
+        download::ensure_at_with_cancel(dest_dir, progress, cancel)
+    }
+
     /// Open an HTDemucs ONNX session against a previously-cached
     /// model file.
     pub fn open(model_path: &Path) -> Result<Self, StemError> {

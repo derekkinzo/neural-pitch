@@ -29,7 +29,7 @@ use tokio_util::sync::CancellationToken;
 const SR_HZ: u32 = 44_100;
 const DURATION_MS: u64 = 30_000;
 
-#[ignore = "ort cpu-fallback path is too slow on the CI matrix; HTDEMUCS_MODEL_URL/SHA256 are also placeholders until the upstream commit is pinned, so this test only exercises a sideloaded model on the local gate"]
+#[ignore = "htdemucs onnx path is too slow on the CI matrix; runs locally"]
 #[test]
 fn stems_cancellation_returns_cancelled_error() {
     let n_samples = (SR_HZ as u64 * DURATION_MS / 1_000) as usize;

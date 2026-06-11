@@ -1,7 +1,7 @@
 #![allow(missing_docs)]
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 
-//! Phase 4 RED — when every voiced frame is exactly on the target MIDI,
+//! When every voiced frame is exactly on the target MIDI,
 //! `in_tune_fraction` is `1.0` and `mean_cents_error_abs` is `0.0`.
 
 use approx::assert_relative_eq;

@@ -1,11 +1,11 @@
-//! HTDemucs stem-separation surface.
+//! HTDemucs stem-separation surface (Defossez 2021).
 //!
-//! The general-purpose pitch-detection app gains an opt-in stem subsystem
-//! that splits a recording into the four standard Demucs buses (vocals /
-//! drums / bass / other) and writes each as a FLAC under
-//! `$APPDATA/recordings/<recording_id>/stems/<stem>.flac`. The pointer
-//! row lives in `stem_results` (see V0003 migration); the FLAC payload
-//! lives on disk so the DB stays small and the WAL stays fast.
+//! Splits a recording into the four standard Demucs buses (vocals /
+//! drums / bass / other) via the HTDemucs ONNX model and writes each as
+//! a FLAC under `$APPDATA/recordings/<recording_id>/stems/<stem>.flac`.
+//! The pointer row lives in `stem_results` (see V0003 migration); the
+//! FLAC payload lives on disk so the DB stays small and the WAL stays
+//! fast.
 //!
 //! This module exposes pure-blocking headless twins so the Tauri command
 //! layer in [`crate::commands`] can `spawn_blocking` them and the
@@ -14,17 +14,9 @@
 //! [`crate::transcribe`].
 //!
 //! The whole module is gated behind `feature = "neural"` at the
-//! `mod stems;` declaration in `lib.rs`; no inner `#![cfg]` is needed
-//! here.
-//!
-//! Headless separator strategy: the GREEN path here invokes a synthetic
-//! four-bus splitter — every bus carries a deterministic projection of
-//! the input mono buffer (vocals = original, drums = onset envelope,
-//! bass = low-pass, other = residual). The on-disk shape, the cache row,
-//! the cancellation polling, and the progress channel all match the
-//! stem-separation contract exactly so a future ONNX-driven HTDemucs swap is a
-//! drop-in for the inner `synth::split_four_bus` call without touching
-//! the Tauri / persistence wiring.
+//! `mod stems;` declaration in `lib.rs`; the inner core surface in
+//! `neural_pitch_core::stems` runs the ONNX inference pass and the
+//! 48 kHz ↔ 44.1 kHz resample pair.
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -32,6 +24,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use neural_pitch_core::pipeline::{FlacRecordingSink, RecordingSink};
 use neural_pitch_core::store::{ListFilter, RecordingId, RecordingsLibrary};
+use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio_util::sync::CancellationToken;
@@ -40,27 +33,21 @@ use tokio_util::sync::CancellationToken;
 /// `stem_results.separator_version` and on the cache key. Bumped in
 /// lock-step with any HTDemucs model swap or the on-the-wire
 /// [`SeparateProgress`] / [`StemSummary`] schema change so cached blobs
-/// invalidate cleanly when a future ONNX checkpoint swap lands.
+/// invalidate cleanly on any ONNX checkpoint swap.
 pub const HTDEMUCS_SEPARATOR_VERSION: &str = "htdemucs-4.0.1";
 
-/// SHA-256 checksum of the HTDemucs ONNX model bundle. Verified by
-/// [`download_stem_model_blocking`] before the temp file is renamed into
-/// `$APPDATA/models/htdemucs-4.0.1.onnx` so a corrupted or man-in-the-
-/// middle download cannot land in the model cache.
-///
-/// Sentinel value; a future commit replaces it with the real
-/// upstream checksum baked next to [`HTDEMUCS_SEPARATOR_VERSION`].
-pub const HTDEMUCS_MODEL_SHA256: &str =
-    "0000000000000000000000000000000000000000000000000000000000000000";
+/// SHA-256 checksum of the HTDemucs ONNX model bundle, mirroring the
+/// build-time constant verified inside
+/// [`neural_pitch_core::stems::download::ensure_at`] before the temp
+/// file is renamed into `<models_dir>/htdemucs.onnx`.
+pub const HTDEMUCS_MODEL_SHA256: &str = neural_pitch_core::stems::HTDEMUCS_SHA256;
 
 /// Public download URL for the HTDemucs ONNX model bundle. The model is
-/// not committed to the repo (~80 MB); first separation attempts fetch
-/// it on demand and cache it under `$APPDATA/models/`. Surfaced in error
-/// messages when the user is offline so the front-end can paste the URL
-/// into a manual download flow.
-///
-/// Placeholder; a future commit wires the canonical mirror URL.
-pub const HTDEMUCS_MODEL_URL: &str = "https://example.invalid/htdemucs-4.0.1.onnx";
+/// not committed to the repo (~316 MB); first separation attempts fetch
+/// it on demand and cache it under `<models_dir>/htdemucs.onnx`.
+/// Surfaced in error messages when the user is offline so the front-end
+/// can paste the URL into a manual download flow.
+pub const HTDEMUCS_MODEL_URL: &str = neural_pitch_core::stems::HTDEMUCS_MODEL_URL;
 
 /// One of the four standard Demucs buses. Serialised as `snake_case` so
 /// the on-the-wire IPC discriminant matches the on-disk filename
@@ -109,7 +96,7 @@ impl StemKind {
 #[serde(rename_all = "snake_case")]
 pub enum SeparateStage {
     /// First-run path — the HTDemucs ONNX is being fetched into
-    /// `$APPDATA/models/`.
+    /// `<models_dir>/htdemucs.onnx`.
     Download,
     /// Source recording is being decoded into the f32 PCM buffer the
     /// separator consumes.
@@ -212,7 +199,7 @@ pub enum StemError {
     #[error("model checksum mismatch (expected {expected}, observed {observed})")]
     ChecksumMismatch {
         /// Expected SHA-256 from the build-time constant.
-        expected: &'static str,
+        expected: String,
         /// Observed SHA-256 from the freshly-downloaded payload.
         observed: String,
     },
@@ -243,10 +230,28 @@ pub enum StemError {
     /// special-casing `JoinError::is_panic()`.
     #[error("separation worker panicked: {0}")]
     Panicked(String),
-    /// GREEN path not yet wired. Reserved for future call sites; the
-    /// Current wiring no longer surfaces this.
-    #[error("not implemented")]
-    NotImplemented,
+}
+
+impl From<neural_pitch_core::stems::StemError> for StemError {
+    fn from(value: neural_pitch_core::stems::StemError) -> Self {
+        use neural_pitch_core::stems::StemError as Core;
+        match value {
+            Core::ModelNotFound(_) | Core::OfflineFirstUse { .. } => {
+                Self::ModelMissing(HTDEMUCS_MODEL_URL)
+            }
+            Core::HashMismatch { expected, actual } => Self::ChecksumMismatch {
+                expected,
+                observed: actual,
+            },
+            Core::Cancelled => Self::Cancelled,
+            Core::Io(e) => Self::IoError(e),
+            Core::Ort(msg) | Core::Configuration(msg) => Self::SeparatorFailed(msg),
+            // The upstream `StemError` is `#[non_exhaustive]`; new
+            // variants surface here as a generic separator failure
+            // until they grow a dedicated mapping.
+            other => Self::SeparatorFailed(format!("{other:#}")),
+        }
+    }
 }
 
 /// Counter snapshot returned by
@@ -266,26 +271,41 @@ pub struct OnnxInvocationSnapshot {
 /// inference-count counter persist across cache-hit fast-paths and
 /// cache-miss warm-up paths.
 ///
-/// Today the struct holds an inference-count counter and no real ONNX
-/// session — the GREEN headless path runs a synthetic four-bus
-/// splitter so the Tauri / persistence wiring can be verified end-to-
-/// end without HTDemucs on the test matrix. A future swap to
-/// `neural_pitch_core::stems::StemSeparator` is a drop-in inside
-/// [`separate_stems_blocking`] without touching the public surface.
-#[derive(Debug, Default)]
+/// The inner `neural_pitch_core::stems::StemSeparator` is constructed on
+/// the first cache-miss separation pass; the ONNX session load is
+/// O(seconds), so deferring it past startup keeps app boot snappy.
+#[derive(Default)]
 pub struct StemSeparator {
     /// Inference-count snapshot. Bumped exactly once per cache-miss
     /// separation pass; cache-hit fast paths never touch the counter.
     invocation_count: AtomicU64,
+    /// Optional override for the on-disk model cache directory. `None`
+    /// resolves the platform default via
+    /// `neural_pitch_core::stems::StemSeparator::ensure_model`.
+    models_dir: Option<PathBuf>,
+    /// Lazily-initialised ONNX-backed core separator. Populated under
+    /// the mutex on the first cache-miss pass and reused thereafter.
+    inner: Mutex<Option<neural_pitch_core::stems::StemSeparator>>,
 }
 
 impl StemSeparator {
-    /// Construct an empty separator. The GREEN path initialises the
-    /// ONNX session lazily on the first `separate(..)` call so the
-    /// constructor is cheap.
+    /// Construct a separator that resolves the model cache via the
+    /// per-platform default (`directories::ProjectDirs`).
     #[must_use]
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Construct a separator that resolves the model cache under an
+    /// explicit directory. The Tauri shell uses this so the on-disk
+    /// model location matches `app.path().app_data_dir()`.
+    #[must_use]
+    pub fn with_models_dir(models_dir: PathBuf) -> Self {
+        Self {
+            invocation_count: AtomicU64::new(0),
+            models_dir: Some(models_dir),
+            inner: Mutex::new(None),
+        }
     }
 
     /// Snapshot of the inference counter. The persistence test
@@ -306,11 +326,10 @@ impl StemSeparator {
 /// intermediate resample.
 const STEM_SAMPLE_RATE_HZ: u32 = 48_000;
 
-/// Hard-cap on the per-stem buffer size to keep the synthetic separator
-/// allocation bounded for absurdly long imports (the GREEN HTDemucs
-/// implementation has its own segment-based memory shape; the cap is
-/// inert in practice for realistic recordings).
-const STEM_MAX_SAMPLES: usize = 48_000 * 600; // 10 minutes at 48 kHz
+/// Mono channel count locked for the stem-separation pipeline. The
+/// recording sink writes mono FLACs and the core separator returns one
+/// `Vec<f32>` per stem at the input channel count.
+const STEM_CHANNELS: u32 = 1;
 
 /// Headless twin of the `separate_stems` Tauri command.
 ///
@@ -319,8 +338,10 @@ const STEM_MAX_SAMPLES: usize = 48_000 * 600; // 10 minutes at 48 kHz
 /// 2. Cache lookup against `stem_results` keyed on
 ///    `(recording_id, HTDEMUCS_SEPARATOR_VERSION)`. On hit the four
 ///    FLAC paths are returned and the ONNX session is never touched.
-/// 3. On miss decode the on-disk recording, run the four-bus splitter
-///    once, FLAC-encode each of the four stems into
+/// 3. On miss decode the on-disk recording, ensure the HTDemucs ONNX
+///    model is cached on disk (downloads on first use), run the
+///    four-bus split via [`neural_pitch_core::stems::StemSeparator`],
+///    FLAC-encode each of the four stems into
 ///    `<recordings_dir>/<recording_id>/stems/<slug>.flac`, and upsert
 ///    one `stem_results` row.
 /// 4. Emit one [`SeparateProgress`] tick per stage milestone; tolerate
@@ -399,12 +420,12 @@ pub fn separate_stems_blocking(
         return Err(StemError::Cancelled);
     }
 
-    // 4. Run the four-bus splitter. The GREEN HTDemucs implementation
-    //    plugs in here without touching anything else in this function.
-    emit(progress, recording_id, SeparateStage::Separate, 0.0);
-    separator.invocation_count.fetch_add(1, Ordering::Relaxed);
-    let split = synth_four_bus_split(&samples, &cancel)?;
-    emit(progress, recording_id, SeparateStage::Separate, 1.0);
+    // 4. Lazy-init the core separator (ensures the ONNX model is
+    //    cached, opens an ort session) and run the four-bus split.
+    //    The inner mutex is held only across the inference call so the
+    //    encode step below runs without blocking concurrent
+    //    re-separations on the shared `Arc<StemSeparator>`.
+    let split = run_separation(&separator, &samples, &cancel, progress, recording_id)?;
 
     if cancel.is_cancelled() {
         return Err(StemError::Cancelled);
@@ -490,34 +511,40 @@ pub fn read_stem_audio_blocking(
 }
 
 /// Headless twin of the `download_stem_model` Tauri command. Pulls the
-/// ~80 MB HTDemucs ONNX from [`HTDEMUCS_MODEL_URL`], verifies the
+/// HTDemucs ONNX from [`HTDEMUCS_MODEL_URL`] (~316 MB), verifies the
 /// streaming SHA-256 against [`HTDEMUCS_MODEL_SHA256`], and atomically
-/// renames the temp file into `<models_dir>/htdemucs-4.0.1.onnx`.
-///
-/// The HTTP-fetch path is intentionally not wired —
-/// the constants, on-disk layout, and the Tauri command surface are
-/// stable so the front-end and the ops layer can build against the
-/// final shape. `download_stem_model` returns
-/// [`StemError::ModelMissing`] (with [`HTDEMUCS_MODEL_URL`]) so the
-/// front-end can paste the URL into a manual download flow on metered
-/// networks.
+/// renames the temp file into `<models_dir>/htdemucs.onnx`. Idempotent:
+/// a cache hit verifies the on-disk SHA-256 and returns immediately.
 pub fn download_stem_model_blocking(
     models_dir: &Path,
     progress: Option<&dyn DownloadProgressSink>,
 ) -> Result<(), StemError> {
-    // Best-effort: ensure the models dir exists so a future GREEN
-    // network-fetch path lands in the right spot. The dir creation is
-    // not error-fatal — a write failure would surface from the rename
-    // step instead.
-    let _ = std::fs::create_dir_all(models_dir);
+    std::fs::create_dir_all(models_dir)?;
     if let Some(sink) = progress {
         sink.emit(DownloadProgress {
             bytes_downloaded: 0,
-            total_bytes: 0,
+            total_bytes: neural_pitch_core::stems::HTDEMUCS_SIZE_BYTES,
             percent: 0.0,
         });
     }
-    Err(StemError::ModelMissing(HTDEMUCS_MODEL_URL))
+    let total = neural_pitch_core::stems::HTDEMUCS_SIZE_BYTES;
+    neural_pitch_core::stems::download::ensure_at(models_dir, |percent| {
+        if let Some(sink) = progress {
+            sink.emit(DownloadProgress {
+                bytes_downloaded: ((f64::from(percent) * total as f64) as u64).min(total),
+                total_bytes: total,
+                percent,
+            });
+        }
+    })?;
+    if let Some(sink) = progress {
+        sink.emit(DownloadProgress {
+            bytes_downloaded: total,
+            total_bytes: total,
+            percent: 1.0,
+        });
+    }
+    Ok(())
 }
 
 // ----------------------------------------------------------------------------
@@ -533,10 +560,8 @@ struct WrittenStems {
     other: PathBuf,
 }
 
-/// Synthetic four-bus splitter result. Each `Vec<f32>` is mono PCM at
-/// 48 kHz. The GREEN HTDemucs implementation plugs in here without
-/// touching the surrounding wiring — same input shape, same output
-/// shape, same cancellation contract.
+/// In-memory four-bus split fed into [`write_four_stems`]. Each
+/// `Vec<f32>` is mono PCM at [`STEM_SAMPLE_RATE_HZ`].
 struct FourBusSplit {
     vocals: Vec<f32>,
     drums: Vec<f32>,
@@ -544,101 +569,85 @@ struct FourBusSplit {
     other: Vec<f32>,
 }
 
-/// Synthetic four-bus split. Vocals = identity. Drums = onset envelope
-/// (peak-tracked half-wave-rectified differential). Bass = single-pole
-/// low-pass at 200 Hz. Other = residual = source − bass − drums (the
-/// vocal cancel).
-///
-/// The output is deterministic and audibly distinguishable per bus on
-/// any non-trivial input, which is enough for the persistence test
-/// (`metadata.len() > 0` per stem). The HTDemucs swap is a drop-in
-/// inside this function.
-fn synth_four_bus_split(
+/// Resolve the on-disk model cache, downloading it on first use.
+/// Forwards download progress onto the supplied closure. The cancel
+/// token is polled inside the streaming-read loop so a tripped token
+/// short-circuits the download mid-blob rather than waiting for the
+/// full ~316 MB to finish.
+fn ensure_model_cached<F: FnMut(f32)>(
+    separator: &StemSeparator,
+    progress: F,
+    cancel: &CancellationToken,
+) -> Result<PathBuf, StemError> {
+    let path = if let Some(dir) = separator.models_dir.as_ref() {
+        neural_pitch_core::stems::StemSeparator::ensure_model_at_with_cancel(dir, progress, cancel)?
+    } else {
+        // The default-platform path is reserved for non-Tauri callers;
+        // it does not currently expose a cancel-aware variant. The
+        // shell always supplies an explicit models_dir, so this branch
+        // is exercised only by the headless tests.
+        neural_pitch_core::stems::StemSeparator::ensure_model(progress)?
+    };
+    Ok(path)
+}
+
+/// Run one HTDemucs separation pass. Holds the inner-mutex guard for
+/// the duration of the inference call so two concurrent calls on the
+/// same `Arc<StemSeparator>` serialise on the underlying ONNX session.
+/// Lazy-initialises the core ONNX-backed separator on the first call,
+/// emitting `Download` ticks while the model is being fetched.
+fn run_separation(
+    separator: &StemSeparator,
     samples: &[f32],
     cancel: &CancellationToken,
+    progress: Option<&dyn SeparateProgressSink>,
+    recording_id: RecordingId,
 ) -> Result<FourBusSplit, StemError> {
-    if samples.is_empty() {
-        return Err(StemError::SeparatorFailed(
-            "empty source buffer".to_string(),
-        ));
+    let mut inner_guard = separator.inner.lock();
+    if inner_guard.is_none() {
+        emit(progress, recording_id, SeparateStage::Download, 0.0);
+        let model_path = ensure_model_cached(
+            separator,
+            |p| {
+                emit(progress, recording_id, SeparateStage::Download, p);
+            },
+            cancel,
+        )?;
+        emit(progress, recording_id, SeparateStage::Download, 1.0);
+        *inner_guard = Some(neural_pitch_core::stems::StemSeparator::open(&model_path)?);
     }
-    if samples.len() > STEM_MAX_SAMPLES {
-        return Err(StemError::SeparatorFailed(format!(
-            "source buffer exceeds the {STEM_MAX_SAMPLES}-sample stem cap"
-        )));
-    }
+    let core = inner_guard
+        .as_mut()
+        .ok_or_else(|| StemError::SeparatorFailed("core separator missing".to_string()))?;
 
-    let n = samples.len();
-    let mut vocals = Vec::with_capacity(n);
-    let mut drums = Vec::with_capacity(n);
-    let mut bass = Vec::with_capacity(n);
-    let mut other = Vec::with_capacity(n);
-
-    // Single-pole low-pass coefficient for ~200 Hz at 48 kHz.
-    // alpha = exp(-2*pi*fc/fs); fc = 200, fs = 48 000.
-    let alpha = (-2.0_f32 * core::f32::consts::PI * 200.0 / STEM_SAMPLE_RATE_HZ as f32).exp();
-    let mut bass_state = 0.0_f32;
-    let mut prev = 0.0_f32;
-
-    // Cancellation poll cadence — once every 4096 samples is well
-    // under the spec's 500 ms budget at 48 kHz (~85 ms per chunk).
-    let poll_cadence = 4096;
-    // The GREEN HTDemucs path runs for ~3× the audio duration on a CPU
-    // host (~3 s on a 1 s clip). The synthetic splitter is several
-    // orders of magnitude faster, which would let a ~50 ms cancel-then-
-    // assert test race past the work and miss the window. Inserting a
-    // bounded sleep inside the poll loop simulates the per-chunk wall-
-    // clock cost of an ONNX inference pass — keeps the cancellation
-    // contract testable on this implementation while staying inert
-    // (~poll_cadence/sample_rate * sleep_ms) for production buffers.
-    let chunk_sleep = std::time::Duration::from_millis(8);
-
-    for (i, &s) in samples.iter().enumerate() {
-        if i % poll_cadence == 0 {
-            if cancel.is_cancelled() {
-                return Err(StemError::Cancelled);
-            }
-            if i > 0 {
-                std::thread::sleep(chunk_sleep);
-            }
-        }
-
-        // Vocals — identity.
-        vocals.push(s);
-
-        // Drums — half-wave-rectified differential. Crisp on transients,
-        // near-silent on sustained tones.
-        let diff = (s - prev).max(0.0);
-        drums.push(diff);
-        prev = s;
-
-        // Bass — one-pole low-pass.
-        bass_state = alpha * bass_state + (1.0 - alpha) * s;
-        bass.push(bass_state);
-
-        // Other — source minus bass minus a small fraction of drums.
-        // Carries the residual mid/high harmonic content not captured
-        // by the bass low-pass.
-        other.push(s - bass_state - 0.5 * diff);
-    }
-
+    emit(progress, recording_id, SeparateStage::Separate, 0.0);
+    separator.invocation_count.fetch_add(1, Ordering::Relaxed);
+    let stems = core.separate(
+        samples,
+        STEM_SAMPLE_RATE_HZ,
+        STEM_CHANNELS,
+        |p| emit(progress, recording_id, SeparateStage::Separate, p),
+        cancel,
+    )?;
+    emit(progress, recording_id, SeparateStage::Separate, 1.0);
     Ok(FourBusSplit {
-        vocals,
-        drums,
-        bass,
-        other,
+        vocals: stems.vocals,
+        drums: stems.drums,
+        bass: stems.bass,
+        other: stems.other,
     })
 }
 
 /// Encode each of the four stems through the existing
 /// `FlacRecordingSink`. The sink enforces 48 kHz / mono / 24-bit on its
-/// own; the synthetic splitter produces buffers matching that shape.
+/// own; the core separator returns mono buffers matching that shape
+/// when invoked with `channels = 1`.
 fn write_four_stems(
     stems_dir: &Path,
     split: &FourBusSplit,
     cancel: &CancellationToken,
 ) -> Result<WrittenStems, StemError> {
-    let mut written = WrittenStems {
+    let written = WrittenStems {
         vocals: stems_dir.join("vocals.flac"),
         drums: stems_dir.join("drums.flac"),
         bass: stems_dir.join("bass.flac"),
@@ -659,14 +668,6 @@ fn write_four_stems(
     }
     write_one_stem(&written.other, &split.other, cancel)?;
 
-    // Touch every field so the move-out fields used in
-    // `WrittenStems` are not flagged unused-mut by clippy.
-    let _ = (
-        &mut written.vocals,
-        &mut written.drums,
-        &mut written.bass,
-        &mut written.other,
-    );
     Ok(written)
 }
 

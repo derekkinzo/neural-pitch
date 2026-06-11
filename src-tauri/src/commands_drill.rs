@@ -16,10 +16,12 @@
 //! - `synthesize_prompt` exposes the additive synth as its own IPC for
 //!   the front-end's per-note rendering path.
 //!
-//! `State<'_, AppState>` is taken on every command for forward
-//! compatibility with the in-flight session map; today the helpers are
-//! stateless on session id, so the parameter is intentionally
-//! `let _ = state;` until the resume path lands.
+//! `State<'_, AppState>` is taken on every command so the IPC
+//! signature is stable across helpers that need the library handle and
+//! helpers that do not. The pure-validation entry points
+//! (`start_drill`, `synthesize_prompt`) keep the parameter on the
+//! signature with a `let _ = state;` discard so adding library access
+//! later does not change the on-the-wire shape.
 
 use std::sync::Arc;
 

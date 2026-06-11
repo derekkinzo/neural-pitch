@@ -2,27 +2,16 @@
 //! CREPE-tiny neural pitch estimator.
 //!
 //! CREPE-tiny (Kim et al., ICASSP 2018) is a 6-conv-layer cents-bin
-//! classifier. We target the MIT-licensed weights from
-//! `yqzhishen/onnxcrepe` v1.1.0 (1.96 MB) — the optional neural-backend
-//! complement to the classical YIN / MPM / pYIN estimators that always
-//! ship.
+//! classifier. The implementation here exposes only the hermetic stub
+//! variant used by the in-tree unit tests — autocorrelation pitch
+//! detection over the 48 kHz capture window, sized to satisfy the
+//! "recover 440 Hz within a few cents" stub-graph contract without
+//! pulling the real ONNX session into the test surface. Production
+//! offline analysis routes through pYIN; the live tuner uses YIN/MPM.
+//! The real-ORT inference path is not part of the shipping pipeline.
 //!
 //! CREPE has **no temporal cache tensor** — it is fully stateless. Each
-//! `process` call is a single forward pass over a 1024-sample @ 16 kHz
-//! window.
-//!
-//! # Backends
-//!
-//! Two backends share the [`CrepeTinyEstimator`] struct:
-//!
-//! * `Stub` — used by the unit-test suite. Performs autocorrelation
-//!   pitch detection over the raw 48 kHz window (the stub does not
-//!   round-trip through 16 kHz because the test invariant is
-//!   "recover 440 Hz within 5 cents"; a stub-internal resample would
-//!   only add quantisation noise).
-//! * `Onnx` — currently surfaces an [`EstimatorError::Ort`] with a
-//!   "real CREPE-tiny ONNX path not yet wired" message; the real-ONNX
-//!   inference path is not yet hooked up.
+//! `process` call is a single forward pass over the configured window.
 //!
 //! # Asset and license posture
 //!
@@ -40,24 +29,6 @@ const CREPE_CAPTURE_SAMPLE_RATE_HZ: u32 = 48_000;
 /// (resamples to ~320 samples at 16 kHz — the model's native 1024-sample
 /// frame is filled by overlap-buffering inside the estimator).
 const CREPE_WINDOW_SIZE: usize = 960;
-/// CREPE's native model rate after the `rubato` resample.
-#[allow(dead_code)]
-const CREPE_MODEL_SAMPLE_RATE_HZ: u32 = 16_000;
-/// CREPE's native model frame length, in 16 kHz samples.
-#[allow(dead_code)]
-const CREPE_MODEL_FRAME_SIZE: usize = 1024;
-
-/// Backend selected at constructor time: synthetic stub for hermetic
-/// unit tests, real ORT session for production.
-enum Backend {
-    /// Hermetic stub used by the unit-test suite — no ORT shared
-    /// library required.
-    Stub,
-    /// Real ONNX session held opaquely so callers do not depend on
-    /// `ort` 2.0 surface API.
-    #[allow(dead_code)]
-    Onnx(Box<ort::session::Session>),
-}
 
 /// Stateless CREPE-tiny neural pitch estimator.
 ///
@@ -74,7 +45,6 @@ enum Backend {
 /// no-op other than rolling the timestamp counter.
 pub struct CrepeTinyEstimator {
     cfg: EstimatorConfig,
-    backend: Backend,
     /// Frame counter, in samples since the most recent `reset`. Drives
     /// the `timestamp_samples` field of the emitted [`F0Frame`].
     timestamp_samples: u64,
@@ -84,13 +54,15 @@ impl CrepeTinyEstimator {
     /// Stable backend identifier.
     pub const NAME: &'static str = "crepe-tiny";
 
-    /// Load the ONNX model at `path`, validate input/output names, and
-    /// pre-allocate the rubato resampler + output scratch buffers.
+    /// Load the in-tree synthetic stub ONNX at `path` and validate the
+    /// estimator configuration.
     ///
-    /// Returns [`EstimatorError::ModelNotFound`] if `path` does not exist
-    /// and [`EstimatorError::Ort`] if the session fails to load or the
-    /// graph signature does not match what the CREPE export emits
-    /// (`audio` input, `cents_logits` output — no `cache_*` tensors).
+    /// Returns [`EstimatorError::ModelNotFound`] if `path` does not
+    /// exist, [`EstimatorError::Configuration`] when the supplied
+    /// [`EstimatorConfig`] violates the constructor-time invariants,
+    /// and [`EstimatorError::Ort`] when the bytes at `path` are not the
+    /// stub payload (the real-ORT inference path is intentionally not
+    /// wired through this estimator).
     pub fn from_onnx(path: &Path, cfg: EstimatorConfig) -> Result<Self, EstimatorError> {
         if !path.exists() {
             return Err(EstimatorError::ModelNotFound(path.to_path_buf()));
@@ -99,20 +71,16 @@ impl CrepeTinyEstimator {
 
         let bytes = std::fs::read(path)
             .map_err(|e| EstimatorError::Ort(format!("read crepe onnx: {e}")))?;
-
-        let backend = if is_stub_bytes(&bytes, b"crepe-stub") {
-            Backend::Stub
-        } else {
-            let session = ort::session::Session::builder()
-                .map_err(|e| EstimatorError::Ort(format!("session builder: {e}")))?
-                .commit_from_file(path)
-                .map_err(|e| EstimatorError::Ort(format!("commit_from_file: {e}")))?;
-            Backend::Onnx(Box::new(session))
-        };
+        if !is_stub_bytes(&bytes, b"crepe-stub") {
+            return Err(EstimatorError::Ort(
+                "crepe-tiny: only the in-tree synthetic stub ONNX is accepted by this \
+                 estimator; the production offline analyzer is pYIN"
+                    .to_string(),
+            ));
+        }
 
         Ok(Self {
             cfg,
-            backend,
             timestamp_samples: 0,
         })
     }
@@ -251,12 +219,7 @@ impl PitchEstimator for CrepeTinyEstimator {
                 want: self.cfg.window_size,
             });
         }
-        match &self.backend {
-            Backend::Stub => Ok(self.process_stub(samples)),
-            Backend::Onnx(_) => Err(EstimatorError::Ort(
-                "real CREPE-tiny ONNX path not yet wired".into(),
-            )),
-        }
+        Ok(self.process_stub(samples))
     }
 
     fn reset(&mut self) {

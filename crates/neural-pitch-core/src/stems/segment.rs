@@ -1,10 +1,10 @@
-//! 8-second windowing + Hann crossfade overlap-add reconstruction.
+//! HTDemucs windowing + Hann crossfade overlap-add reconstruction.
 //!
-//! HTDemucs canonical inference window is exactly 8.0 s at 44.1 kHz
-//! ([`SEGMENT_SAMPLES`] = 352 800 per channel). Adjacent windows
-//! overlap by 50 % ([`HOP_SAMPLES`] = 176 400) so every output
-//! sample is covered by exactly two windows except at the head
-//! and tail.
+//! HTDemucs ONNX inference window is the model's exported input
+//! length: [`SEGMENT_SAMPLES`] = 343 980 samples per channel
+//! (≈7.8 s at 44.1 kHz). Adjacent windows overlap by 50 %
+//! ([`HOP_SAMPLES`] = 171 990) so every output sample is covered by
+//! exactly two windows except at the head and tail.
 //!
 //! Each segment's output is multiplied by a Hann window before
 //! summation; two adjacent half-overlap Hann-windowed signals sum
@@ -23,13 +23,15 @@ use tracing::instrument;
 use crate::stems::StemError;
 use crate::stems::htdemucs::Session;
 
-/// Samples per channel in one HTDemucs inference window.
-/// `8.0 s × 44 100 Hz = 352 800`.
-pub const SEGMENT_SAMPLES: usize = 352_800;
+/// Samples per channel in one HTDemucs inference window. Matches the
+/// pinned ONNX export's third input dim — the bundled
+/// `htdemucs.onnx` declares `[1, 2, 343_980]` for the `mix` input,
+/// and any deviation surfaces as a session-run dimension mismatch.
+pub const SEGMENT_SAMPLES: usize = 343_980;
 
-/// Hop between adjacent inference windows, in samples per channel.
-/// `4.0 s × 44 100 Hz = 176 400` — exactly 50 % of [`SEGMENT_SAMPLES`].
-pub const HOP_SAMPLES: usize = 176_400;
+/// Hop between adjacent inference windows, in samples per channel —
+/// exactly 50 % of [`SEGMENT_SAMPLES`] for unit-gain Hann overlap-add.
+pub const HOP_SAMPLES: usize = SEGMENT_SAMPLES / 2;
 
 /// Four reconstructed stem buffers, interleaved stereo at 44.1 kHz,
 /// truncated to the original (un-padded) input length.
@@ -71,8 +73,9 @@ fn hann_window() -> Vec<f32> {
 }
 
 /// Run HTDemucs inference over `stereo_44k1` (interleaved stereo at
-/// 44.1 kHz), splitting the input into 8 s windows with 50 % overlap
-/// and reconstructing the four stems via Hann-window overlap-add.
+/// 44.1 kHz), splitting the input into [`SEGMENT_SAMPLES`]-sized
+/// windows with 50 % overlap and reconstructing the four stems via
+/// Hann-window overlap-add.
 ///
 /// `progress` is invoked with values in `[0.0, 1.0]` after each
 /// segment. `cancel` is checked on entry and once per segment;

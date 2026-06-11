@@ -9,16 +9,16 @@
 
 //! Overlap-add boundary cleanliness on a 12 s sustained sine.
 //!
-//! 12 s of 440 Hz at 44.1 kHz forces the segmenter to emit exactly
-//! three 8 s windows with 50 % overlap. Assertions:
+//! 12 s of 440 Hz at 44.1 kHz spans multiple HTDemucs inference
+//! windows with 50 % overlap. Assertions:
 //!
 //!   1. No NaN or infinite samples in any of the four stems.
 //!   2. Each stem buffer length matches the input length (after
 //!      truncating the right-pad).
 //!   3. Zero-crossing density inside ±200 samples of each segment
-//!      boundary (4 s, 8 s) stays within 1σ of the overall density
-//!      — i.e. the overlap-add does not introduce a discontinuity
-//!      at segment boundaries.
+//!      boundary stays within 1σ of the overall density — i.e. the
+//!      overlap-add does not introduce a discontinuity at segment
+//!      boundaries.
 
 use neural_pitch_core::stems::StemSeparator;
 use neural_pitch_core::test_utils::signals::sine_wave;
@@ -32,10 +32,13 @@ const F_HZ: f32 = 440.0;
 /// which the local zero-crossing density is measured.
 const BOUNDARY_RADIUS: usize = 200;
 
-/// Segment boundaries inside a 12 s buffer windowed at 8 s with
-/// 50 % overlap: the overlap regions sit at `[4 s, 8 s]` and
-/// `[8 s, 12 s]`, so the boundaries-of-interest are at 4 s and 8 s.
-const BOUNDARY_TIMES_S: [f32; 2] = [4.0, 8.0];
+/// Segment boundaries inside a 12 s buffer windowed at HTDemucs's
+/// 343 980-sample window with 50 % overlap. Hop length is half the
+/// window (171 990 samples ≈ 3.9 s at 44.1 kHz), so boundaries land
+/// at multiples of the hop and the boundaries-of-interest are at
+/// `HOP_SECONDS` and `2 * HOP_SECONDS`.
+const HOP_SECONDS: f32 = 171_990.0 / 44_100.0;
+const BOUNDARY_TIMES_S: [f32; 2] = [HOP_SECONDS, HOP_SECONDS * 2.0];
 
 fn zero_cross_count(buf: &[f32]) -> usize {
     let mut zc = 0;
@@ -47,7 +50,7 @@ fn zero_cross_count(buf: &[f32]) -> usize {
     zc
 }
 
-#[ignore = "ort cpu-fallback path is too slow on the CI matrix; HTDEMUCS_MODEL_URL/SHA256 are also placeholders until the upstream commit is pinned, so this test only exercises a sideloaded model on the local gate"]
+#[ignore = "htdemucs onnx path is too slow on the CI matrix; runs locally"]
 #[test]
 fn stems_overlap_add_has_no_boundary_artifacts() {
     let n_samples = (SR_HZ as u64 * DURATION_MS / 1_000) as usize;
@@ -99,9 +102,9 @@ fn stems_overlap_add_has_no_boundary_artifacts() {
         let local_density = local_zc as f32 / (hi - lo) as f32;
         let drift = (local_density - total_density).abs();
         // 1σ tolerance: standard deviation of zero-crossing density
-        // for a clean sine is ~0 (deterministic), so we allow up to
-        // 50 % relative drift to keep this RED-stable; the GREEN
-        // implementation should land well below this.
+        // for a clean sine is ~0 (deterministic), so a 50 % relative
+        // drift bound is wide enough to absorb FP rounding while still
+        // catching a window-boundary discontinuity.
         let tol = 0.5 * total_density.max(1e-3);
         assert!(
             drift < tol,

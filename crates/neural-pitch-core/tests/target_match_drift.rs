@@ -1,7 +1,7 @@
 #![allow(missing_docs)]
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 
-//! Phase 4 RED — drift handling.
+//! Drift handling for the target matcher.
 //!
 //! Five frames at +10 cents (within tolerance) and five at +30 cents
 //! (outside tolerance), with `tolerance_cents = 20.0`, must score
