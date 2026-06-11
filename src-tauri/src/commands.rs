@@ -524,8 +524,17 @@ pub async fn list_recordings(
         .collect())
 }
 
-/// Soft-delete a recording. Tombstones the row but keeps the on-disk file
-/// so a future "undelete" / hard-purge can clean up.
+/// Hard-delete a recording: drop the SQLite row, remove the on-disk audio
+/// file, and remove the per-recording `stems/` sub-tree. Cascades through
+/// the foreign-key constraint to drop matching `analysis_cache` and
+/// `stem_results` rows.
+///
+/// Order: read filename → delete row → unlink the audio file → remove the
+/// `<recordings_dir>/<id>/` sub-tree (best-effort; a leftover empty
+/// directory is not an error). The audio-file unlink is the only failure
+/// the caller observes — the row is gone first so a partial failure
+/// leaves an orphaned file rather than a re-listable row pointing at
+/// nothing.
 #[tauri::command]
 #[tracing::instrument(skip(state))]
 pub async fn delete_recording(
@@ -536,10 +545,34 @@ pub async fn delete_recording(
         .parse()
         .map_err(|e| format!("invalid recording id: {e}"))?;
     let library = Arc::clone(&state.library);
-    tokio::task::spawn_blocking(move || library.soft_delete(parsed))
-        .await
-        .map_err(|e| format!("delete_recording task panicked: {e}"))?
-        .map_err(|e| format!("delete recording: {e:#}"))?;
+    let recordings_dir = state.recordings_dir.clone();
+    tokio::task::spawn_blocking(move || -> Result<(), String> {
+        library
+            .hard_purge(parsed, |path| match std::fs::remove_file(path) {
+                Ok(()) => Ok(()),
+                // Treat "already gone" as success — the row is the source
+                // of truth; an orphan unlink retry must converge.
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+                Err(e) => Err(e),
+            })
+            .map_err(|e| format!("delete recording: {e:#}"))?;
+        // Best-effort cleanup of any stems / analysis-output sub-tree the
+        // app produced under `<recordings_dir>/<id>/`. The SQL cascade has
+        // already dropped the corresponding rows.
+        let subtree = recordings_dir.join(parsed.to_string());
+        if subtree.is_dir() {
+            if let Err(e) = std::fs::remove_dir_all(&subtree) {
+                tracing::warn!(
+                    error = %e,
+                    path = %subtree.display(),
+                    "delete_recording: stems sub-tree cleanup failed",
+                );
+            }
+        }
+        Ok(())
+    })
+    .await
+    .map_err(|e| format!("delete_recording task panicked: {e}"))??;
     Ok(())
 }
 
