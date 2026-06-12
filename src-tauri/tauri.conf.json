@@ -30,7 +30,7 @@
   "bundle": {
     "active": true,
     "category": "Music",
-    "copyright": "Copyright © 2026 Derek Kinzo",
+    "copyright": "Copyright © Derek Kinzo",
     "shortDescription": "Offline pitch tuner, transcriber, and ear-training app for musicians.",
     "longDescription": "Pitch tuner, recorder, and analyzer for musicians. Live pitch detection with cents meter, FLAC capture, pYIN contour analysis, range and vibrato reports, polyphonic transcription with MIDI export, ear-training drills, and HTDemucs stem separation — all offline, on your machine.",
     "icon": [

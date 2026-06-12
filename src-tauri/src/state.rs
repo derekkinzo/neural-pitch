@@ -99,8 +99,8 @@ pub(crate) struct ActiveRecording {
     pub(crate) filename: String,
     /// Instrument profile slug at the moment recording started.
     pub(crate) instrument_profile: String,
-    /// Sample rate locked to 48 kHz but recorded explicitly
-    /// for forward-compatibility with future variable-rate paths.
+    /// Sample rate locked to 48 kHz but recorded explicitly so
+    /// heterogeneous-rate sources do not need a schema migration.
     pub(crate) sample_rate_hz: i64,
     /// Wall-clock recording-start timestamp. Stamped on the
     /// `recordings.created_at_unix_ms` column on stop.
@@ -120,10 +120,9 @@ pub struct AppState {
     /// SQLite-backed recordings catalog. Opened once at startup.
     pub(crate) library: Arc<RecordingsLibrary>,
 
-    /// Directory where new recordings are written. Defaults to the
-    /// library's parent directory; mirrors `RecordingsLibrary::root()`
-    /// but kept as a separate field so commands can construct paths
-    /// without taking the library lock.
+    /// Directory where new recordings are written. Held as a separate
+    /// field so commands can construct paths without taking the library
+    /// lock.
     pub(crate) recordings_dir: PathBuf,
 
     /// Directory where downloaded ONNX models are cached

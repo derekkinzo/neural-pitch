@@ -5,10 +5,9 @@
 //! need to match on `StoreError` directly unless they want fine-grained
 //! handling.
 //!
-//! `#[non_exhaustive]` is applied so future variant additions are not
-//! breaking changes to downstream `match` statements (the IPC boundary
-//! exhaustively pattern-matches errors today; a new variant must not break
-//! that).
+//! `#[non_exhaustive]` is applied so additional variants are not breaking
+//! changes to downstream `match` statements (the IPC boundary exhaustively
+//! pattern-matches errors; a new variant must not break that).
 
 use std::path::PathBuf;
 
@@ -72,10 +71,10 @@ pub enum StoreError {
 
     /// A SQL constraint (UNIQUE / CHECK / FOREIGN KEY) was violated.
     ///
-    /// Today this is produced by `upsert_analysis` when the supplied
-    /// `recording_id` does not exist (foreign-key violation) so callers see
-    /// `NotFound` instead of an opaque `Sql` error. A residual generic
-    /// variant is kept for future use.
+    /// Produced by `upsert_analysis` when the supplied `recording_id`
+    /// does not exist (foreign-key violation) so callers see `NotFound`
+    /// instead of an opaque `Sql` error. The variant remains generic
+    /// for additional constraint-violation surfaces.
     #[error("constraint violation: {0}")]
     ConstraintViolation(String),
 

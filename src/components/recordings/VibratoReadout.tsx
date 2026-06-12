@@ -23,11 +23,9 @@
 //   `transition-all` class swap is preserved as a discoverable signal
 //   for AT inspectors and the e2e suite (Playwright asserts that the
 //   `transition-none` class is present when `prefers-reduced-motion:
-//   reduce` matches), but it is vacuously satisfied: there is no
-//   animation in either branch. If a future revision drives the
-//   indicator via a `transform: translateX(...)` on a wrapping `<g>`,
-//   the class swap becomes load-bearing and this comment must be
-//   updated alongside the geometry change.
+//   reduce` matches), but the swap is currently vacuous because the
+//   indicator is driven by SVG geometry — only revisit if the
+//   indicator gains a CSS-animatable property.
 //
 // Per-window dot strip below the bar — one `<span data-testid="vibrato-
 // window-dot">` per `windows[i]`. Color is derived from `confidence`:

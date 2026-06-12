@@ -60,32 +60,44 @@ export function formatDurationToast(durationMs: number): string {
   return `${minutes}m${ss}s`;
 }
 
+/** Common time-bucket decomposition used by both relative-time
+ *  renderers. Returns `null` when the input is non-finite or
+ *  sub-threshold so the caller can render its own sentinel. */
+interface RelativeBuckets {
+  readonly minutes: number;
+  readonly hours: number;
+  readonly days: number;
+}
+
+function decomposeRelative(
+  timestampMs: number,
+  nowMs: number,
+): RelativeBuckets | "non-finite" | "just-now" {
+  const deltaMs = nowMs - timestampMs;
+  if (!Number.isFinite(deltaMs)) return "non-finite";
+  const deltaSeconds = Math.max(0, Math.floor(deltaMs / MS_PER_SECOND));
+  if (deltaSeconds < 30) return "just-now";
+  const minutes = Math.floor(deltaSeconds / SECONDS_PER_MINUTE);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+  return { minutes, hours, days };
+}
+
 /** Verbose relative-time renderer used by the Training landing
  *  cards. Mirrors `formatRelative` but expands the unit suffix to match the
  *  natural-language copy on the cards (e.g. "2 days ago", "8 hours ago").
  *  Returns "—" when the input is non-finite so empty cards render the
  *  documented em-dash sentinel. */
 export function formatRelativeLong(timestampMs: number, nowMs: number): string {
-  const deltaMs = nowMs - timestampMs;
-  if (!Number.isFinite(deltaMs)) return "—";
-  const deltaSeconds = Math.max(0, Math.floor(deltaMs / MS_PER_SECOND));
-  if (deltaSeconds < 30) return "just now";
-  const minutes = Math.floor(deltaSeconds / SECONDS_PER_MINUTE);
-  if (minutes < 60) {
-    return minutes === 1 ? "1 minute ago" : `${minutes} minutes ago`;
-  }
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) {
-    return hours === 1 ? "1 hour ago" : `${hours} hours ago`;
-  }
-  const days = Math.floor(hours / 24);
-  if (days < 30) {
-    return days === 1 ? "1 day ago" : `${days} days ago`;
-  }
+  const buckets = decomposeRelative(timestampMs, nowMs);
+  if (buckets === "non-finite") return "—";
+  if (buckets === "just-now") return "just now";
+  const { minutes, hours, days } = buckets;
+  if (minutes < 60) return minutes === 1 ? "1 minute ago" : `${minutes} minutes ago`;
+  if (hours < 24) return hours === 1 ? "1 hour ago" : `${hours} hours ago`;
+  if (days < 30) return days === 1 ? "1 day ago" : `${days} days ago`;
   const months = Math.floor(days / 30);
-  if (months < 12) {
-    return months === 1 ? "1 month ago" : `${months} months ago`;
-  }
+  if (months < 12) return months === 1 ? "1 month ago" : `${months} months ago`;
   const years = Math.floor(months / 12);
   return years === 1 ? "1 year ago" : `${years} years ago`;
 }
@@ -94,15 +106,12 @@ export function formatRelativeLong(timestampMs: number, nowMs: number): string {
  *  "5m ago", "2h ago", or a YYYY-MM-DD date for older takes. Pure — the
  *  caller passes the reference `now` so tests can pin time. */
 export function formatRelative(timestampMs: number, nowMs: number): string {
-  const deltaMs = nowMs - timestampMs;
-  if (!Number.isFinite(deltaMs)) return "—";
-  const deltaSeconds = Math.max(0, Math.floor(deltaMs / MS_PER_SECOND));
-  if (deltaSeconds < 30) return "just now";
-  const minutes = Math.floor(deltaSeconds / SECONDS_PER_MINUTE);
+  const buckets = decomposeRelative(timestampMs, nowMs);
+  if (buckets === "non-finite") return "—";
+  if (buckets === "just-now") return "just now";
+  const { minutes, hours, days } = buckets;
   if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
   if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
   if (days < 7) return `${days}d ago`;
   // Fall back to a plain ISO calendar date so the row stays readable
   // without dragging a locale-aware formatter into the recorder UI.

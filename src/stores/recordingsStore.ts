@@ -161,22 +161,17 @@ export const useRecordingsStore = create<RecordingsStore>((set, get) => ({
 
   startRecording: async (instrumentProfile: string): Promise<void> => {
     if (get().isRecording || get().saving || get().starting) return;
-    // Show a "starting…" state instead of optimistically flipping
-    // `isRecording`. The previous code flipped `isRecording=true` before
-    // the IPC resolved, which made it possible for a fast user to press
-    // Stop while the start was still in-flight: `stopRecording`'s
-    // `if (!get().isRecording) return;` guard let the call through, and
-    // the front-end fired `stop_recording` against a take the Rust side
-    // never started. Gating on `starting` (set here, cleared in the
-    // resolve / reject paths) closes the race without losing the UX
-    // affordance — the button reads `data-state="saving"` while
-    // `starting` is true (the same affordance used during stop).
+    // Set `starting=true` before the IPC fires so a Stop click while a
+    // Start is in flight is rejected by the `!get().starting` guard in
+    // `stopRecording`. The button reads `data-state="saving"` while
+    // `starting` is true (the same affordance used during stop), so the
+    // UX cue is preserved without flipping `isRecording` optimistically.
     set({ starting: true, elapsedMs: 0, lastError: null });
     try {
       await invoke<WireStartResponse | null>("start_recording", { instrumentProfile });
-      // Only flip `isRecording` after the start IPC resolves. The Rust
-      // side has now spawned the encoder thread and attached the DSP
-      // fan-out; from this point Stop is a meaningful action.
+      // Flip `isRecording` only after start_recording resolves. After this
+      // point Stop is meaningful — the encoder thread is attached and the
+      // DSP fan-out is wired.
       set({ starting: false, isRecording: true });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);

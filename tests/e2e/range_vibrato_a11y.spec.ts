@@ -119,9 +119,9 @@ test.describe("a11y — range + vibrato readouts", () => {
         RANGE,
       ),
     });
-    // Sanity — the second wrapper is exported and importable; ensures
-    // a future spec that toggles to vibrato-only doesn't suffer a dead
-    // import. The result is intentionally unused here.
+    // Sanity — the second wrapper is exported and importable, so a
+    // vibrato-only toggle path doesn't suffer a dead import. The
+    // result is intentionally unused here.
     void installAnalysisMockWithVibrato;
 
     await page.goto("/");

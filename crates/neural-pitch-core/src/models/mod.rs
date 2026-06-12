@@ -8,7 +8,8 @@
 //!   manifest and verifies any cached ONNX blob's sha256.
 //!
 //! Provides the `models.toml` manifest parser and the on-disk sha256
-//! verification path. Live network fetch is not currently implemented.
+//! verification path. Live network fetch is out of scope; placeholder
+//! manifest entries surface as [`ResolverError::NotConfigured`].
 
 pub mod manifest;
 pub mod resolver;

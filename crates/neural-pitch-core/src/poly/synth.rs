@@ -10,14 +10,14 @@
 //! Implementation: a small additive sine stack
 //! (fundamental + 2nd / 3rd partial at modest amplitudes) shaped by a
 //! short cosine fade-in/out envelope to avoid the click that a hard
-//! gate would produce. The harmonic content is deliberately quiet
-//! enough that a YIN/MPM estimator locks the median onto the
-//! fundamental within 1 cent, which is the contract
-//! `synthesize_prompt_a4_440hz.rs` asserts.
+//! gate would produce. The harmonic content stays quiet enough that a
+//! YIN/MPM estimator locks the median onto the fundamental within
+//! 1 cent.
 
 use thiserror::Error;
 
 use crate::music::midi_to_hz;
+use crate::settings::DEFAULT_A4_HZ;
 
 /// Sample rate the synth emits at, in Hertz. Matches the live-capture
 /// sample rate so the prompt audio and any user-side capture share the
@@ -25,17 +25,18 @@ use crate::music::midi_to_hz;
 pub const PROMPT_SAMPLE_RATE_HZ: u32 = 48_000;
 
 /// Hard cap on prompt duration. Mirrors the Tauri command boundary
-/// clamp: prompts longer than 10 s are not a use case the drill UI
-/// supports today and rejecting them server-side keeps the synth's
-/// memory budget bounded by a fixed constant.
+/// clamp: the drill UI does not support prompts longer than 10 s, and
+/// rejecting them server-side keeps the synth's memory budget bounded
+/// by a fixed constant.
 pub const MAX_PROMPT_DURATION_MS: u32 = 10_000;
 
 /// Reference A4 the synth tunes against. The drill UI sends the
 /// caller's preferred A4 through [`crate::training::NoteSpec::a4_hz`];
-/// the bare [`PromptSynth::render_wav`] shortcut uses 440.0 because
-/// the drill protocol stores the a4 inside the prompt note and the
-/// command boundary supplies it explicitly.
-const PROMPT_A4_HZ: f32 = 440.0;
+/// the bare [`PromptSynth::render_wav`] shortcut uses
+/// [`crate::settings::DEFAULT_A4_HZ`] because the drill protocol stores
+/// the a4 inside the prompt note and the command boundary supplies it
+/// explicitly.
+const PROMPT_A4_HZ: f32 = DEFAULT_A4_HZ;
 
 /// Additive partial amplitudes. Total peak amplitude budget held below
 /// 0.85 to leave headroom for the cosine envelope without clipping i16

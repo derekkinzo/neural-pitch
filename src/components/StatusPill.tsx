@@ -70,9 +70,8 @@ export function StatusPill(): ReactNode {
   const audioParams = useSettingsStore((s) => s.audioParams);
   const instrumentHint = useSettingsStore((s) => s.instrumentHint);
 
-  // useId() instead of a module-level constant so two StatusPill instances
-  // (HMR overlap, future split view, Storybook, side-by-side tests) cannot
-  // collide on the aria-describedby anchor.
+  // useId() rather than a module constant so two StatusPill instances
+  // cannot collide on the aria-describedby anchor.
   const rateMismatchHelpId = useId();
 
   const dotClass =
@@ -93,9 +92,8 @@ export function StatusPill(): ReactNode {
 
   const badge = priorBadge(instrumentHint, priorRange);
 
-  // Interpolate the actual negotiated rate into the rate-mismatch help so
-  // the described-by text matches what the user sees in the readout
-  // (e.g. "48 kHz" not the previously hard-coded "44.1 kHz").
+  // The described-by text uses the live negotiated rate so AT users
+  // hear the same value the readout shows (no hard-coded fallback).
   const rateMismatchHelpText =
     displayRateHz !== null
       ? `Negotiated ${formatRateKHz(displayRateHz)}; engine resamples on demand.`

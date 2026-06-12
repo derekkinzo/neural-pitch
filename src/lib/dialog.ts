@@ -1,7 +1,7 @@
 // Thin wrapper around the Tauri file-open dialog.
 //
 // The ImportButton needs to ask the user to pick a `.wav` /
-// `.flac` / `.mp3` file. The Tauri 2 plugin lives behind the
+// `.flac` file. The Tauri 2 plugin lives behind the
 // `plugin:dialog|open` IPC command and ships as a separate npm package
 // (`@tauri-apps/plugin-dialog`) which we do NOT install — keeping the
 // front-end JS dep surface tight. Routing through `invoke()` directly

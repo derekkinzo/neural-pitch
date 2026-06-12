@@ -3,7 +3,7 @@
 //! Sits on the Rust side of the IPC boundary so the per-frame
 //! "is the user on pitch?" decision stays on the audio-rate thread. The
 //! [`crate::pipeline::DspWorker`] keeps emitting [`PitchUpdate`] frames
-//! exactly as today; when a [`TargetMatcher`] is attached it consumes
+//! unchanged; when a [`TargetMatcher`] is attached it consumes
 //! every update and emits a [`MatchUpdate`] decision through whatever
 //! [`MatchEmitter`] the shell wires in. The Tauri shell adapts the
 //! emitter trait against `tauri::ipc::Channel<MatchUpdate>` so the
@@ -30,6 +30,7 @@ use std::time::SystemTime;
 
 use crate::music::midi_to_hz;
 use crate::pipeline::PitchUpdate;
+use crate::settings::DEFAULT_A4_HZ;
 
 /// Default ±-cents window the front-end's karaoke ribbon highlights as
 /// "in tune". 25 cents matches the JI-vs-12TET worst-case Pythagorean
@@ -124,8 +125,7 @@ impl TargetMatcher {
     /// `in_window` flag is `false` for unvoiced frames regardless of
     /// the cents-error magnitude.
     pub fn observe(&mut self, update: PitchUpdate, emitter: &dyn MatchEmitter) {
-        const A4_HZ: f32 = 440.0;
-        let target_hz = midi_to_hz(self.target_midi, A4_HZ);
+        let target_hz = midi_to_hz(self.target_midi, DEFAULT_A4_HZ);
         let cents_error = if update.voiced && update.f0_hz > 0.0 && target_hz > 0.0 {
             100.0 * 12.0 * (update.f0_hz / target_hz).log2()
         } else {

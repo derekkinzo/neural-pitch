@@ -12,8 +12,8 @@ export type InstrumentHint = "Generic" | "Voice" | "Guitar" | "Bass" | "Piano" |
 /** Note-label rendering mode shared between the live tuner and the
  *  drill subsystem. Letter is the default (C, D, E, …); movable-do renders
  *  solfege relative to the active drill's tonic; fixed-do anchors solfege
- *  to C. Outside the drill subsystem the rest of the app keeps Letter
- *  unconditionally — only the drill UI consults this setting today. */
+ *  to C. Only the drill UI consults this setting; the rest of the app
+ *  keeps Letter unconditionally. */
 export type NoteLabelMode = "letter" | "movable-do" | "fixed-do";
 
 export const NOTE_LABEL_MODES: ReadonlyArray<NoteLabelMode> = ["letter", "movable-do", "fixed-do"];
@@ -74,7 +74,8 @@ export interface TunerSettings {
   /** A4 reference frequency in Hz. Defaults to 440. */
   a4Hz: number;
   /** Instrument hint forwarded to the auto-prior selector. Defaults to
-   *  "Generic" — a non-decision marker on day 1. */
+   *  "Generic" — the non-decision default; the auto-prior path
+   *  narrows from there. */
   instrumentHint: InstrumentHint;
   /** Smoothing window in milliseconds (100–500). */
   smoothingMs: number;

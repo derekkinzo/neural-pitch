@@ -484,7 +484,7 @@ fn assemble_notes(
             let onset_v = onset[frame][bin];
             // Open a note when *either* the onset crosses its
             // threshold (preferred path) *or* the Viterbi-cleaned
-            // sustain head says the bin is currently active and the
+            // sustain head says the bin is active and the
             // raw note posterior is solidly above threshold (fallback
             // for soft attacks / pure tones).
             let open_via_onset = onset_v >= cfg.onset_threshold;

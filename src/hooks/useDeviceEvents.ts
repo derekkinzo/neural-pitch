@@ -1,6 +1,12 @@
 // useDeviceEvents — single-subscription hook for the `audio:backend` Tauri
-// event channel. Mirrors the Rust-side `AudioBackendEvent` enum into the
+// event channel. Mirrors the Rust-side audio-backend bus enum into the
 // slow Zustand store at <=1 Hz.
+//
+// Distinct from `types/audio-event.ts::AudioBackendEvent`: that type
+// describes the out-of-band cpal `err_fn` Channel payloads
+// (`disconnected | format_changed | underrun`); this one is the Tauri
+// event-bus variant (`PriorNarrowed | Disconnected | Connected |
+// FormatChanged`) and is named `AudioBackendBusEvent` to disambiguate.
 //
 // Wires four event variants:
 //   - PriorNarrowed { rangeHz: [number, number] } -> setPriorRange
@@ -21,10 +27,10 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { getTestHooks, registerTestListener } from "@/lib/test-hooks";
 import { useTunerStore } from "@/stores/tunerStore";
 
-/** Wire-format AudioBackendEvent. Field names mirror the Rust `serde`
- *  output (snake_case for nested data, but `type` + camelCase for the
- *  variant tag we control on the TS test harness side). */
-export type AudioBackendEvent =
+/** Wire-format audio-backend bus event. Field names mirror the Rust
+ *  `serde` output (snake_case for nested data, but `type` + camelCase
+ *  for the variant tag we control on the TS test harness side). */
+export type AudioBackendBusEvent =
   | { type: "PriorNarrowed"; rangeHz: readonly [number, number] }
   | { type: "Disconnected" }
   | { type: "Connected"; rateHz?: number; channels?: number }
@@ -32,7 +38,7 @@ export type AudioBackendEvent =
 
 const CHANNEL = "audio:backend";
 
-function applyEvent(event: AudioBackendEvent): void {
+function applyEvent(event: AudioBackendBusEvent): void {
   const store = useTunerStore.getState();
   switch (event.type) {
     case "PriorNarrowed":
@@ -69,10 +75,10 @@ export function useDeviceEvents(): void {
     // ALSO register through `__neuralPitchTestHooks.listeners` so specs
     // can drive synthetic events without needing the real listen wiring.
     const unregister = registerTestListener(CHANNEL, (payload) => {
-      applyEvent(payload as AudioBackendEvent);
+      applyEvent(payload as AudioBackendBusEvent);
     });
     if (getTestHooks() === undefined) {
-      void listen<AudioBackendEvent>(CHANNEL, (event) => {
+      void listen<AudioBackendBusEvent>(CHANNEL, (event) => {
         applyEvent(event.payload);
       })
         .then((u) => {

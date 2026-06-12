@@ -30,12 +30,12 @@ import { DRILLS, type Drill, type DrillAttempt } from "@/types/training";
 
 const SETTINGS_GLYPH = "⚙";
 
-/** Best-effort hydration from the persistent IPC. Today's production Rust
- *  shape is not yet routed into the TS-side store (history is localStorage
- *  only), so a missing or unmocked handler is silently swallowed. The E2E
- *  harness's `installTrainingMock` registers a `list_drill_history` handler
- *  that returns the seeded history in TS shape — that path is what the
- *  Training landing reads on mount under the harness. */
+/** Best-effort hydration from the persistent IPC. Hydration silently
+ *  falls back to the localStorage-only history when the
+ *  `list_drill_history` handler is missing or returns a non-array shape;
+ *  the E2E harness's `installTrainingMock` registers the handler so
+ *  specs can seed history under the same path the production store
+ *  would read. */
 async function fetchSeedHistory(): Promise<readonly DrillAttempt[] | null> {
   try {
     const rows = await invoke<unknown>("list_drill_history", {});

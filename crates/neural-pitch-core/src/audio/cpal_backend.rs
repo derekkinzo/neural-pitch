@@ -16,25 +16,12 @@
 //!   with `Ordering::Relaxed`. It never blocks, locks, or returns early
 //!   on a partial drop.
 //!
-//! ## Out-of-band events and platform fallbacks
 //!
-//! - **Out-of-band events.** [`CpalAudioBackend::with_emitter`] takes an
-//!   [`AudioEventEmitter`] (a `Fn(AudioBackendEvent)`) supplied by the Tauri
-//!   shell. The cpal `err_fn` runs on the platform audio thread; on
-//!   [`cpal::StreamError::DeviceNotAvailable`] it calls the emitter with
-//!   [`AudioBackendEvent::Disconnected`], on any other variant with
-//!   [`AudioBackendEvent::Underrun`]. The emitter wraps a non-blocking
-//!   `tauri::ipc::Channel::send` on the shell side; calls in `err_fn` are
-//!   non-blocking with respect to the audio thread.
-//! - **Windows WASAPI buffer-size fallback.** [`pick_buffer_size`] clamps a
-//!   requested buffer size into the device's
-//!   [`cpal::SupportedBufferSize::Range`] when present, falling back to
-//!   [`cpal::BufferSize::Default`] for `Unknown` ranges.
-//! - **Linux ALSA-via-PulseAudio renegotiation.** On
-//!   [`cpal::BuildStreamError::StreamConfigNotSupported`] the backend
-//!   re-queries `default_input_config()` once and rebuilds the stream with
-//!   the device-advertised configuration (cpal #564 family). This is a
-//!   single-shot retry, not a loop.
+//! Out-of-band events and platform fallbacks are documented on the methods
+//! that own them: see [`CpalAudioBackend::with_emitter`] for the
+//! [`AudioEventEmitter`] surface, [`pick_buffer_size`] for the Windows
+//! WASAPI buffer-size clamp, and [`CpalAudioBackend::renegotiate_to_default`]
+//! for the cpal #564-family Linux ALSA/PulseAudio renegotiation path.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -132,7 +119,7 @@ impl CpalAudioBackend {
         Arc::clone(&self.dropped_samples)
     }
 
-    /// Build the cpal input stream for the currently-stored config. Returns
+    /// Build the cpal input stream for the stored config. Returns
     /// the constructed stream on success or the build error verbatim. The
     /// caller owns retry / renegotiation policy.
     fn build_stream(&self, producer: rtrb::Producer<f32>) -> Result<Stream, BuildStreamError> {
@@ -140,14 +127,12 @@ impl CpalAudioBackend {
         let dropped = Arc::clone(&self.dropped_samples);
         let events = self.events.clone();
 
+        // The error callback runs on a non-RT cpal listener thread on every
+        // supported backend (CoreAudio HAL on macOS, WASAPI event thread on
+        // Windows, ALSA poll thread on Linux). Tracing and emitter dispatch
+        // are allowed here — only the data callback is bound by the
+        // module-level RT-safe contract.
         let err_fn = move |err: StreamError| {
-            // The error callback runs off the RT data path on every supported
-            // cpal backend (CoreAudio HAL listener thread on macOS, WASAPI
-            // event thread on Windows, ALSA poll thread on Linux). Logging
-            // and emitter-dispatch here are safe because they are NOT on
-            // the audio data callback. The module docs at lines 5-9 forbid
-            // tracing/log inside the data callback; they do not forbid
-            // tracing inside the err_fn, which executes on a non-RT thread.
             tracing::trace!(target: "neural_pitch_core::audio::cpal_backend", error = %err, "cpal stream error");
             if let Some(em) = events.as_ref() {
                 em(map_stream_error(&err, dropped.load(Ordering::Relaxed)));
@@ -230,7 +215,7 @@ impl CpalAudioBackend {
         let Ok(default) = self.device.default_input_config() else {
             return false;
         };
-        // In cpal 0.17, `SampleRate` is a `u32` type alias and
+        // cpal 0.17+ exposes `SampleRate` as a `u32` type alias;
         // `sample_rate()` returns `u32` directly — no tuple-struct wrapper.
         let new_sample_rate: u32 = default.sample_rate();
         let new_channels = default.channels();

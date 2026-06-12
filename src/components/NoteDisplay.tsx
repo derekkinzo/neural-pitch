@@ -16,7 +16,7 @@
 //
 // The slow `tunerStore.lastVoicedNoteLabel` mirror is written exclusively
 // by `usePitchStream` so the AT label and visible glyph cannot diverge near
-// the cents-50 boundary (see review feedback "ui.bug — duplicate writers").
+// the cents-50 boundary.
 //
 
 import { useEffect, useRef, type ReactNode } from "react";

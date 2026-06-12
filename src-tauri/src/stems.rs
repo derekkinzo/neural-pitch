@@ -79,9 +79,10 @@ impl StemKind {
     }
 
     /// Discriminant string persisted in `analysis_cache.stem_kind` for
-    /// per-stem analysis cache rows. Matches [`StemKind::slug`] today;
-    /// kept as a separate accessor so a future schema can decouple the
-    /// on-disk filename from the SQL column without churning callers.
+    /// per-stem analysis cache rows. Currently identical to
+    /// [`StemKind::slug`]; kept as a separate accessor so the on-disk
+    /// filename and the SQL column can decouple without churning
+    /// callers.
     #[must_use]
     pub const fn cache_discriminant(self) -> &'static str {
         self.slug()
@@ -353,10 +354,9 @@ const STEM_CHANNELS: u32 = 1;
 /// The `separator` argument is taken as `Arc<StemSeparator>` so a
 /// cancel-then-restart sequence reuses the warm separator handle.
 //
-// `Arc<StemSeparator>` + `CancellationToken` are intentionally moved so
-// callers compose with `tokio::task::spawn_blocking` without re-cloning
-// at every site; the inner body holds the values across the synchronous
-// decode → separate → encode pipeline.
+// Owned values are moved into the synchronous pipeline body; clippy's
+// `needless_pass_by_value` is suppressed because callers compose with
+// `tokio::task::spawn_blocking`.
 #[allow(clippy::needless_pass_by_value)]
 #[tracing::instrument(skip(library, separator, progress), fields(recording_id = %recording_id))]
 pub fn separate_stems_blocking(
@@ -583,9 +583,9 @@ fn ensure_model_cached<F: FnMut(f32)>(
         neural_pitch_core::stems::StemSeparator::ensure_model_at_with_cancel(dir, progress, cancel)?
     } else {
         // The default-platform path is reserved for non-Tauri callers;
-        // it does not currently expose a cancel-aware variant. The
-        // shell always supplies an explicit models_dir, so this branch
-        // is exercised only by the headless tests.
+        // it does not expose a cancel-aware variant. The shell always
+        // supplies an explicit models_dir, so this branch is exercised
+        // only by the headless tests.
         neural_pitch_core::stems::StemSeparator::ensure_model(progress)?
     };
     Ok(path)
@@ -714,15 +714,11 @@ fn write_one_stem(
 
 /// Decode a 16-bit / 24-bit / float-32 PCM WAV or FLAC into a mono
 /// `f32` buffer at 48 kHz. The recording pipeline is locked to 48 kHz
-/// so the source rate is implicit; a future heterogeneous-rate import
-/// path adds a `rubato` resample stage here without changing the public
+/// so the source rate is implicit; heterogeneous-rate imports would
+/// slot a `rubato` resample stage here without changing the public
 /// surface.
 fn decode_mono_48k(path: &Path) -> Result<Vec<f32>, String> {
-    let ext = path
-        .extension()
-        .and_then(|s| s.to_str())
-        .map(str::to_ascii_lowercase)
-        .unwrap_or_default();
+    let ext = lowercase_ext(path);
     match ext.as_str() {
         "wav" => decode_wav_mono_48k(path),
         // FLAC decode is wired through `claxon` (already a transitive
@@ -946,6 +942,15 @@ fn unix_now_ms() -> i64 {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| i64::try_from(d.as_millis()).unwrap_or(i64::MAX))
         .unwrap_or(0)
+}
+
+/// Return the lowercased file extension of `path`, or an empty string
+/// when `path` carries no extension or non-UTF-8 bytes.
+fn lowercase_ext(path: &Path) -> String {
+    path.extension()
+        .and_then(|s| s.to_str())
+        .map(str::to_ascii_lowercase)
+        .unwrap_or_default()
 }
 
 fn path_to_string(p: &Path) -> Result<String, StemError> {

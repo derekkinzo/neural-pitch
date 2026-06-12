@@ -22,7 +22,8 @@ calls hit a programmable response map without a real Tauri shell.
   `serious` or `critical` WCAG violation.
 - `visual.spec.ts` — `toHaveScreenshot` baseline (Chromium-only;
   `chromium-linux` baselines).
-- `i18n.spec.ts`, `perf.spec.ts` — placeholder specs, currently skipped.
+- `i18n.spec.ts`, `perf.spec.ts` — unconditionally skipped pending real
+  subjects-of-test (locale switching and a measurable hot path).
 
 ## Run locally
 

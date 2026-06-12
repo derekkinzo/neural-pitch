@@ -53,7 +53,7 @@ use thiserror::Error;
 /// the Basic Pitch transcribe surface. Matches
 /// [`neural_pitch_core::poly::basic_pitch::BasicPitchEstimator::name`]
 /// minus the `-v1` suffix so the cache key reads the same as the on-the-
-/// wire IPC discriminant a future `BackendKind::BasicPitch` arm will use.
+/// wire IPC discriminant a `BackendKind::BasicPitch` arm consumes.
 pub const BASIC_PITCH_ANALYZER_NAME: &str = "basic-pitch";
 
 /// Stable analyzer version persisted in
@@ -173,10 +173,9 @@ struct WireNoteEvent {
 
 /// Typed error surface for [`import_audio_file_blocking`].
 ///
-/// All variants flatten at the IPC boundary via `format!("{e:#}")`. The
-/// front-end keeps regex-free `match` on prefix substrings *only* in the
-/// (rare) case it needs to discriminate `already imported` for UX —
-/// otherwise the message is purely user-facing copy.
+/// Variants flatten at the IPC boundary via `format!("{e:#}")`; the
+/// front-end matches on prefix substrings only for `already imported`
+/// UX disambiguation.
 #[derive(Debug, Error)]
 pub enum ImportError {
     /// File extension is not in the gated `{wav, flac}` set.
@@ -256,11 +255,7 @@ pub fn import_audio_file_blocking(
     // 1) Extension gate. WAV and FLAC are the two formats the downstream
     //    `decode_audio_mono` helper handles without pulling in symphonia.
     //    The UI's open-file filter offers the same set.
-    let ext = source_path
-        .extension()
-        .and_then(|os| os.to_str())
-        .map(str::to_ascii_lowercase)
-        .unwrap_or_default();
+    let ext = lowercase_ext(source_path);
     if !matches!(ext.as_str(), "wav" | "flac") {
         return Err(ImportError::UnsupportedExtension(ext));
     }
@@ -311,10 +306,11 @@ pub fn import_audio_file_blocking(
             duration_ms: i64::try_from(probe.duration_ms).unwrap_or(i64::MAX),
             sample_rate_hz: i64::from(probe.sample_rate_hz),
             channels: i64::from(probe.channels),
-            // 0 sentinel for lossy / unknown; WAV probe could populate this
-            // but the import contract deliberately keeps it as a sentinel so
-            // the row-shape matches future FLAC / MP3 imports without an
-            // append-only schema change.
+            // 0 sentinel for lossy / unknown; WAV probe could populate
+            // this but the import contract deliberately keeps it as a
+            // sentinel so the row-shape matches heterogeneous container
+            // imports without a schema migration when their bit-depth
+            // is unknown / undefined.
             bit_depth: 0,
             format: ext,
             a4_hz: 440.0,
@@ -409,8 +405,8 @@ fn probe_wav(path: &Path) -> Result<AudioProbe, ImportError> {
             found_data = true;
             // We don't need to read the data here — duration is purely a
             // function of the data-chunk size + format params. Skip the
-            // payload so a future loop iteration could pick up trailing
-            // chunks without having to seek.
+            // payload so trailing chunks can be parsed without
+            // seeking.
             std::io::copy(&mut (&f).take(u64::from(size)), &mut std::io::sink())
                 .map_err(|e| ImportError::DecodeFailed(format!("data chunk skip: {e}")))?;
             // Most WAVs end at the data chunk; exit early so the loop does
@@ -500,8 +496,8 @@ fn probe_flac(path: &Path) -> Result<AudioProbe, ImportError> {
 /// `(recording_id, "basic-pitch", "1.0", stem_kind)`. `None` round-trips
 /// as SQL NULL — the un-stemmed full-mix transcribe path — and matches
 /// every pre-V0003 row verbatim. `Some(StemKind::*)` distinguishes per-
-/// stem cache entries so transcribing the vocals stem does not clobber
-/// the previously-cached full-mix transcription. The on-disk source path
+/// stem cache entries so the per-stem cache entry does not clobber the
+/// full-mix cache row. The on-disk source path
 /// is also re-routed when `stem_kind` is set: instead of the recording's
 /// top-level FLAC, the helper reads
 /// `<recordings_dir>/<recording_id>/stems/<slug>.flac` (the same path
@@ -571,7 +567,12 @@ pub fn transcribe_recording_blocking(
             "audio buffer is empty".to_string(),
         ));
     }
-    let duration_ms = (samples.len() as u64).saturating_mul(1_000) / u64::from(sample_rate_hz);
+    // Guard against a misreporting decoder: `checked_div` collapses a
+    // zero sample-rate to the 0 sentinel rather than panicking.
+    let duration_ms = (samples.len() as u64)
+        .saturating_mul(1_000)
+        .checked_div(u64::from(sample_rate_hz))
+        .unwrap_or(0);
 
     let notes = transcribe_buffer(&samples, sample_rate_hz)
         .map_err(|e| TranscribeError::AnalyzerFailed(format!("{e:#}")))?;
@@ -672,16 +673,23 @@ fn resolve_recording(
 /// path (which reads FLAC) and the full-mix transcribe path (which
 /// reads WAV from the import flow) share one entry point.
 fn decode_audio_mono(path: &Path) -> Result<(Vec<f32>, u32), String> {
-    let ext = path
-        .extension()
-        .and_then(|s| s.to_str())
-        .map(str::to_ascii_lowercase)
-        .unwrap_or_default();
+    let ext = lowercase_ext(path);
     match ext.as_str() {
         "wav" => decode_wav_mono(path),
         "flac" => decode_flac_mono(path),
         other => Err(format!("unsupported source extension: {other}")),
     }
+}
+
+/// Return the lowercased file extension of `path`, or an empty string
+/// when `path` carries no extension or non-UTF-8 bytes. Centralises the
+/// idiom so the extension gates in `import_audio_file_blocking` and
+/// `decode_audio_mono` cannot drift.
+fn lowercase_ext(path: &Path) -> String {
+    path.extension()
+        .and_then(|os| os.to_str())
+        .map(str::to_ascii_lowercase)
+        .unwrap_or_default()
 }
 
 /// Decode a FLAC into a mono `f32` buffer at the source sample rate.
@@ -870,8 +878,8 @@ fn decode_float32_mono(bytes: &[u8], channels: u16) -> Vec<f32> {
 /// Process-wide cache of the bundled Basic Pitch v1 ONNX session.
 ///
 /// The estimator carries an `ort::Session` (~17 MB of weights + a
-/// platform-specific execution provider) that is expensive to spin up
-/// per call. The inner [`Mutex`] serialises concurrent transcribes —
+/// platform-specific execution provider) that is O(seconds) to
+/// construct. The inner [`Mutex`] serialises concurrent transcribes —
 /// [`PolyEstimator::analyze`] takes `&mut self` and `ort::Session` is
 /// `Send` but not `Sync`. Concurrent transcribes of distinct
 /// recordings serialise behind this lock; that is acceptable in the
@@ -887,22 +895,31 @@ static BASIC_PITCH: OnceLock<Mutex<BasicPitchEstimator>> = OnceLock::new();
 /// Run Basic Pitch v1 (Bittner et al., ICASSP 2022) over a mono `f32`
 /// buffer and project the resulting note events onto the IPC wire shape.
 ///
-/// The estimator owns the resampling step internally — it accepts mono
-/// PCM at any rate and resamples to its native 22.05 kHz before
-/// inference (zero-copy when the input already matches). Per-note
-/// pitch-bend curves on the upstream `NoteEvent` are dropped during the
-/// projection because the SMF emitter writes a single `NoteOn` /
-/// `NoteOff` pair per note (no per-sample pitch-bend track).
+/// The estimator accepts mono PCM at any source rate and resamples to
+/// its 22.05 kHz native rate. Per-note pitch-bend curves on the upstream
+/// `NoteEvent` are dropped during the projection because the SMF
+/// emitter writes a single `NoteOn` / `NoteOff` pair per note (no
+/// per-sample pitch-bend track).
 fn transcribe_buffer(
     samples: &[f32],
     sample_rate_hz: u32,
 ) -> Result<Vec<WireNoteEvent>, EstimatorError> {
+    // Serialize the fallible first-init so racing callers do not all
+    // load the ~17 MB ONNX session independently. The init mutex is held
+    // only across the `get_or_init`-equivalent below; once `BASIC_PITCH`
+    // is populated, subsequent callers skip the lock entirely on the
+    // `get()` fast-path.
     if BASIC_PITCH.get().is_none() {
-        let estimator = BasicPitchEstimator::from_bundled()?;
-        // `set` only fails if another thread won the race; in that case
-        // we silently drop our local copy and use the winner on the
-        // `get()` below.
-        let _ = BASIC_PITCH.set(Mutex::new(estimator));
+        static INIT_LOCK: Mutex<()> = Mutex::new(());
+        let _init_guard = INIT_LOCK.lock();
+        if BASIC_PITCH.get().is_none() {
+            let estimator = BasicPitchEstimator::from_bundled()?;
+            // `set` cannot fail here: we hold `INIT_LOCK` and re-checked
+            // the cell inside the guard. A spurious failure still drops
+            // the local estimator without leaking — the next caller
+            // retries.
+            let _ = BASIC_PITCH.set(Mutex::new(estimator));
+        }
     }
     let cell = BASIC_PITCH
         .get()

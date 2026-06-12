@@ -275,8 +275,8 @@ export function PlaybackPanel(props: PlaybackPanelProps = {}): ReactNode {
       resetPlaybackHead(0);
     };
     // Zustand action refs are stable; only `currentRecordingId` should
-    // re-mount wavesurfer. Including the actions in the dep array would
-    // silently re-mount on every store change after a future refactor.
+    // re-mount wavesurfer. Including the actions in the deps would
+    // re-mount wavesurfer on unrelated store changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentRecordingId]);
 
@@ -318,9 +318,8 @@ export function PlaybackPanel(props: PlaybackPanelProps = {}): ReactNode {
         if (cancelled) return;
         const plugin = mod.default.create({
           // Pass the resolved HTMLElement rather than a global `#id`
-          // selector so a future feature that mounts a second
-          // PlaybackPanel cannot accidentally bind the plugin to the
-          // first host.
+          // selector so multiple PlaybackPanel instances bind to their
+          // own host.
           container: host,
           labels: true,
           fftSamples: 512,
@@ -358,19 +357,18 @@ export function PlaybackPanel(props: PlaybackPanelProps = {}): ReactNode {
     const value = Number(e.currentTarget.value);
     if (!Number.isFinite(value)) return;
     const ratio = Math.max(0, Math.min(1, value / durationMs));
-    // Let wavesurfer be the single source of truth: `seekTo` will fire
+    // wavesurfer is the single source of truth for time: `seekTo` fires
     // `seeking`, which writes the throttled store value and publishes
-    // into the playback head. Skipping the explicit writes here avoids
-    // the double-write per drag-tick that previously caused slider
-    // jitter.
+    // into the playback head — skipping explicit writes here avoids
+    // the double-write per drag-tick.
     ws.seekTo(ratio);
   };
 
   // Spacebar/k panel-level shortcut. We intercept only when the active
   // element is not a form control (the slider's native key behavior is
-  // arrow keys only — space on a range input is no-op, but we still
-  // skip if the focus target is an INPUT/SELECT/TEXTAREA so a future
-  // textfield in the panel keeps native space behavior).
+  // arrow keys only — space on a range input is no-op). Skip the
+  // override when the focus target is a form control so native space
+  // behavior is preserved.
   const onPanelKeyDown = (e: React.KeyboardEvent<HTMLElement>): void => {
     if (e.key !== " " && e.key !== "k") return;
     const target = e.target as HTMLElement | null;

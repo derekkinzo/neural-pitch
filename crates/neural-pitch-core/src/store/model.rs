@@ -54,7 +54,7 @@ impl FromStr for RecordingId {
 /// Input record passed to `RecordingsLibrary::insert_recording`.
 #[derive(Debug, Clone)]
 pub struct NewRecording {
-    /// Filename of the on-disk audio asset (e.g. `2026-06-04_120300_a1b2c3d4.flac`).
+    /// Filename of the on-disk audio asset (e.g. `YYYY-MM-DD_HHMMSS_<short-hash>.flac`).
     pub filename: String,
     /// Wall-clock creation time in milliseconds since the Unix epoch.
     pub created_at_unix_ms: i64,

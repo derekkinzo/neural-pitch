@@ -10,9 +10,9 @@
 // Accessibility:
 //   - `<ul role="listbox">` wraps the rows.
 //   - Each `<li role="option">` carries `aria-selected` and a non-color
-//     selection affordance (a leading "▸" glyph) — the brief flagged the
-//     prior border-color-only cue as a WCAG 1.4.1 violation in high-
-//     contrast / forced-colors mode.
+//     selection affordance (a leading "▸" glyph) — a border-color-only
+//     cue would violate WCAG 1.4.1 in high-contrast / forced-colors
+//     mode where the cyan border collapses.
 //   - Roving tabindex: only the focused / selected row has `tabindex=0`;
 //     the others are `tabindex=-1`. ArrowUp / ArrowDown / Home / End move
 //     focus AND selection in lock-step.

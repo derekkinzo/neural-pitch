@@ -62,8 +62,9 @@ export interface MatchUpdate {
   readonly ended: boolean;
 }
 
-/** Live drill session — kept as a separate type so a future "resume" path
- *  can persist mid-flight progress without rewriting the attempt schema. */
+/** Live drill session — separated from DrillAttempt so mid-session
+ *  state can be persisted independently of the immutable attempt
+ *  record. */
 export interface DrillSession {
   readonly drillId: DrillId;
   readonly startedAt: number;
@@ -76,6 +77,15 @@ export interface DrillSession {
 // drill consumers and settings consumers see exactly the same type.
 // Single source of truth: `src/types/settings.ts`.
 export { NOTE_LABEL_MODES, type NoteLabelMode } from "@/types/settings";
+
+/** Number of prompts per choice-driven drill (intervals, chords, scales).
+ *  Lifted to a shared constant so a session-length change lands in one
+ *  file. */
+export const TOTAL_PROMPTS = 10;
+
+/** Auto-dismiss timeout (ms) for the per-prompt "Correct" / "Incorrect"
+ *  result toast. */
+export const RESULT_TOAST_MS = 1500;
 
 /** Stable display metadata for the five built-in drills. The order here
  *  IS the visual order on the landing screen — re-arranging is a deliberate

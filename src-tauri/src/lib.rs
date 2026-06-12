@@ -1,5 +1,5 @@
-//! NeuralPitch Tauri shell — all logic lives in the library so platform
-//! entry points (desktop today) link it.
+//! NeuralPitch Tauri shell — all logic lives in the library so the
+//! desktop entry point links it.
 //!
 //! Streaming `PitchUpdate` frames flow over a
 //! `tauri::ipc::Channel<PitchUpdate>` that the JavaScript side constructs
@@ -12,10 +12,8 @@ pub mod commands_drill;
 pub mod sink;
 pub mod state;
 // File-import / Basic Pitch transcribe / MIDI export.
-// Gated behind `feature = "neural"` because the implementation depends
-// on `neural-pitch-core/poly` (which itself only compiles under
-// `neural-pitch-core/neural`). Under `--no-default-features` the module
-// is compiled out entirely so the classical-only build stays clean.
+// Gated behind `feature = "neural"`; depends transitively on
+// `neural-pitch-core/neural`.
 #[cfg(feature = "neural")]
 pub mod transcribe;
 // HTDemucs four-stem separation surface (vocals / drums /
@@ -48,10 +46,8 @@ pub fn run() {
         .init();
     tracing::info!(version = env!("CARGO_PKG_VERSION"), "NeuralPitch starting");
 
-    // Builder failure at startup is unrecoverable — no front-end exists,
-    // no state is persisted, the OS-level shell window is not open. The
-    // single bootstrap path is the documented exception to the
-    // `expect_used` lint.
+    // Documented exception: bootstrap failure is unrecoverable, so this
+    // single call site is the documented allowance for `expect_used`.
     #[allow(clippy::expect_used)]
     tauri::Builder::default()
         .plugin(tauri_plugin_store::Builder::default().build())

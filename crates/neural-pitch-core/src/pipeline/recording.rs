@@ -1,26 +1,19 @@
 //! Audio capture / FLAC recording pipeline.
 //!
-//! Implements the trait surface, error type, artifact shape, and worker
-//! used to encode captured audio into 24-bit / mono / 48 kHz FLAC
-//! files. The audio callback never touches this module — the DSP
-//! worker is wired to fan hop-aligned slices out through a bounded
-//! `std::sync::mpsc::sync_channel` and the [`RecordingWorker`] drains
-//! it onto a [`RecordingSink`].
-//!
-//! The [`RecordingSink`] / [`RecordingWorker`] core is exercised by the
-//! crate's unit tests. The DSP-worker fan-out and the `start_recording`
-//! / `stop_recording` Tauri commands are wired in
-//! `src-tauri/src/commands.rs` using a bounded `sync_channel`. The
-//! encoder thread receives hop-sized `Vec<f32>` slices via `try_send`;
-//! the producer-side increments the shared `dropped_windows`
-//! `AtomicU64` on `TrySendError::Full`.
+//! Encodes captured audio into 24-bit / mono / 48 kHz FLAC files. The
+//! audio callback never touches this module — the DSP worker fans
+//! hop-aligned slices through a bounded `std::sync::mpsc::sync_channel`
+//! and the [`RecordingWorker`] drains it onto a [`RecordingSink`].
 //!
 //! Design anchors:
 //! - Recording fidelity: 48 kHz / 24-bit / mono / FLAC.
-//! - rtrb is the only legal egress from the audio
-//!   callback; FLAC encoding sits two thread hops away on a worker thread.
-//! - `Drop` impls never panic; partial files are abandoned on
-//!   drop and never exposed to the library.
+//! - rtrb is the only legal egress from the audio callback; FLAC
+//!   encoding sits two thread hops away on a worker thread.
+//! - `Drop` impls never panic; partial files are abandoned on drop and
+//!   never exposed to the library.
+//! - Producer-side increments the shared `dropped_windows` counter on
+//!   `TrySendError::Full`; the encoder is allowed to lag without
+//!   stalling the live tuner pipeline.
 
 #[cfg(feature = "flac")]
 use std::path::Path;
@@ -203,15 +196,19 @@ impl FlacRecordingSink {
     pub const BIT_DEPTH: u8 = 24;
 }
 
+/// Peak `f32` scale factor for the positive 24-bit PCM range
+/// (`2^23 - 1 = 8_388_607`). Multiplying a clamped `[-1.0, 1.0]` sample
+/// by this constant keeps the result inside `[-2^23 + 1, 2^23 - 1]`.
+#[cfg(feature = "flac")]
+const PCM24_PEAK_F32: f32 = 8_388_607.0;
+
 /// Convert one `f32` sample in `[-1.0, 1.0]` to a 24-bit signed integer
 /// left-justified in `i32`. Saturating arithmetic; never panics.
 #[cfg(feature = "flac")]
 #[inline]
 fn f32_to_pcm24(s: f32) -> i32 {
-    // 24-bit range: [-2^23, 2^23 - 1]. We multiply by 2^23 - 1 (8_388_607)
-    // to keep the positive peak inside the representable range.
     let clamped = s.clamp(-1.0, 1.0);
-    let scaled = (clamped * 8_388_607.0_f32).round();
+    let scaled = (clamped * PCM24_PEAK_F32).round();
     // `as i32` on f32 saturates to the i32 range, so this conversion is
     // total. The clamp above keeps us well inside [-2^23 + 1, 2^23 - 1].
     scaled as i32

@@ -6,17 +6,16 @@
 // WAV blobs from Rust, but the WebAudio path is universally available and
 // keeps the IPC surface frozen (no new audio commands).
 //
-// Test-bridge contract: every prompt-play increments
-// `__neuralPitchTestHooks.audioPlayCount` (top-level for the spec) and
-// also `__neuralPitchTestHooks.training.audioPlayCount` (forward-compat
-// with future drill-specific harness slots).
+// Test-bridge contract: every prompt-play increments both the top-level
+// `__neuralPitchTestHooks.audioPlayCount` and the drill-scoped
+// `__neuralPitchTestHooks.training.audioPlayCount` so spec-side helpers
+// can target either granularity.
 //
 // AudioContext lifecycle: a single lazy module-level context is reused
-// across all prompts. Chrome typically caps live AudioContexts at 6 —
-// constructing a fresh one per `playDrillPrompt` (the previous shape)
-// silently leaked a context every prompt and broke playback after 6
-// drills. `closeDrillSynth()` is exposed so tests + drill unmount can
-// drop the singleton.
+// across all prompts because Chrome caps live AudioContexts at 6 —
+// constructing a fresh one per `playDrillPrompt` would leak a context
+// every prompt. `closeDrillSynth()` is exposed so tests + drill unmount
+// can drop the singleton.
 //
 
 import { midiToHz } from "@/lib/note-format";

@@ -152,6 +152,15 @@ export function formatIntervalLabel(
     return INTERVAL_QUALITY_LABELS[semitones] ?? `${semitones}st`;
   }
   // For solfege modes the row labels render the destination syllable —
-  // the tonic is implied by the prompt's first note.
-  return formatNoteForMode(tonicMidi + semitones, 440, mode, tonicMidi);
+  // the tonic is implied by the prompt's first note. The `a4Hz`
+  // parameter is irrelevant in solfege modes because
+  // `formatNoteForMode` short-circuits to a mod-12 syllable lookup;
+  // we pass the standard reference rather than thread the live
+  // setting through the call.
+  return formatNoteForMode(tonicMidi + semitones, SOLFEGE_A4_REFERENCE_HZ, mode, tonicMidi);
 }
+
+/** Standard reference for the solfege branch of `formatIntervalLabel`.
+ *  Unused by the underlying syllable lookup (mod-12 only) but threaded
+ *  through `formatNoteForMode` to satisfy the shared signature. */
+const SOLFEGE_A4_REFERENCE_HZ = 440;

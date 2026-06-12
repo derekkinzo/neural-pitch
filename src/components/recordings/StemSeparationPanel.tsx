@@ -87,7 +87,8 @@ export function StemSeparationPanel({
   const activeProgress = useStemsStore((s) => s.activeProgress);
   // Prefer the per-recording live status so concurrent separations on
   // two different recordings cannot interleave their stage
-  // announcements. Falls back to the global slot for older code paths.
+  // announcements. Falls back to the singleton slot for callers that
+  // pre-date the per-recording map.
   const liveStatus = useStemsStore((s) => s.liveStatusByRecording.get(recordingId) ?? s.liveStatus);
   const separate = useStemsStore((s) => s.separate);
   const cancel = useStemsStore((s) => s.cancel);

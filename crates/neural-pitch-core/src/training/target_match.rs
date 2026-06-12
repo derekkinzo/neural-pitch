@@ -35,7 +35,7 @@ pub struct MatchUpdate {
     /// Fraction of *all* frames (voiced + unvoiced) on-pitch:
     /// `count(voiced && in_tune) / total_frames`.
     pub time_on_pitch_ratio: f32,
-    /// Total frames currently in the ring.
+    /// Total frames in the ring.
     pub frames_observed: u32,
 }
 

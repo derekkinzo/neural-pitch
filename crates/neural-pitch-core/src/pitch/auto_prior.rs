@@ -44,22 +44,9 @@
 //!
 //! # Hint vs soft-clamp independence
 //!
-//! `hint_range` (set via [`AutoPrior::set_hint`] / [`AutoPrior::with_hint`])
-//! and the soft-clamp range (set via [`AutoPrior::set_soft_clamp`]) are two
-//! *independent* slots. Mutators on one do not touch the other:
-//!
-//! - [`AutoPrior::set_hint`] writes only `hint_range` — a previously
-//!   configured soft clamp is preserved.
-//! - [`AutoPrior::clear_hint`] writes only `hint_range` — soft clamp
-//!   survives the transition.
-//! - [`AutoPrior::set_soft_clamp`] / [`AutoPrior::clear_soft_clamp`] write
-//!   only `soft_clamp` — the pinned hint is preserved.
-//!
-//! Precedence is enforced at *read* time in [`AutoPrior::current_range`]:
-//! a pinned hint wins absolutely (rule 1 above) and the soft clamp is
-//! ignored while a hint is pinned. Once the hint is cleared, the soft
-//! clamp re-applies on the next read with no further configuration
-//! needed.
+//! `hint_range` and `soft_clamp` are independent slots; see the impl-block
+//! docs on [`AutoPrior::set_hint`] / [`AutoPrior::set_soft_clamp`] for the
+//! precedence contract.
 
 use crate::pitch::{F0Frame, InstrumentHint};
 
@@ -117,7 +104,7 @@ pub struct AutoPrior {
     ring: Box<[f32]>,
     /// Index of the next slot to write. In `[0, capacity)`.
     head: usize,
-    /// Number of valid samples currently in the ring. In `[0, capacity]`.
+    /// Number of valid samples held in the ring. In `[0, capacity]`.
     len: usize,
     /// Total ring capacity.
     capacity: usize,
@@ -241,13 +228,13 @@ impl AutoPrior {
         self.capacity
     }
 
-    /// Returns the number of voiced samples currently held in the ring.
+    /// Returns the number of voiced samples held in the ring.
     #[must_use]
     pub fn voiced_count(&self) -> usize {
         self.len
     }
 
-    /// Returns `true` iff a hint range is currently pinned.
+    /// Returns `true` iff a hint range is pinned.
     #[must_use]
     pub fn has_hint(&self) -> bool {
         self.hint_range.is_some()

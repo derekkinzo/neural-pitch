@@ -24,13 +24,7 @@
 import { create } from "zustand";
 import { invoke } from "@tauri-apps/api/core";
 import type { RecordingId } from "@/types/recording";
-import type {
-  SeparateProgress,
-  SeparateStage,
-  SeparationStatus,
-  StemKind,
-  StemSeparationState,
-} from "@/types/stems";
+import type { SeparateProgress, SeparateStage, StemKind, StemSeparationState } from "@/types/stems";
 
 interface WireProgress {
   recordingId?: string;
@@ -244,7 +238,6 @@ export const useStemsStore = create<StemsStore>((set, get) => ({
       pendingSeparations.delete(id);
       const msg = err instanceof Error ? err.message : String(err);
       const wasCancelled = /cancel/i.test(msg);
-      const nextStatus: SeparationStatus = wasCancelled ? "idle" : "error";
       const nextStatusCopy = wasCancelled
         ? "Stem separation cancelled"
         : `Stem separation failed: ${msg}`;
@@ -258,9 +251,6 @@ export const useStemsStore = create<StemsStore>((set, get) => ({
         liveStatus: nextStatusCopy,
         liveStatusByRecording: setLiveStatus(s.liveStatusByRecording, id, nextStatusCopy),
       }));
-      // Suppress an "unused" lint: the variable is captured for clarity
-      // but the only consumer is the ternary above.
-      void nextStatus;
       resetStemPercent(id);
     }
   },

@@ -1,9 +1,9 @@
 // Visual regression — tuner states.
 //
 // Three canonical states are snapshotted on Chromium-Linux only. The single-OS
-// pin is required by Playwright issue #13873 ("Not planned" 2026-05): even
-// identical Docker images render subtly differently across host CPU
-// architectures, so cross-OS pixel equality is not a viable goal.
+// pin is required by Playwright issue #13873: even identical Docker images
+// render subtly differently across host CPU architectures, so cross-OS pixel
+// equality is not a viable goal.
 //
 // All snapshots run with `prefers-reduced-motion: reduce` so HistoryStrip
 // renders its static <output> form rather than the canvas spline — keeping
@@ -268,13 +268,9 @@ test.describe("visual — RecordingDetail", () => {
     await expect(panel.locator("canvas").first()).toBeVisible({ timeout: 4000 });
     await expect(page.locator("#spectrogram-host")).toHaveAttribute("hidden", "");
 
-    // Use the project-wide `maxDiffPixelRatio: 0.08` baked into
-    // `playwright.config.ts` (no per-test override). The wavesurfer
-    // canvas is sensitive to glibc/freetype/cairo drift, so the strict
-    // pixel gate the previous revision used did not survive the move
-    // from local Playwright runner to the official Microsoft Playwright
-    // Docker image. Aligning on the project-wide ratio keeps the visual
-    // contract uniform with the other RecordingDetail snapshots.
+    // The wavesurfer canvas is sensitive to glibc/freetype/cairo drift;
+    // rely on the project-wide `maxDiffPixelRatio` (playwright.config.ts)
+    // instead of a per-test override.
     await expect(page).toHaveScreenshot("recording-detail-with-playback.png", {
       fullPage: true,
     });

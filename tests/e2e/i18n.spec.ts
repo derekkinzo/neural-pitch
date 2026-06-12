@@ -1,10 +1,10 @@
 // i18n / locale-switching stub.
 //
-// This build ships English strings only; the React app does not read the
-// `?locale=` query param. This stub asserts that the English path renders
-// successfully and reserves the spec slot for the movable-do
-// solfege NoteFormatter plus the {en-US, de-DE,
-// ja-JP, ar-EG} parameterised matrix.
+// English strings are the only catalogue; the React app does not read
+// the `?locale=` query param. This stub asserts that the English path
+// renders and reserves the spec slot for a movable-do solfege
+// NoteFormatter plus a {en-US, de-DE, ja-JP, ar-EG} parameterised
+// matrix once locale switching is wired.
 //
 
 import { test, expect } from "./fixtures";

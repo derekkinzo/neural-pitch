@@ -60,9 +60,9 @@ const SEED_HISTORY: MockDrillAttempt[] = [
   },
 ];
 
-/** Pin the page-side `now` reading so both spec seed and render share
- *  the same epoch. Removes the wall-clock drift that the previous spec
- *  papered over with a 1-hour slack on every `completedAt`. */
+/** Pin the page-side `now` so the spec seed and the render share an
+ *  epoch — exact `formatRelativeLong` output, no slack required, no
+ *  clock-drift flake. */
 async function pinTestNow(page: import("@playwright/test").Page, now: number): Promise<void> {
   await page.addInitScript((seedNow: number) => {
     type Hooks = { now?: number; [extra: string]: unknown };

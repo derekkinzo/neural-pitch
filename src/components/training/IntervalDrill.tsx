@@ -30,14 +30,13 @@ import { formatIntervalLabel } from "@/lib/note-format";
 import { handleRadioGroupKeydown } from "@/lib/radiogroup-keys";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { useTrainingStore } from "@/stores/trainingStore";
+import { RESULT_TOAST_MS, TOTAL_PROMPTS } from "@/types/training";
 
 const INTERVAL_SEMITONES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] as const;
 
 /** Default tonic for the drill — middle C. Solfege rendering anchors here
  *  in movable-do mode; in letter mode the tonic is irrelevant. */
 const DEFAULT_TONIC_MIDI = 60;
-
-const TOTAL_PROMPTS = 10;
 
 interface PromptState {
   /** Index in INTERVAL_SEMITONES of the correct answer. */
@@ -108,7 +107,7 @@ export function IntervalDrill(): ReactNode {
     toastTimeoutRef.current = window.setTimeout(() => {
       setResultText(null);
       toastTimeoutRef.current = null;
-    }, 1500);
+    }, RESULT_TOAST_MS);
 
     const answered = (session?.answered ?? 0) + 1;
     if (answered >= TOTAL_PROMPTS) {

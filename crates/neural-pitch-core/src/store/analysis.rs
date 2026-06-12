@@ -51,9 +51,9 @@ pub(super) fn upsert(
 
     let now = now_unix_ms()?;
 
-    // `result_format_version` defaults to 1 today; future analyzers can
-    // bump it independently of `analyzer_version` if their on-the-wire blob
-    // shape changes without changing the analyzer logic.
+    // `result_format_version` defaults to 1; analyzers bump it independently
+    // of `analyzer_version` when their on-the-wire blob shape changes without
+    // changing the analyzer logic.
     conn.execute(
         "INSERT INTO analysis_cache (
              recording_id, analyzer_name, analyzer_version,

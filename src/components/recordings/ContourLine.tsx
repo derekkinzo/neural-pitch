@@ -46,8 +46,7 @@ const DEFAULT_RANGE = 100; // ± cents — y-axis half-range
 const FRAMES_PER_SECOND_CAP = 500;
 
 // The hex literals live in `lib/theme-tokens.ts`; re-export under the
-// existing names so the paint paths stay readable while the tokens are
-// centralised for future theming work.
+// existing names so the paint paths stay readable.
 const COLORS = {
   bg: COLOR_SLATE_900,
   axis: COLOR_SLATE_600,

@@ -14,8 +14,8 @@
 //! `0..=15` skipping channel 9 (GM percussion). Each note holds its own
 //! channel for the duration of its pitch-bend stream. If more than 15
 //! notes overlap simultaneously, the emitter returns
-//! [`EstimatorError::Configuration`] — sung material never hits the
-//! limit; a multi-track fallback is documented as a future ticket.
+//! [`EstimatorError::Configuration`] — more than 15 simultaneous notes
+//! are out of scope; callers MUST split into multiple tracks externally.
 
 use midly::num::{u4, u7, u14, u15, u24, u28};
 use midly::{

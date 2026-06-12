@@ -26,6 +26,7 @@ use crate::music::frequency_to_note;
 use crate::pipeline::sink::{FrameSink, FrameSinkError, PitchUpdate};
 use crate::pitch::auto_prior::AutoPrior;
 use crate::pitch::{EstimatorError, InstrumentHint, PitchEstimator};
+use crate::settings::DEFAULT_A4_HZ;
 use crate::smoothing::ContourSmoother;
 use crate::voicing::VoiceActivityGate;
 
@@ -48,10 +49,6 @@ pub enum DspError {
     Spawn(String),
 }
 
-/// Reference pitch (Hz) for note math. Tunable per-instance via
-/// [`DspWorker::with_a4`].
-const DEFAULT_A4_HZ: f32 = 440.0;
-
 /// Audio analysis worker.
 ///
 /// Owns its inputs (consumer + estimator + smoother + VAD) and its output
@@ -68,7 +65,7 @@ pub struct DspWorker {
     cfg: AudioBackendConfig,
     /// Pre-allocated sliding window buffer; reused every iteration.
     window: Box<[f32]>,
-    /// Number of valid samples currently held in `window`. Once this reaches
+    /// Number of valid samples held in `window`. Once this reaches
     /// `cfg.window`, the buffer is full and analysis can run; subsequent
     /// hops shift the buffer left by `hop` samples and append a fresh hop
     /// from the consumer.
@@ -337,26 +334,22 @@ impl DspWorker {
             }
 
             // 3b) Recording fan-out — try_send the freshest hop slice to
-            //     the bounded recording channel if one is attached. On
-            //     `TrySendError::Full` the slice is dropped and the
-            //     producer-side dropped-windows counter is incremented;
-            //     the slice is NOT retried (the recording worker's
-            //     backpressure semantics permit drops, and a retry would
-            //     stall the live tuner pipeline).
+            //     the bounded recording channel if one is attached.
+            //     `TrySendError::Full` drops the slice and bumps the
+            //     producer-side dropped-windows counter; no retry, since
+            //     the recording worker tolerates drops and a retry would
+            //     stall the live tuner pipeline.
             //
             //     RT-safety: `try_send` on a full bounded channel is
-            //     non-blocking. The cost is one Vec allocation per
-            //     fanned-out hop (sized to `hop`), which at hop=512 /
-            //     48 kHz is ~93 allocations per second on the DSP
-            //     thread. Reviewers: this is a known per-hop allocation,
-            //     the same shape as the existing `Channel::send` JSON-
-            //     serialise path described in `src-tauri/src/sink.rs`;
-            //     the audio callback is two thread hops away.
+            //     non-blocking. One Vec allocation per fanned-out hop
+            //     (sized to `hop`) is accepted — this thread is two thread
+            //     hops away from the audio callback. See
+            //     `src-tauri/src/sink.rs` for the matching RT-safety
+            //     contract.
             //
-            //     Snapshotting the fanout entry once per iteration takes
-            //     a brief parking_lot lock (uncontended in the
-            //     steady-state — the shell only mutates it on
-            //     start/stop_recording).
+            //     Snapshotting the fanout entry takes a brief parking_lot
+            //     lock that stays uncontended in the steady state — the
+            //     shell only mutates it on start/stop_recording.
             if let Some(entry) = self.recording_fanout.snapshot() {
                 let hop_slice = &self.window[window - hop..window];
                 let payload: Vec<f32> = hop_slice.to_vec();

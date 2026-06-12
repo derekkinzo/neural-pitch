@@ -2,9 +2,10 @@
 //! downstream crates. Exposes synthesised signal generators in [`signals`]
 //! and the voice-shaped fixture builder in [`voice`].
 //!
-//! NOTE: this module is `pub` unconditionally; gating it behind
-//! `#[cfg(any(test, feature = "test-utils"))]` is left as a follow-up so
-//! production binaries do not pull in the helpers.
+//! NOTE: this module is `pub` unconditionally — production binaries
+//! pay the cost of pulling in the synthesised-signal helpers. Gating
+//! it behind `#[cfg(any(test, feature = "test-utils"))]` would shrink
+//! the production surface but is not part of the contract.
 
 pub mod signals;
 pub mod voice;

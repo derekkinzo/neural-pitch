@@ -38,6 +38,11 @@ pub(crate) const SETTINGS_STORE_KEY: &str = "settings";
 /// Maximum wait for the DSP worker thread to join during `stop_capture`.
 const DSP_JOIN_BUDGET: Duration = Duration::from_millis(500);
 
+/// Sample rate locked by the recording + DSP pipeline. The FLAC sink, the
+/// `48 kHz` gate in `start_recording`, and the live-capture pipeline all
+/// share this constant so the gate and the sink-creation call cannot drift.
+const SAMPLE_RATE_LOCK_HZ: u32 = 48_000;
+
 /// Begin capture with the supplied settings, streaming [`PitchUpdate`]
 /// frames through `channel` and out-of-band [`AudioBackendEvent`]s through
 /// `events`.
@@ -77,8 +82,8 @@ pub async fn start_capture(
         .map_err(|e| format!("invalid settings: {e:#}"))?;
 
     // Refuse a duplicate start *before* we mutate settings or build the
-    // controller — the original code path persisted-then-checked, which
-    // committed bad config to disk on the duplicate-start error path.
+    // controller. Pre-check is required so a duplicate-start error path
+    // does not commit bad config to disk.
     {
         let guard = state.dsp.lock();
         if guard.is_some() {
@@ -271,7 +276,7 @@ pub async fn start_recording(
 
     let settings_snapshot = state.settings_snapshot();
     let sample_rate_hz = settings_snapshot.sample_rate_hz;
-    if sample_rate_hz != 48_000 {
+    if sample_rate_hz != SAMPLE_RATE_LOCK_HZ {
         return Err(format!(
             "FLAC recordings require a 48 kHz sample rate (current: {sample_rate_hz})"
         ));
@@ -300,7 +305,7 @@ pub async fn start_recording(
     // active. A minimal CI build that disables the feature would fail
     // to compile this command, which is the desired behaviour.
     let sink: Box<dyn neural_pitch_core::pipeline::RecordingSink> = Box::new(
-        neural_pitch_core::pipeline::FlacRecordingSink::create(&path, 48_000)
+        neural_pitch_core::pipeline::FlacRecordingSink::create(&path, SAMPLE_RATE_LOCK_HZ)
             .map_err(|e| format!("create sink: {e:#}"))?,
     );
 
@@ -339,7 +344,10 @@ pub async fn start_recording(
                     u64::try_from(started_at.elapsed().as_millis()).unwrap_or(u64::MAX);
                 let dropped_n = dropped_for_ticker.load(std::sync::atomic::Ordering::Relaxed);
                 if let Err(e) = progress.send(RecordingProgress::Tick {
-                    sample_count: 0, // running tally not exposed by handle yet
+                    // sample_count is held at 0 because the handle does
+                    // not expose a running tally; `duration_ms` carries
+                    // elapsed wall-clock instead.
+                    sample_count: 0,
                     duration_ms,
                     dropped_windows: dropped_n,
                 }) {
@@ -505,23 +513,25 @@ pub async fn list_recordings(
     .await
     .map_err(|e| format!("list_recordings task panicked: {e}"))?
     .map_err(|e| format!("list recordings: {e:#}"))?;
-    Ok(rows
-        .into_iter()
-        .map(|r| {
-            serde_json::json!({
-                "id": r.id.to_string(),
-                "filename": r.filename,
-                "created_at": r.created_at_unix_ms,
-                "duration_ms": r.duration_ms,
-                "sample_rate_hz": r.sample_rate_hz,
-                "channels": r.channels,
-                "bit_depth": r.bit_depth,
-                "a4_hz": r.a4_hz,
-                "instrument_profile": r.instrument_profile,
-                "user_label": r.user_label,
-            })
-        })
-        .collect())
+    Ok(rows.iter().map(recording_row_to_json).collect())
+}
+
+/// Project a [`neural_pitch_core::store::Recording`] row onto the wire
+/// JSON shape consumed by the front-end. Keeps `list_recordings` and
+/// `stop_recording` from drifting on field naming.
+fn recording_row_to_json(r: &neural_pitch_core::store::Recording) -> serde_json::Value {
+    serde_json::json!({
+        "id": r.id.to_string(),
+        "filename": r.filename,
+        "created_at": r.created_at_unix_ms,
+        "duration_ms": r.duration_ms,
+        "sample_rate_hz": r.sample_rate_hz,
+        "channels": r.channels,
+        "bit_depth": r.bit_depth,
+        "a4_hz": r.a4_hz,
+        "instrument_profile": r.instrument_profile,
+        "user_label": r.user_label,
+    })
 }
 
 /// Hard-delete a recording: drop the SQLite row, remove the on-disk audio
@@ -595,11 +605,9 @@ const DEFAULT_ANALYZER_NAME: &str = neural_pitch_core::analysis::contour::PYIN_A
 ///     smoothing window, voicing threshold),
 ///   * a postcard format-version bump.
 ///
-/// Failure to bump leads to silent stale-cache hits where an old blob
-/// decodes against the new shape and surfaces wrong values to the UI —
-/// the SQL key compares plain strings (no semver normalisation, see
-/// `store::analysis`), so the cache layer cannot detect the divergence
-/// on its own.
+/// Failure to bump leads to silent stale-cache hits — the SQL key
+/// compares plain strings (no semver normalisation, see
+/// `store::analysis`).
 const DEFAULT_ANALYZER_VERSION: &str = neural_pitch_core::analysis::contour::PYIN_ANALYZER_VERSION;
 
 /// Adapter that lets `analyze_recording_blocking` emit progress through a
@@ -952,8 +960,8 @@ impl BackendKind {
 ///
 /// The underlying analyzer plumbing in
 /// [`neural_pitch_core::store::analyze_recording_blocking`] dispatches
-/// on `analyzer_name`; the offline pipeline today only routes pYIN, so
-/// [`BackendKind`] only carries that arm. Adding a new analyzer means
+/// on `analyzer_name`; the offline pipeline routes pYIN, so
+/// [`BackendKind`] carries that one arm. Adding a new analyzer means
 /// adding a new variant *and* extending the core dispatcher in the
 /// same change so the cache key, the IPC discriminant, and the
 /// computed bytes stay in lock-step.
@@ -1059,8 +1067,8 @@ pub fn get_capabilities() -> Result<Capabilities, String> {
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum ModelStatus {
     /// The model is shipped in-tree as a synthetic test ONNX. Reserved
-    /// for the test_utils path; the workspace `models.toml` does not
-    /// surface this today.
+    /// for the test_utils path; `models.toml` does not list a Bundled
+    /// entry.
     Bundled,
     /// The model is on disk and verified against the manifest sha256.
     Cached {
@@ -1117,7 +1125,7 @@ pub fn get_model_status(
 }
 
 /// Cancel an in-flight analysis. Idempotent: returns `Ok(())` if no
-/// analysis is currently registered for the supplied `recording_id`.
+/// analysis is registered for the supplied `recording_id`.
 #[tauri::command]
 #[tracing::instrument(skip(state))]
 pub async fn cancel_analysis(
@@ -1137,8 +1145,13 @@ pub async fn cancel_analysis(
     Ok(())
 }
 
-/// Rename a recording's user-supplied label. Empty / whitespace-only
-/// strings clear the label.
+/// Validate a rename request for a recording's user-supplied label.
+///
+/// The IPC currently performs validation only — the underlying
+/// `RecordingsLibrary` exposes no rename helper, so the new label is
+/// accepted (or rejected as `NotFound`) but is **not** persisted to
+/// SQLite. Empty / whitespace-only strings would clear the label once
+/// the persistence call lands.
 #[tauri::command]
 #[tracing::instrument(skip(state))]
 pub async fn rename_recording(
@@ -1227,8 +1240,8 @@ pub async fn get_settings(state: State<'_, AppState>) -> Result<TunerSettings, S
 }
 
 /// Apply a single `(key, value)` patch to the current settings, validate,
-/// persist, and return the new full struct. Validation errors do not
-/// mutate state.
+/// persist, and return the persisted full struct. Validation errors do
+/// not mutate state.
 ///
 /// The whole RMW is performed under the settings write lock so two
 /// concurrent `set_setting` calls cannot lose each other's deltas.
@@ -1289,12 +1302,9 @@ async fn persist_settings(
 
 /// Map [`InstrumentHint`] to the live-tuner search range.
 ///
-/// Thin wrapper around [`live_search_range_for_hint`]: kept here so the call
-/// site reads cleanly and so the unit tests in this module continue to
-/// exercise the helper through the same surface the live build uses.
-/// Acceptance harnesses MUST go through `live_search_range_for_hint`
-/// directly so test coverage and live behaviour stay bound to the same
-/// table.
+/// Thin wrapper around [`live_search_range_for_hint`]. Acceptance
+/// harnesses MUST call that function directly so test coverage and live
+/// behaviour stay bound to the same table.
 fn search_range(hint: InstrumentHint) -> (f32, f32) {
     live_search_range_for_hint(hint)
 }
@@ -1385,6 +1395,15 @@ fn translate_build_error(e: BuildError) -> String {
 /// 256 frames at 48 kHz ≈ 5.3 ms — well under the DESIGN §6.3 latency budget.
 const DEFAULT_BUFFER_FRAMES: u32 = 256;
 
+/// RMS threshold below which the voice-activity gate marks a frame
+/// unvoiced. Calibrated for the live-tuner pipeline at hop=512 / 48 kHz.
+const VAD_RMS_THRESHOLD: f32 = 0.005;
+
+/// Hangover frames the VAD keeps a voiced label after the RMS dips below
+/// `VAD_RMS_THRESHOLD`. Smooths over short consonant gaps in continuous
+/// vocal lines.
+const VAD_HANGOVER_FRAMES: u32 = 4;
+
 /// Wire up the live capture pipeline end-to-end and return the controller
 /// that the lifecycle owner stores in `AppState`.
 fn build_controller(
@@ -1392,9 +1411,8 @@ fn build_controller(
     channel: Channel<PitchUpdate>,
     emitter: Option<AudioEventEmitter>,
 ) -> Result<DspController, BuildError> {
-    // 1) Discover the default input device. We do not currently allow
-    //    explicit device selection from the front-end; that is future
-    //    work.
+    // 1) Discover the default input device. The default is used;
+    //    explicit device selection is not part of the surface.
     let host = cpal::default_host();
     let device = host
         .default_input_device()
@@ -1433,7 +1451,7 @@ fn build_controller(
     )?;
 
     let smoother = ContourSmoother::new(settings.smoothing_window_ms, settings.sample_rate_hz);
-    let vad = VoiceActivityGate::new(0.005, 4);
+    let vad = VoiceActivityGate::new(VAD_RMS_THRESHOLD, VAD_HANGOVER_FRAMES);
 
     // 3) SPSC ring sized per the audio-backend ring-capacity contract.
     let (producer, consumer) = rtrb::RingBuffer::<f32>::new(backend_cfg.ring_capacity());
@@ -1762,7 +1780,6 @@ pub async fn separate_stems(
         let mut g = state.active_separations.lock();
         g.remove(&parsed);
     }
-    let _ = cancel; // suppress unused-binding lint after registry cleanup.
 
     result.map_err(|e| format!("{e:#}"))
 }
@@ -1860,8 +1877,13 @@ pub async fn export_stem(
         };
         let bytes = std::fs::copy(src, &partial)
             .map_err(|e| format!("copy {src} -> {}: {e}", partial.display()))?;
-        // Best-effort fsync of the partial file's contents before the
-        // atomic rename so the byte stream is durable.
+        // Best-effort fsync of the partial file before the atomic
+        // rename. Limitation: fsync on a freshly-opened read handle
+        // durabilizes inode metadata only, not the bytes written by the
+        // prior `copy()` call. Strengthening this would require a
+        // write-handle round-trip plus a parent-directory fsync — kept
+        // best-effort here because export targets land outside the app
+        // sandbox where stronger guarantees are out of scope.
         if let Ok(f) = std::fs::File::open(&partial) {
             let _ = f.sync_all();
         }
@@ -1924,9 +1946,9 @@ mod tests {
         assert_eq!(json["code"], "no_input_device");
     }
 
-    /// Lock in the on-the-wire `kind` discriminant so a future serde
-    /// rename (e.g. accidentally re-introducing
-    /// `rename_all = "snake_case"`) cannot silently flip `pyin` to
+    /// Locks in the on-the-wire `kind` discriminant against an
+    /// accidental serde `rename_all` (e.g. re-introducing
+    /// `rename_all = "snake_case"`) that would silently flip `pyin` to
     /// `p_yin`. This is the contract the front-end joins to
     /// `analysis_cache.analyzer_name` rows.
     #[test]

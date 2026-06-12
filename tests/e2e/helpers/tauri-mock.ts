@@ -768,31 +768,56 @@ export function installPlaybackMock(): TauriMockResponses {
 /**
  * Build the 1 s, 440 Hz, mono 16-bit PCM WAV at 8 kHz on the Node side.
  * Small (~16 KB) so a single `Buffer.from` round-trip per spec is cheap.
+ *
+ * Layout follows RIFF / WAVE: a "RIFF" chunk wrapping a 16-byte PCM
+ * "fmt " sub-chunk and a "data" sub-chunk (see Multimedia Programming
+ * Interface and Data Specifications 1.0, IBM/Microsoft 1991, §5).
  */
+// RIFF / PCM-WAVE byte offsets within the 44-byte canonical header.
+const WAV_RIFF_TAG_OFFSET = 0;
+const WAV_RIFF_SIZE_OFFSET = 4;
+const WAV_WAVE_TAG_OFFSET = 8;
+const WAV_FMT_TAG_OFFSET = 12;
+const WAV_FMT_CHUNK_SIZE_OFFSET = 16;
+const WAV_FORMAT_TAG_OFFSET = 20;
+const WAV_NUM_CHANNELS_OFFSET = 22;
+const WAV_SAMPLE_RATE_OFFSET = 24;
+const WAV_BYTE_RATE_OFFSET = 28;
+const WAV_BLOCK_ALIGN_OFFSET = 32;
+const WAV_BITS_PER_SAMPLE_OFFSET = 34;
+const WAV_DATA_TAG_OFFSET = 36;
+const WAV_DATA_SIZE_OFFSET = 40;
+const WAV_HEADER_BYTES = 44;
+// PCM constants.
+const WAV_FMT_CHUNK_SIZE_PCM = 16;
+const WAV_FORMAT_PCM = 1;
+const WAV_BITS_PER_SAMPLE_S16 = 16;
+const WAV_BYTES_PER_SAMPLE_S16 = 2;
+
 function buildFixtureWav(): Buffer {
   const sampleRate = 8000;
   const durationS = 1;
   const freqHz = 440;
   const totalSamples = sampleRate * durationS;
-  const dataBytes = totalSamples * 2;
-  const totalSize = 44 + dataBytes;
+  const dataBytes = totalSamples * WAV_BYTES_PER_SAMPLE_S16;
+  const totalSize = WAV_HEADER_BYTES + dataBytes;
   const buf = Buffer.alloc(totalSize);
-  buf.write("RIFF", 0, "ascii");
-  buf.writeUInt32LE(totalSize - 8, 4);
-  buf.write("WAVE", 8, "ascii");
-  buf.write("fmt ", 12, "ascii");
-  buf.writeUInt32LE(16, 16); // PCM fmt chunk size
-  buf.writeUInt16LE(1, 20); // PCM
-  buf.writeUInt16LE(1, 22); // mono
-  buf.writeUInt32LE(sampleRate, 24);
-  buf.writeUInt32LE(sampleRate * 2, 28); // byte rate
-  buf.writeUInt16LE(2, 32); // block align
-  buf.writeUInt16LE(16, 34); // bits per sample
-  buf.write("data", 36, "ascii");
-  buf.writeUInt32LE(dataBytes, 40);
+  buf.write("RIFF", WAV_RIFF_TAG_OFFSET, "ascii");
+  buf.writeUInt32LE(totalSize - 8, WAV_RIFF_SIZE_OFFSET);
+  buf.write("WAVE", WAV_WAVE_TAG_OFFSET, "ascii");
+  buf.write("fmt ", WAV_FMT_TAG_OFFSET, "ascii");
+  buf.writeUInt32LE(WAV_FMT_CHUNK_SIZE_PCM, WAV_FMT_CHUNK_SIZE_OFFSET);
+  buf.writeUInt16LE(WAV_FORMAT_PCM, WAV_FORMAT_TAG_OFFSET);
+  buf.writeUInt16LE(1, WAV_NUM_CHANNELS_OFFSET); // mono
+  buf.writeUInt32LE(sampleRate, WAV_SAMPLE_RATE_OFFSET);
+  buf.writeUInt32LE(sampleRate * WAV_BYTES_PER_SAMPLE_S16, WAV_BYTE_RATE_OFFSET);
+  buf.writeUInt16LE(WAV_BYTES_PER_SAMPLE_S16, WAV_BLOCK_ALIGN_OFFSET);
+  buf.writeUInt16LE(WAV_BITS_PER_SAMPLE_S16, WAV_BITS_PER_SAMPLE_OFFSET);
+  buf.write("data", WAV_DATA_TAG_OFFSET, "ascii");
+  buf.writeUInt32LE(dataBytes, WAV_DATA_SIZE_OFFSET);
   for (let i = 0; i < totalSamples; i++) {
     const v = Math.round(Math.sin((2 * Math.PI * freqHz * i) / sampleRate) * 0.5 * 32767);
-    buf.writeInt16LE(v, 44 + i * 2);
+    buf.writeInt16LE(v, WAV_HEADER_BYTES + i * WAV_BYTES_PER_SAMPLE_S16);
   }
   return buf;
 }
@@ -1398,7 +1423,7 @@ export function installStemsMock(): TauriMockResponses {
      return {
        downloadUrl: "https://example.invalid/htdemucs.onnx",
        sha256: "0000000000000000000000000000000000000000000000000000000000000000",
-       sizeBytes: 80 * 1024 * 1024
+       sizeBytes: 80 * 1024 * 1024 /* stub size; real model size lives in models.toml */
      };`,
   ) as (args: Record<string, unknown>) => unknown;
 

@@ -135,8 +135,8 @@ pub struct ContourResult {
 
 /// Errors raised by the offline analysis surface.
 ///
-/// The Tauri command surface maps every variant via
-/// `format!("{e:#}")`, identical to `start_capture` / `stop_recording`.
+/// Every variant is rendered via `format!("{e:#}")` at the Tauri
+/// boundary, matching the rest of the recording-surface IPC contract.
 #[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum AnalysisError {
@@ -149,7 +149,7 @@ pub enum AnalysisError {
     /// FLAC decode failed.
     #[error("decode failed: {0}")]
     DecodeFailed(String),
-    /// The analyzer (PYIN today; other backends later) returned an error.
+    /// The analyzer returned an error.
     #[error("analyzer failed: {0}")]
     AnalyzerFailed(String),
     /// A cancel token was flipped mid-run.
@@ -382,7 +382,7 @@ pub fn get_contour_blocking(
     };
     tracing::Span::current().record("blob_bytes", blob.len() as u64);
     // Cache-bump back-compat: pre-`0.2` blobs use an older
-    // `ContourResult` field set that the current postcard schema can
+    // `ContourResult` field set that the live postcard schema can
     // no longer round-trip. Rather than treating them as hard
     // [`AnalysisError::CacheCorrupted`] (which would force the front-end
     // to manually purge the row), surface a structurally-empty
@@ -437,14 +437,14 @@ pub fn get_contour_blocking(
     } else if contour.frames.is_empty() {
         0
     } else {
-        256
+        PYIN_DEFAULT_HOP
     };
     let window_size: usize = if contour.window_size > 0 {
         contour.window_size as usize
     } else if contour.frames.is_empty() {
         0
     } else {
-        1024
+        PYIN_DEFAULT_WINDOW
     };
     Ok(Some(reshape_contour(
         analyzer_name,
@@ -457,9 +457,9 @@ pub fn get_contour_blocking(
 }
 
 /// Identify analyzer-version strings that predate the cache bump.
-/// Today only `"0.1"` qualifies; the helper exists so a future
-/// version-introduction bump (e.g. `"0.1.1"`) can extend the set without
-/// re-touching the decoder.
+/// `"0.1"` is the sole qualifier; the helper exists so a follow-on
+/// version (e.g. `"0.1.1"`) can extend the set without re-touching the
+/// decoder.
 fn is_pre_0_2_legacy_version(analyzer_version: &str) -> bool {
     matches!(analyzer_version, "0.1")
 }
@@ -653,6 +653,14 @@ fn cancelled(cancel: Option<&AtomicBool>) -> bool {
 /// to special-case different commands.
 const PROGRESS_TICK_INTERVAL: std::time::Duration = std::time::Duration::from_millis(200);
 
+/// Default pYIN hop size, in samples. The 256/1024 hop/window pair matches
+/// the live-tuner pipeline so cached offline contours and a fresh live
+/// capture of the same audio stay frame-aligned.
+const PYIN_DEFAULT_HOP: usize = 256;
+
+/// Default pYIN analysis window, in samples. Pairs with [`PYIN_DEFAULT_HOP`].
+const PYIN_DEFAULT_WINDOW: usize = 1024;
+
 /// Drive the offline pYIN analyzer with periodic progress ticks.
 ///
 /// Mirrors the inner loop of `crate::analysis::contour::analyze_contour`
@@ -762,7 +770,10 @@ fn run_analyzer_with_progress(
 
     // Post-process via the smoother + cents conversion. Mirrors the
     // pipeline in `analyze_contour`.
-    let mut smoother = ContourSmoother::new(80.0, source_sample_rate_hz);
+    let mut smoother = ContourSmoother::new(
+        crate::analysis::contour::ANALYZER_SMOOTHER_WINDOW_MS,
+        source_sample_rate_hz,
+    );
     let mut smoothed_cents = Vec::with_capacity(frames.len());
     let mut voiced_count = 0usize;
     for frame in &frames {
@@ -827,10 +838,10 @@ fn summarize_cached(
         f64::from(contour.frame_rate_hz)
     } else {
         // Fall back to spec ratio: `sample_rate_hz / hop_size`. Computed
-        // from a 256-sample hop default if the analyzer left
-        // frame_rate_hz at zero (bug-resistant — older blobs from before
-        // the field was populated).
-        sample_rate_hz / 256.0
+        // from the default hop size if the analyzer left frame_rate_hz at
+        // zero (bug-resistant — older blobs from before the field was
+        // populated).
+        sample_rate_hz / PYIN_DEFAULT_HOP as f64
     };
     let voiced_ratio = f64::from(contour.voiced_ratio).clamp(0.0, 1.0);
     let (median_hz_voiced, median_cents_off) = compute_medians(&contour.frames, a4_hz);
@@ -1027,8 +1038,8 @@ fn pyin_config_from_row(
     let sr = u32::try_from(sample_rate_hz).unwrap_or(48_000);
     crate::pitch::EstimatorConfig {
         sample_rate_hz: sr,
-        hop_size: 256,
-        window_size: 1024,
+        hop_size: PYIN_DEFAULT_HOP,
+        window_size: PYIN_DEFAULT_WINDOW,
         fmin_hz,
         fmax_hz,
         instrument_hint: Some(hint),

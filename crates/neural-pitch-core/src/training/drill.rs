@@ -55,8 +55,8 @@ pub struct DrillSpec {
 
 /// Karaoke-ribbon hit-window. Single-note targets have
 /// `start_midi == end_midi`; the matcher's slide-along-a-line
-/// interpolation is NOT implemented today — the field pair is treated
-/// as a `[min_midi, max_midi]` envelope.
+/// interpolation is out of scope — the field pair is treated as a
+/// `[min_midi, max_midi]` envelope.
 ///
 /// Concretely, [`crate::training::target_match::TargetMatcher`] flags a
 /// frame in-tune iff:
@@ -67,8 +67,8 @@ pub struct DrillSpec {
 ///    `target_midi` is within `tolerance_cents`.
 ///
 /// True slide scoring (cents tolerance around the line connecting the
-/// two endpoints, parameterised by `t_normalised`) is a follow-up;
-/// today single-pitch targets are the only contract.
+/// two endpoints, parameterised by `t_normalised`) is out of scope;
+/// the matcher treats `[start_midi, end_midi]` as an envelope.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct HitWindow {
     /// Lower MIDI bound, inclusive. For single-pitch targets,

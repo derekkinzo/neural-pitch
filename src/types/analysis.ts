@@ -78,8 +78,9 @@ export interface AnalysisSummary {
   /** Analyzer version stamp — part of the cache key alongside the recording
    *  id. Specs assert via the `${recordingId}:${analyzerVersion}` composite. */
   readonly analyzerVersion: string;
-  /** Vocal range report. Optional because older cached rows
-   *  pre-date the field; readouts treat `undefined` as the empty branch. */
+  /** Vocal range report. Optional — when absent (cache rows or
+   *  fixtures without range data), readouts fall into the empty
+   *  branch. */
   readonly range?: RangeReport;
   /** Vibrato report. Optional for the same reason. */
   readonly vibrato?: VibratoReport;

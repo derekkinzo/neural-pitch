@@ -65,18 +65,18 @@ impl core::fmt::Debug for SampleSource {
 /// Pacing policy for the mock backend.
 ///
 /// `MockAudioBackend` itself does not sleep — the variants exist for symmetry
-/// with future real-time test harnesses and are not consulted by the current
+/// with real-time test harnesses and are not consulted by this
 /// implementation. They are kept on the public surface so tests can express
 /// intent.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum Pacing {
     /// Produce samples as fast as the consumer drains them. This is the only
-    /// mode used by the deterministic integration tests today.
+    /// mode used by the deterministic integration tests.
     #[default]
     AsFastAsPossible,
     /// Marker variant intended to simulate real-time pacing in
-    /// long-running integration tests. **Currently a no-op marker** —
+    /// long-running integration tests. Reserved no-op marker —
     /// `MockAudioBackend` does not consult this variant; `feed` always
     /// runs as fast as the ring drains.
     Realtime,

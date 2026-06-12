@@ -1,10 +1,9 @@
 // Drawer — right-side slide-in dialog with focus trap and Escape-to-close.
 //
 // Vendored under `components/ui/`. The shadcn `Drawer` primitive
-// wraps Radix Dialog; we implement the same surface in ~80 lines because the
-// use case is exactly one drawer, exactly one trigger, exactly one
-// modal pattern. A future polish pass may switch to Radix once we add a second
-// drawer surface (e.g. a metronome side-panel).
+// wraps Radix Dialog; the native implementation here is sufficient for
+// the single-drawer surface footprint — Radix Dialog is a candidate
+// replacement if the surface count grows.
 //
 // Implementation:
 //   - role="dialog" aria-modal="true" on the panel.
@@ -106,13 +105,10 @@ export function Drawer({
 
     // Defer focus until the panel is in the DOM. Both modal and non-
     // modal drawers pull focus into the panel on open so keyboard users
-    // do not have to Tab past the drawer header to reach the contents.
-    // The non-modal path used to leave focus on the trigger, which made
-    // a Tab traverse the entire panel just to reach the first row's
-    // Play button — a real keyboard productivity gap on the recordings
-    // drawer with 50+ takes (WAI-ARIA APG dialog pattern). The Escape
-    // key still closes the drawer either way, and the focus is restored
-    // to the previous element on close (see the cleanup branch).
+    // land on the first focusable control without traversing the
+    // trigger (WAI-ARIA APG dialog pattern). Escape closes the drawer
+    // either way, and focus is restored to the previous element on
+    // close (see the cleanup branch).
     const id = window.setTimeout(() => {
       const first = panel?.querySelector<HTMLElement>(FOCUSABLE_SELECTORS);
       first?.focus();

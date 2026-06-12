@@ -176,15 +176,13 @@ export function CentsMeter({ ringRef }: CentsMeterProps): ReactNode {
     };
     subscribeDpr();
 
-    // Reduced-motion cadence. The matchMedia listener is
-    // re-evaluated reactively so a user toggling the OS-level setting at
-    // runtime is honoured without a remount.
+    // Reduced-motion cadence. The cadence is locked in at mount: a
+    // runtime flip of the OS-level setting requires a remount of the
+    // CentsMeter (e.g. navigating away from / back to the tuner) to
+    // pick up the new branch. This matches the rest of the meter's
+    // mount-once contract.
     const motionMql = window.matchMedia("(prefers-reduced-motion: reduce)");
-    let reducedMotion = motionMql.matches;
-    const onMotionChange = (): void => {
-      reducedMotion = motionMql.matches;
-    };
-    motionMql.addEventListener("change", onMotionChange);
+    const reducedMotion = motionMql.matches;
 
     let raf = 0;
     let intervalId: number | null = null;
@@ -234,9 +232,9 @@ export function CentsMeter({ ringRef }: CentsMeterProps): ReactNode {
       renderOnce();
     };
 
-    // Choose cadence; if motion preference flips at runtime the next
-    // animation frame / interval cycle picks up the change because we
-    // re-evaluate `reducedMotion` per-tick via closure capture below.
+    // Choose cadence at mount; runtime flips of the OS reduced-motion
+    // setting need a remount to take effect (see the matchMedia comment
+    // above for the contract).
     if (reducedMotion) startInterval();
     else startRaf();
 
@@ -245,7 +243,6 @@ export function CentsMeter({ ringRef }: CentsMeterProps): ReactNode {
       if (intervalId !== null) window.clearInterval(intervalId);
       ro.disconnect();
       if (mql !== null && mqlListener !== null) mql.removeEventListener("change", mqlListener);
-      motionMql.removeEventListener("change", onMotionChange);
     };
   }, [ringRef]);
 

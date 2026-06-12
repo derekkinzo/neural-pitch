@@ -40,21 +40,22 @@ export function SettingsDrawer({ open, onOpenChange }: SettingsDrawerProps): Rea
 
   const { setA4Hz, setInstrumentHint, setSmoothingMs } = useSettings();
 
-  // Local input state keeps numeric typing snappy without spamming the store.
-  const [a4Draft, setA4Draft] = useState<string>(String(a4Hz));
-  // Reset draft when the store value changes externally (e.g. preset click)
-  // and the input is not currently focused.
-  useEffect(() => {
-    const active = document.activeElement as HTMLElement | null;
-    if (active?.dataset["testid"] === "a4-input") return;
-    setA4Draft(String(a4Hz));
-  }, [a4Hz]);
-
   const a4InputId = useId();
   const a4PresetId = useId();
   const instrumentId = useId();
   const smoothingId = useId();
   const noteLabelId = useId();
+
+  // Local input state keeps numeric typing snappy without spamming the store.
+  const [a4Draft, setA4Draft] = useState<string>(String(a4Hz));
+  // Reset draft when the store value changes externally (e.g. preset click)
+  // and the input is not currently focused. Compare to the React-assigned
+  // input id so the focus guard does not depend on the test-id attribute.
+  useEffect(() => {
+    const active = document.activeElement as HTMLElement | null;
+    if (active?.id === a4InputId) return;
+    setA4Draft(String(a4Hz));
+  }, [a4Hz, a4InputId]);
 
   const onA4Input = (e: ChangeEvent<HTMLInputElement>): void => {
     const raw = e.currentTarget.value;

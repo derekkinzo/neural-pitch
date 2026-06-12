@@ -17,6 +17,7 @@ import { playDrillPrompt } from "@/lib/drill-synth";
 import { handleRadioGroupKeydown } from "@/lib/radiogroup-keys";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { useTrainingStore } from "@/stores/trainingStore";
+import { RESULT_TOAST_MS, TOTAL_PROMPTS } from "@/types/training";
 
 interface ChordDef {
   readonly id: string;
@@ -35,7 +36,6 @@ const CHORDS: ReadonlyArray<ChordDef> = [
 ];
 
 const DEFAULT_ROOT_MIDI = 60;
-const TOTAL_PROMPTS = 10;
 
 function pickPromptIndex(promptNumber: number): number {
   return (promptNumber * 5) % CHORDS.length;
@@ -96,7 +96,7 @@ export function ChordDrill(): ReactNode {
     toastTimeoutRef.current = window.setTimeout(() => {
       setResultText(null);
       toastTimeoutRef.current = null;
-    }, 1500);
+    }, RESULT_TOAST_MS);
 
     const answered = (session?.answered ?? 0) + 1;
     if (answered >= TOTAL_PROMPTS) {

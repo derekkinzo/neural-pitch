@@ -105,16 +105,16 @@ pub struct VibratoReport {
 
 /// Compute the vibrato report for one contour.
 ///
-/// `a4_hz` is the caller-supplied reference pitch. The
-/// vibrato analysis itself operates on `smoothed_cents` (already
-/// relative to `a4_hz`) but the parameter is kept on the public
-/// signature for API symmetry with [`crate::analysis::range::compute_range`]
-/// and to leave room for future work that needs the absolute pitch
-/// reference (e.g. instrument-specific extent thresholds).
+/// `a4_hz` is the caller-supplied reference pitch. The vibrato analysis
+/// itself operates on `smoothed_cents` (already relative to `a4_hz`) but
+/// the parameter is kept on the public signature for API symmetry with
+/// [`crate::analysis::range::compute_range`] and to leave room for
+/// instrument-specific extent thresholds that need the absolute pitch
+/// reference.
 #[must_use]
 pub fn compute_vibrato(contour: &ContourResult, a4_hz: f32) -> VibratoReport {
-    // a4_hz is intentionally unused today (see doc-comment above); future
-    // hooks may consume it for instrument-specific thresholds.
+    // a4_hz is intentionally unused (see doc-comment above); reserved for
+    // instrument-specific threshold extensions.
     let _ = a4_hz;
 
     let frame_rate_hz = contour.frame_rate_hz;

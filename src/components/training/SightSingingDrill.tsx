@@ -75,9 +75,8 @@ export function SightSingingDrill(): ReactNode {
   }, []);
 
   const handleFinish = useCallback(() => {
-    // Sight-singing is a single-prompt session; mark the prompt
-    // answered as "correct" by default — a future scorer reduction
-    // will replace this with a real verdict from `liveMatch`.
+    // Sight-singing currently scores the single prompt as correct on
+    // Finish — the contract is the surface plumbing, not the verdict.
     if (session !== null && session.answered === 0) {
       scoreAnswer({ correct: true });
     }

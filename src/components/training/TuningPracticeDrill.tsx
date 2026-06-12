@@ -6,9 +6,8 @@
 // to the "passed" state once the in-window dwell exceeds the target
 // duration.
 //
-// The drill is intentionally simple — the contract is the
-// presence of the surface and the a11y / lifecycle plumbing. The
-// Finish button advances the session in either pass or skip mode.
+// Single-prompt session; the Done/Skip buttons score the prompt and
+// complete the session.
 //
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";

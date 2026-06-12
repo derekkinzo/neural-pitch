@@ -1,9 +1,9 @@
 // Centralised hex literals for canvas/wavesurfer paint paths.
 //
 // Tailwind classes do not work for runtime canvas APIs (WaveSurfer's
-// `waveColor`, `progressColor`, `<canvas>` `fillStyle`, etc.). Mirroring
-// the Tailwind theme tokens here keeps the duplication in one place so a
-// future theming pass touches a single file rather than every component.
+// `waveColor`, `progressColor`, `<canvas>` `fillStyle`, etc.).
+// Centralised so theme changes touch one file rather than every
+// canvas/wavesurfer caller.
 
 export const COLOR_SLATE_600 = "#475569";
 export const COLOR_SLATE_700 = "#334155";

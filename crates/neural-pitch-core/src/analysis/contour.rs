@@ -48,8 +48,9 @@ pub const PYIN_ANALYZER_VERSION: &str = "0.2";
 /// Default contour-smoother window in milliseconds for the offline analyser.
 /// 80 ms matches the live tuner default (`commands.rs::SMOOTHER_MS`) so the
 /// offline cents track is not visually different from a live capture of the
-/// same audio.
-const SMOOTHER_WINDOW_MS: f32 = 80.0;
+/// same audio. Public so the runtime helper that resmooths cached contours
+/// can reuse the same window without drifting from the offline path.
+pub const ANALYZER_SMOOTHER_WINDOW_MS: f32 = 80.0;
 
 /// Whole-file analysis result for one recording, one analyser, one version.
 ///
@@ -166,7 +167,7 @@ pub fn analyze_contour(
     // operates on `f0_hz`; we then convert the smoothed Hz to cents
     // relative to the `a4_hz` reference. Unvoiced frames carry NaN so the
     // returned `smoothed_cents` vector stays aligned with `frames`.
-    let mut smoother = ContourSmoother::new(SMOOTHER_WINDOW_MS, source_sample_rate_hz);
+    let mut smoother = ContourSmoother::new(ANALYZER_SMOOTHER_WINDOW_MS, source_sample_rate_hz);
     let mut smoothed_cents = Vec::with_capacity(frames.len());
     let mut voiced_count = 0usize;
     for frame in &frames {

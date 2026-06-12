@@ -3,7 +3,12 @@ import ReactDOM from "react-dom/client";
 import { App } from "./App";
 import "./index.css";
 
-ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
+const rootEl = document.getElementById("root");
+if (rootEl === null) {
+  throw new Error("NeuralPitch: missing #root in index.html");
+}
+
+ReactDOM.createRoot(rootEl).render(
   <React.StrictMode>
     <App />
   </React.StrictMode>,

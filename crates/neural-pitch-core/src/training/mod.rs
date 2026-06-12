@@ -6,8 +6,7 @@
 //! `TargetMatcher` that consumes [`crate::pipeline::PitchUpdate`] frames
 //! and emits scoring summaries for the karaoke ribbon and drill UIs.
 //!
-//! Default-on (no `feature = "neural"` gate) so both
-//! `--no-default-features` and `--all-features` builds see this module.
+//! Feature-gate-free; ships in every build configuration.
 //! The training module intentionally consumes only
 //! `music::frequency_to_note`, `music::midi_to_hz`, and
 //! `pipeline::sink::PitchUpdate` from the rest of the crate — it is a

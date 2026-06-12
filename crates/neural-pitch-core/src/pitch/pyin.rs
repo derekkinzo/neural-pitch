@@ -175,30 +175,10 @@ impl PYinEstimator {
             // `i * hop_length` (Center framing puts the first frame at
             // sample 0 of the unpadded signal).
             //
-            // Apply a 9-frame rolling **mean** filter on `f0_hz` for
-            // voiced frames before emitting. The pyin crate's Viterbi
-            // output is bin-quantised to ~10 cents per bin (default
-            // `resolution = 0.1`). When the signal contains a periodic
-            // vibrato, the time series spends arcsine-distributed time at
-            // the extreme bins of the modulator swing — and the
-            // distribution along the bin grid can be skewed by a fraction
-            // of a bin owing to the asymmetric Hz <-> cent mapping. The
-            // naive median over that series can sit between two non-truth
-            // bins and miss the 5-cent voice-acceptance budget on upper-
-            // octave fixtures (F5 in the voice corpus). A 9-frame mean
-            // filter (≈190 ms at the 46.875 Hz default frame rate, one
-            // period of the 5 Hz vibrato modulator in the voice corpus)
-            // converts each frame into the *centre of mass* of its local
-            // neighbourhood. By symmetry of the modulator the local mean
-            // tracks the true pitch, and the median over the smoothed
-            // series collapses onto a single value close to the true
-            // pitch — clean (non-vibrato) fixtures already produce a
-            // constant trajectory and are unchanged by the filter.
-            //
-            // The filter operates only on voiced frames so unvoiced
-            // segments do not bleed pitch information across silence
-            // boundaries. Confidence and voicing are passed through
-            // unchanged.
+            // A 9-frame rolling mean filter is applied to `f0_hz` over
+            // voiced frames before emitting; see [`rolling_mean_voiced`]
+            // for the bin-quantisation rationale. Confidence and voicing
+            // pass through unchanged.
             let raw_f0: Vec<f32> = f0
                 .iter()
                 .map(|&hz| {

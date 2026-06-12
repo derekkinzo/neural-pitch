@@ -6,9 +6,7 @@
 // up the backing-store size by `devicePixelRatio`, and reset the 2D
 // transform so callers can keep painting in CSS-pixel coordinates.
 //
-// Centralising the helper lets a future fix (e.g. honouring
-// `OffscreenCanvas` paths or a non-1.0 transform stack) land in one
-// place.
+// Centralised so all canvas DPR scaling consumers share one code path.
 
 /**
  * Resize the canvas backing store to the current CSS dimensions multiplied

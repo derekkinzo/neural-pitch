@@ -26,8 +26,8 @@ todo         = "warn"
 # Pedantic lints that are noise in DSP / audio code where small-integer-to-f32
 # casts and constructor return values are routine. Keep `unwrap_used`,
 # `expect_used`, `panic`, and `unsafe_code` strict; relax these informational
-# lints crate-wide. Re-enable on a per-call-site basis with `#[deny(...)]` if
-# precision loss ever matters.
+# lints crate-wide. Re-enable per call-site with `#[deny(...)]` when a
+# specific cast must be precision-checked.
 cast_precision_loss      = "allow"
 cast_possible_truncation = "allow"
 cast_sign_loss           = "allow"

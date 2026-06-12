@@ -163,7 +163,6 @@ export function usePitchStream(): UsePitchStreamApi {
   }, [handleMessage]);
 
   useEffect(() => {
-    let cancelled = false;
     const ring = ringRef.current;
 
     // Expose a raw push hook for the E2E mock harness.
@@ -171,15 +170,11 @@ export function usePitchStream(): UsePitchStreamApi {
       handleMessage(payload as PitchUpdate);
     });
 
-    void startCapture().then(() => {
-      if (cancelled) {
-        // The component unmounted during start_capture; the cleanup branch
-        // below will idempotently stop the capture.
-      }
-    });
+    // The cleanup branch below is the authoritative stop path; if the
+    // component unmounted during start_capture it will run idempotently.
+    void startCapture();
 
     return () => {
-      cancelled = true;
       unregisterTestListener();
       void invoke("stop_capture").catch(() => {
         /* swallow: the shell handles repeated stops idempotently. */

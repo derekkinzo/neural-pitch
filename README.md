@@ -4,7 +4,7 @@ A small, FOSS pitch-detection app for musicians and audio nerds. Desktop
 build is a Rust core wrapped in a Tauri 2 shell with a React + Tailwind
 front end. Dual-licensed under MIT OR Apache-2.0.
 
-## What it does today
+## Features
 
 - **Live tuner.** Real-time pitch detection from the default input device
   — guitar, piano, voice, violin, bass, or anything else with a

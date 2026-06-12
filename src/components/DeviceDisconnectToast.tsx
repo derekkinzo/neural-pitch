@@ -33,9 +33,7 @@ export function DeviceDisconnectToast(): ReactNode {
   // role="alert" implies aria-live="assertive" + aria-atomic="true": a
   // device disconnect carries a destructive recovery action and SHOULD
   // be announced immediately rather than queued behind speech the way a
-  // polite live region would.md §9.3 for the
-  // rationale and the matching playwright assertion in
-  // tests/e2e/disconnect.spec.ts.
+  // polite live region would (see WAI-ARIA APG live-region pattern).
   return (
     <div
       role="alert"

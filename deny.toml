@@ -1,11 +1,7 @@
 [advisories]
-# cargo-deny v2 / v0.19+ schema:
-# Vulnerabilities and yanked crates are gated by `version` (set globally
-# on `[advisories]` is deprecated; ids are auto-evaluated and reported).
-# `unmaintained` accepts "all" | "workspace" | "transitive" | "none".
-# Set to "workspace" so unmaintained warnings only fail CI when we own
-# the dep directly. Tauri's huge transitive set of unmaintained gtk-rs
-# crates becomes an informational note instead of a blocker.
+# `unmaintained = "workspace"` — only direct deps fail CI; transitive
+# unmaintained warnings (e.g. gtk-rs from tauri) become informational
+# notes rather than blockers.
 unmaintained = "workspace"
 yanked = "warn"
 ignore = []
@@ -37,8 +33,8 @@ multiple-versions = "warn"
 wildcards = "deny"
 # Transitive duplicates we cannot resolve from our own Cargo.toml. Each
 # entry is pinned by an upstream crate we don't control (tauri/wry/gtk-rs,
-# cpal/alsa, windows-sys, the icu/toml ecosystems). Revisit once those
-# upstreams unify their version pins.
+# cpal/alsa, windows-sys, the icu/toml ecosystems). Per-crate comments
+# below justify each skip individually.
 skip = [
   # rustls-pemfile keeps 0.21; reqwest / tauri / tower-http track 0.22.
   { crate = "base64" },

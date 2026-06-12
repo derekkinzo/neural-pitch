@@ -15,11 +15,7 @@
 
 import { useCallback, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import {
-  snapshotSettingsForIpc,
-  useSettingsStore,
-  type SettingsState,
-} from "@/stores/settingsStore";
+import { snapshotSettingsForIpc, useSettingsStore } from "@/stores/settingsStore";
 import { useTunerStore } from "@/stores/tunerStore";
 import { clampA4Hz, clampSmoothingMs, type InstrumentHint } from "@/types/settings";
 
@@ -105,10 +101,3 @@ export function useSettings(): UseSettingsApi {
 
   return { setA4Hz, setInstrumentHint, setSmoothingMs };
 }
-
-/** Stable selector helpers — module-level so the React component bodies
- *  don't allocate them per render. */
-export const selectA4Hz = (s: SettingsState): number => s.a4Hz;
-export const selectInstrumentHint = (s: SettingsState): InstrumentHint => s.instrumentHint;
-export const selectSmoothingMs = (s: SettingsState): number => s.smoothingMs;
-export const selectAudioParams = (s: SettingsState): SettingsState["audioParams"] => s.audioParams;

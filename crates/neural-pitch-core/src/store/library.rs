@@ -121,11 +121,10 @@ impl RecordingsLibrary {
 
     /// List recordings, ordered by `created_at_unix_ms DESC`.
     ///
-    /// `ListFilter` is `#[non_exhaustive]`. The match is intentionally
-    /// non-exhaustive at the call site so a future variant (e.g.
-    /// `DeletedOnly`, `ByInstrument`) can be added without churning the
-    /// IPC boundary; callers MUST extend this match in the same revision
-    /// that ships the new variant.
+    /// `ListFilter` is `#[non_exhaustive]`; downstream callers MUST
+    /// extend their match in the same revision that adds a new variant
+    /// so the IPC boundary stays unchanged when filters such as
+    /// `DeletedOnly` or `ByInstrument` are introduced.
     pub fn list_recordings(&self, f: ListFilter) -> Result<Vec<Recording>, StoreError> {
         let conn = self.lock_conn();
 

@@ -28,6 +28,7 @@ use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::settings::DEFAULT_A4_HZ;
 use crate::store::{NewDrillAttempt, RecordingId, RecordingsLibrary, StoreError};
 
 /// Server-side cap on `HistoryFilter::limit`. Requests above this
@@ -101,7 +102,10 @@ impl NoteSpec {
     /// Construct a [`NoteSpec`] at the standard 440 Hz A4 reference.
     #[must_use]
     pub fn new(midi: i32) -> Self {
-        Self { midi, a4_hz: 440.0 }
+        Self {
+            midi,
+            a4_hz: DEFAULT_A4_HZ,
+        }
     }
 }
 
@@ -259,9 +263,9 @@ pub struct DrillAttempt {
 #[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum DrillError {
-    /// Sentinel for code paths that have no implementation. No helper
-    /// returns this today; kept as an `#[non_exhaustive]` slot so the
-    /// IPC surface can grow without a breaking change.
+    /// Sentinel for code paths that have no implementation. Reserved
+    /// `#[non_exhaustive]` slot so the IPC surface can grow without a
+    /// breaking change; no helper returns this variant in production.
     #[error("drill subsystem path not implemented")]
     NotImplemented,
     /// SQLite library failure.
@@ -287,8 +291,8 @@ impl From<StoreError> for DrillError {
 /// Default duration the prompt synth is asked for when
 /// [`start_drill_blocking`] hands the spec's first prompt note to
 /// [`crate::poly::synth::PromptSynth::render_wav_at_a4`]. 1.2 s covers
-/// every interval / chord / sight-singing prompt today; longer
-/// melodies are rendered on a per-note basis by the front-end through
+/// every interval / chord / sight-singing prompt; longer melodies are
+/// rendered on a per-note basis by the front-end through
 /// [`synthesize_prompt_blocking`].
 const PROMPT_RENDER_MS: u32 = 1_200;
 
@@ -397,10 +401,10 @@ const SCORE_TOLERANCE_CENTS: f32 = 25.0;
 /// Score an attempt against the session's expected response and
 /// persist a `drill_attempts` row.
 ///
-/// `session_id` is informational today — the headless twin is
-/// stateless on session ids; the Tauri shell's `AppState` LRU cache
-/// is the only consumer of the value. We accept it to keep the
-/// signature stable when the in-flight resume path lands.
+/// `session_id` is informational — the headless twin is stateless on
+/// session ids; the Tauri shell's `AppState` LRU cache is the only
+/// consumer of the value. The parameter stays in the signature so the
+/// in-flight resume path can be wired in without an API break.
 ///
 /// # Errors
 ///

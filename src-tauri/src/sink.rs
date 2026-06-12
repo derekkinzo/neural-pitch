@@ -52,7 +52,7 @@ impl FrameSink for TauriChannelFrameSink {
         // `Channel::send` returns `tauri::Result<()>`. The only failure
         // surface that matters to us is a disconnected webview / dropped
         // channel; we collapse all variants to `Disconnected`, matching
-        // the contract for the day-1 `ChannelFrameSink` mpsc adapter.
+        // the contract for the `ChannelFrameSink` mpsc adapter.
         self.channel
             .send(update)
             .map_err(|_| FrameSinkError::Disconnected)
@@ -79,9 +79,8 @@ mod tests {
     /// `TauriChannelFrameSink`. We capture every update in a `Vec` so tests
     /// can introspect after the worker has run. This intentionally does not
     /// drive a real `tauri::ipc::Channel` — instantiating one outside an
-    /// active runtime is awkward. End-to-end correctness is covered by the
-    /// existing worker unit tests plus the Playwright MCP
-    /// suite.
+    /// active runtime is awkward. End-to-end correctness is covered by
+    /// the worker unit tests plus the Playwright suite.
     #[derive(Default)]
     struct MockChannelSink {
         sent: Arc<Mutex<Vec<PitchUpdate>>>,

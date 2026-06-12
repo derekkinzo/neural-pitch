@@ -1,13 +1,9 @@
 // Performance budget stub.
 //
-// The current placeholder page has no real hot path: it is a single static
-// React tree. Web-Vitals targets (LCP < 2.0 s,
-// CLS < 0.05, p95 FPS > 55, no `longtask` > 50 ms) gain teeth once the
-// tuner needle is the actual measurement subject.
-//
-// This stub records the intended shape:
-//   - capture LargestContentfulPaint via PerformanceObserver
-//   - assert against a relaxed CI-friendly bound
+// Records the intended shape of the perf gate: capture LCP via
+// PerformanceObserver and assert against a relaxed CI-friendly bound.
+// Skipped until a Web-Vitals target set (e.g. LCP < 2.0 s, CLS < 0.05,
+// p95 FPS > 55, no `longtask` > 50 ms) is wired to a real subject.
 //
 
 import { test, expect } from "./fixtures";

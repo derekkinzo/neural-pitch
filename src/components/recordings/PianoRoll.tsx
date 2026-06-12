@@ -194,7 +194,6 @@ export function PianoRoll({ poly, a4Hz }: PianoRollProps): ReactNode {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const boxesRef = useRef<readonly NoteBox[]>([]);
   const boundsRef = useRef<Bounds>({ tMin: 0, tMax: 1 });
-  const reducedMotionRef = useRef<boolean>(false);
 
   const [tooltip, setTooltip] = useState<TooltipState | null>(null);
 
@@ -277,9 +276,7 @@ export function PianoRoll({ poly, a4Hz }: PianoRollProps): ReactNode {
     // Reduced-motion media query subscription: track changes so the
     // `data-reduced-motion` attribute reflects live OS preference.
     const motionMql = window.matchMedia("(prefers-reduced-motion: reduce)");
-    reducedMotionRef.current = motionMql.matches;
     const onMotionChange = (e: MediaQueryListEvent): void => {
-      reducedMotionRef.current = e.matches;
       setReducedMotion(e.matches);
     };
     motionMql.addEventListener("change", onMotionChange);

@@ -2,8 +2,8 @@
 //! workspace `models.toml`.
 //!
 //! Ships the manifest + on-disk verification plumbing. Live network fetch
-//! is not currently implemented; placeholder manifest entries surface as
-//! [`ResolverError::NotConfigured`].
+//! is out of scope for this resolver; placeholder manifest entries surface
+//! as [`ResolverError::NotConfigured`].
 
 use std::fs;
 use std::io::Read;
@@ -111,7 +111,7 @@ fn hex_encode(bytes: &[u8]) -> String {
 pub struct PeekResult {
     /// The manifest entry for the requested model.
     pub entry: ManifestEntry,
-    /// Resolved on-disk path (whether or not the file currently exists).
+    /// Resolved on-disk path (whether or not the file exists).
     pub target: PathBuf,
     /// `true` when the entry is still a placeholder (empty URL or
     /// all-zeros sha256).
@@ -124,7 +124,7 @@ pub struct PeekResult {
 /// `get_model_status` command.
 ///
 /// Returns the manifest entry for `name` plus the resolved on-disk path
-/// (whether or not the file currently exists). Hashes the on-disk blob
+/// (whether or not the file exists). Hashes the on-disk blob
 /// when present so callers can distinguish a verified cache from an
 /// unverified or missing one.
 pub fn peek(name: &str, dest_dir: &Path) -> Result<PeekResult, ResolverError> {
@@ -170,7 +170,7 @@ fn read_workspace_manifest() -> Result<Manifest, ResolverError> {
 /// 6. If `entry.url` is empty or the sha256 is the placeholder, return
 ///    `NotConfigured { name }`.
 /// 7. Otherwise return `NotConfigured { name }` — the network fetch path
-///    is not currently implemented.
+///    is out of scope for this resolver.
 ///
 /// # Errors
 ///
@@ -224,9 +224,9 @@ pub fn ensure_model(name: &str, dest_dir: &Path) -> Result<PathBuf, ResolverErro
         });
     }
 
-    // 7. Network fetch is not currently implemented; surface
-    //    `NotConfigured` so callers (e.g. the Tauri `get_model_status`
-    //    command) can render a consistent state.
+    // 7. Network fetch is out of scope here; surface `NotConfigured` so
+    //    callers (e.g. the Tauri `get_model_status` command) can render a
+    //    consistent state.
     Err(ResolverError::NotConfigured {
         name: name.to_string(),
     })

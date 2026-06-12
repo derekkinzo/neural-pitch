@@ -13,7 +13,7 @@
 // ear-training drill UI's only persistent setting on the page side). `a4Hz`,
 // `instrumentHint`, and `smoothingMs` are persisted via the Rust shell
 // through the debounced `configure` IPC, so they intentionally live
-// outside the partialize whitelist below.
+// outside the partialize allowlist below.
 //
 
 import { create } from "zustand";
@@ -55,7 +55,7 @@ export const useSettingsStore = create<SettingsState>()(
     {
       name: NOTE_LABEL_MODE_STORAGE_KEY,
       storage: createJSONStorage(() => localStorage),
-      // Whitelist: only `noteLabelMode` is persisted on the page side.
+      // Allowlist: only `noteLabelMode` is persisted on the page side.
       // The Rust shell owns the rest of the settings (A4 / instrument
       // hint / smoothing) via the `configure` IPC.
       partialize: (state) => ({ noteLabelMode: state.noteLabelMode }),

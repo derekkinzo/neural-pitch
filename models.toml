@@ -1,11 +1,12 @@
-# Resolver manifest.
+# Resolver manifest — names, hashes, sizes, and licences for every
+# neural model the resolver may fetch or reference.
 #
-# This file is git-tracked. The resolved ONNX blobs under `/models/` are NOT
-# (see `.gitignore`).
+# This file is git-tracked. The resolved ONNX blobs under `/models/` are
+# NOT (see `.gitignore`).
 #
 # `schema_version = 1` is the parser's exact-match guard; bumping it is a
-# breaking change that triggers a "manifest version unsupported" error rather
-# than silent reinterpretation.
+# breaking change that triggers a "manifest version unsupported" error
+# rather than silent reinterpretation.
 schema_version = 1
 
 # Spotify Basic Pitch v1 (ICASSP 2022). Bundled in-tree under

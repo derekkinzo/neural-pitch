@@ -28,7 +28,8 @@
 //      returns `was_cached=true` from the `analysis_cache` SHA-256 hit and
 //      the summary lands in `byRecording` as soon as the promise resolves.
 //
-//   src/stores/recordingsStore.ts (precedent for slow-path Zustand patterns)
+// See also `src/stores/recordingsStore.ts` for the same slow-path
+// Zustand store pattern.
 
 import { create } from "zustand";
 import { invoke } from "@tauri-apps/api/core";
@@ -188,17 +189,15 @@ function normaliseVibrato(raw: WireVibratoReport | null | undefined): VibratoRep
 }
 
 function normaliseSummary(raw: WireSummary): AnalysisSummary {
-  // Prefer an explicit MIDI median (mock or future Rust); fall through to
-  // deriving MIDI from `median_hz_voiced` when only Hz is supplied. The
-  // production Rust shell at v0.2 emits BOTH `median_midi` and
-  // `median_hz_voiced`, so the fall-through is just a defensive shim
-  // until older shells are gone.
+  // Both `median_midi` and `median_hz_voiced` are accepted; the Hz
+  // fall-through covers shells that emit only Hz (e.g. the camelCase
+  // E2E mock or callers that pre-date the explicit MIDI field).
   const midiExplicit = firstNumber(raw.medianMidi, raw.median_midi);
   const medianHz = firstNumber(raw.medianHzVoiced, raw.median_hz_voiced);
-  // `medianHz > 0` guard is required: `Math.log2(0) === -Infinity`, and a
-  // future shim or mock that emits literal `0` (rather than the documented
-  // `null` sentinel for unvoiced takes) would otherwise propagate
-  // `-Infinity` into `medianMidi` and from there into `formatMidiNote`.
+  // `medianHz > 0` guard is required: `Math.log2(0) === -Infinity`, so a
+  // shim or mock that emits literal `0` rather than the documented `null`
+  // sentinel for unvoiced takes would otherwise propagate `-Infinity`
+  // into `medianMidi` and from there into `formatMidiNote`.
   const medianMidi =
     midiExplicit !== undefined
       ? midiExplicit

@@ -56,7 +56,7 @@ test.describe("recording lifecycle — start/stop/save", () => {
       status: "active",
     });
 
-    // 500 ms wait per the brief, gives the elapsed counter a frame to tick.
+    // 500 ms lets the elapsed counter tick at least once.
     await page.waitForTimeout(500);
 
     // Click → saving → saved.
@@ -117,9 +117,9 @@ test.describe("recording lifecycle — start/stop/save", () => {
     const animationName = await pulse.evaluate((el) => getComputedStyle(el).animationName);
     expect(animationName).toBe("none");
 
-    // The elapsed counter is rendered next to the button in reduced-motion
-    // mode (and also in motion mode, per the brief — the cue swaps, not the
-    // presence). Driving a progress frame should make it tick.
+    // The elapsed counter is rendered next to the button in both
+    // reduced-motion and motion modes — the cue swaps, not the
+    // presence. Driving a progress frame should make it tick.
     await pushRecordingProgress(page, {
       recordingId: "rec-pending",
       elapsedMs: 5000,
