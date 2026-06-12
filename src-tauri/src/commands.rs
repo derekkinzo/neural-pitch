@@ -733,48 +733,6 @@ pub async fn get_contour(
     res.ok_or_else(|| "not found".to_string())
 }
 
-/// Enumerate every cached analysis row for one recording.
-#[tauri::command]
-#[tracing::instrument(skip(state))]
-pub async fn list_analyses(
-    state: State<'_, crate::state::AppState>,
-    recording_id: String,
-) -> Result<Vec<neural_pitch_core::store::AnalysisRow>, String> {
-    let parsed: neural_pitch_core::store::RecordingId = recording_id
-        .parse()
-        .map_err(|e| format!("invalid recording id: {e}"))?;
-    let library = Arc::clone(&state.library);
-    tokio::task::spawn_blocking(move || {
-        neural_pitch_core::store::list_analyses_blocking(&library, parsed)
-    })
-    .await
-    .map_err(|e| format!("list_analyses task panicked: {e}"))?
-    .map_err(|e| format!("list_analyses: {e:#}"))
-}
-
-/// Drop one cached analysis row.
-#[tauri::command]
-#[tracing::instrument(skip(state))]
-pub async fn delete_analysis(
-    state: State<'_, crate::state::AppState>,
-    recording_id: String,
-    analyzer_name: String,
-    analyzer_version: String,
-) -> Result<(), String> {
-    let parsed: neural_pitch_core::store::RecordingId = recording_id
-        .parse()
-        .map_err(|e| format!("invalid recording id: {e}"))?;
-    let library = Arc::clone(&state.library);
-    let name = analyzer_name;
-    let version = analyzer_version;
-    tokio::task::spawn_blocking(move || {
-        neural_pitch_core::store::delete_analysis_blocking(&library, parsed, &name, &version)
-    })
-    .await
-    .map_err(|e| format!("delete_analysis task panicked: {e}"))?
-    .map_err(|e| format!("delete_analysis: {e:#}"))
-}
-
 // -- Range / vibrato accessors ----------------------------------------------
 //
 // Convenience IPC surface for the recordings UI: shell out to a
@@ -910,128 +868,11 @@ pub async fn get_vibrato_report(
     result.ok_or_else(|| "not found".to_string())
 }
 
-// -- Backend-aware analysis surface -----------------------------------------
-
-/// Wire shape for the requested pitch backend.
-///
-/// `tag = "kind"` so the front-end matches exhaustively on the
-/// discriminant rather than the field set; `untagged` would let a typo
-/// silently fall into a different arm. The IPC exposes only the
-/// backends the offline analyzer dispatcher actually routes; YIN/MPM
-/// is the live-tuner backend (driven by `start_capture`, not by this
-/// surface), and the CREPE-tiny ONNX inference path is not part of the
-/// shipping offline pipeline.
-///
-/// Discriminant naming: each variant carries an explicit
-/// `#[serde(rename)]` so the on-the-wire `kind` matches the value
-/// persisted in `analysis_cache.analyzer_name` (e.g. `"pyin"`).
-/// Without the explicit rename, `rename_all = "snake_case"` would coin
-/// `p_yin`, splitting the IPC discriminant from the cache key and
-/// burning the front-end engineer who joins the two.
-#[derive(serde::Deserialize, Debug, Clone)]
-#[serde(tag = "kind")]
-pub enum BackendKind {
-    /// pYIN (Mauch & Dixon 2014). Requires `feature = "pyin"` in core.
-    #[serde(rename = "pyin")]
-    PYin,
-}
-
-impl BackendKind {
-    /// Stable analyzer name persisted in `analysis_cache.analyzer_name`.
-    /// Matches the on-the-wire `kind` discriminant exactly so a single
-    /// string round-trips between IPC and SQLite.
-    fn analyzer_name(&self) -> &'static str {
-        match self {
-            Self::PYin => "pyin",
-        }
-    }
-
-    /// Stable analyzer version persisted in
-    /// `analysis_cache.analyzer_version`. Bump in lock-step with on-the-wire
-    /// shape changes so cached blobs invalidate cleanly.
-    fn analyzer_version(&self) -> &'static str {
-        match self {
-            Self::PYin => DEFAULT_ANALYZER_VERSION,
-        }
-    }
-}
-
-/// Run a backend-selected analysis on a previously-recorded file.
-///
-/// The underlying analyzer plumbing in
-/// [`neural_pitch_core::store::analyze_recording_blocking`] dispatches
-/// on `analyzer_name`; the offline pipeline routes pYIN, so
-/// [`BackendKind`] carries that one arm. Adding a new analyzer means
-/// adding a new variant *and* extending the core dispatcher in the
-/// same change so the cache key, the IPC discriminant, and the
-/// computed bytes stay in lock-step.
-#[tauri::command]
-#[tracing::instrument(
-    skip(state, progress, backend),
-    fields(force_refresh = force_refresh, backend = ?backend),
-)]
-pub async fn analyze_recording_with_backend(
-    state: State<'_, crate::state::AppState>,
-    recording_id: String,
-    backend: BackendKind,
-    force_refresh: bool,
-    progress: Channel<neural_pitch_core::store::AnalysisProgress>,
-) -> Result<neural_pitch_core::store::AnalysisSummary, String> {
-    let parsed: neural_pitch_core::store::RecordingId = recording_id
-        .parse()
-        .map_err(|e| format!("invalid recording id: {e}"))?;
-
-    let analyzer_name = backend.analyzer_name();
-    let analyzer_version = backend.analyzer_version();
-
-    let cancel = Arc::new(std::sync::atomic::AtomicBool::new(false));
-    {
-        let mut g = state.analyses.lock();
-        if let Some(prev) = g.insert(parsed, Arc::clone(&cancel)) {
-            prev.store(true, std::sync::atomic::Ordering::Relaxed);
-        }
-    }
-
-    let library = Arc::clone(&state.library);
-    let cancel_for_blocking = Arc::clone(&cancel);
-    let sink_owned = ChannelProgressSink { channel: progress };
-    let result = tokio::task::spawn_blocking(move || {
-        let sink_ref: &dyn neural_pitch_core::store::ProgressSink = &sink_owned;
-        neural_pitch_core::store::analyze_recording_blocking(
-            &library,
-            parsed,
-            analyzer_name,
-            analyzer_version,
-            force_refresh,
-            Some(sink_ref),
-            Some(cancel_for_blocking.as_ref()),
-        )
-    })
-    .await
-    .map_err(|e| {
-        let mut g = state.analyses.lock();
-        g.remove(&parsed);
-        format!("analyze_recording_with_backend task panicked: {e}")
-    })?;
-
-    {
-        let mut g = state.analyses.lock();
-        if let Some(existing) = g.get(&parsed) {
-            if Arc::ptr_eq(existing, &cancel) {
-                g.remove(&parsed);
-            }
-        }
-    }
-
-    result.map_err(|e| format!("analyze: {e:#}"))
-}
-
 /// Read-only snapshot of the build's compiled-in capabilities.
 ///
-/// The front-end uses this to light a developer-mode status pill and to
-/// gate UI that depends on which backends are linked in. Mirrors the
-/// `cfg!` flags at the Tauri layer so the front-end never has to guess
-/// which backends are linked in.
+/// Mirrors the `cfg!` flags at the Tauri layer so any future Help/About
+/// or feature-gated UI can discover which backends are linked in
+/// without re-deriving the cfg test on the JS side.
 #[derive(Serialize, Debug, Clone)]
 pub struct Capabilities {
     /// `true` when this binary was built with `--features app-neural`
@@ -1042,6 +883,10 @@ pub struct Capabilities {
 }
 
 /// Return the build's compiled-in capability flags.
+///
+/// Diagnostic surface; no UI consumes it today. Kept as the canonical
+/// JS-visible probe so a future Help/About panel or feature-gated
+/// affordance does not have to re-derive the same `cfg!` checks.
 #[tauri::command]
 #[tracing::instrument(skip())]
 pub fn get_capabilities() -> Result<Capabilities, String> {
@@ -1088,7 +933,9 @@ pub enum ModelStatus {
 
 /// Inspect the on-disk + manifest state for a single model.
 ///
-/// Calls [`neural_pitch_core::models::peek`] (a non-fetching variant of
+/// Diagnostic surface; no UI consumes it today. Kept as the canonical
+/// IPC view into models.toml resolution health: calls
+/// [`neural_pitch_core::models::peek`] (a non-fetching variant of
 /// `ensure_model`) and maps the result onto [`ModelStatus`]. Returns
 /// [`ModelStatus::Cached`] when the on-disk SHA-256 matches the
 /// manifest, [`ModelStatus::MissingButFetchable`] when the manifest
@@ -1126,6 +973,11 @@ pub fn get_model_status(
 
 /// Cancel an in-flight analysis. Idempotent: returns `Ok(())` if no
 /// analysis is registered for the supplied `recording_id`.
+///
+/// Diagnostic surface; no UI consumes it today. Kept wired to the
+/// `state.analyses` cancel-token registry already populated by
+/// `analyze_recording`, so a future Cancel button can ride the same
+/// `AtomicBool` flag the analyzer polls between hops.
 #[tauri::command]
 #[tracing::instrument(skip(state))]
 pub async fn cancel_analysis(
@@ -1897,17 +1749,5 @@ mod tests {
         let err = BuildError::NoInputDevice;
         let json = serde_json::to_value(&err).expect("serialize");
         assert_eq!(json["code"], "no_input_device");
-    }
-
-    /// Locks in the on-the-wire `kind` discriminant against an
-    /// accidental serde `rename_all` (e.g. re-introducing
-    /// `rename_all = "snake_case"`) that would silently flip `pyin` to
-    /// `p_yin`. This is the contract the front-end joins to
-    /// `analysis_cache.analyzer_name` rows.
-    #[test]
-    fn backend_kind_wire_discriminants_match_analyzer_names() {
-        let pyin: BackendKind =
-            serde_json::from_str(r#"{"kind":"pyin"}"#).expect("pyin should deserialize");
-        assert_eq!(pyin.analyzer_name(), "pyin");
     }
 }

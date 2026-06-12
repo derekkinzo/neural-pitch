@@ -52,8 +52,8 @@ use thiserror::Error;
 /// Stable analyzer name persisted in `analysis_cache.analyzer_name` for
 /// the Basic Pitch transcribe surface. Matches
 /// [`neural_pitch_core::poly::basic_pitch::BasicPitchEstimator::name`]
-/// minus the `-v1` suffix so the cache key reads the same as the on-the-
-/// wire IPC discriminant a `BackendKind::BasicPitch` arm consumes.
+/// minus the `-v1` suffix so the cache key on disk reads the same as
+/// the polyphonic transcriber's published name.
 pub const BASIC_PITCH_ANALYZER_NAME: &str = "basic-pitch";
 
 /// Stable analyzer version persisted in
