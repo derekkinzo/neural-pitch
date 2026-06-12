@@ -1,7 +1,5 @@
 # Rust
 /target
-**/*.rs.bk
-Cargo.lock.bak
 
 # Node / frontend
 /node_modules
@@ -20,13 +18,6 @@ Cargo.lock.bak
 # scripts/ci-local.sh per-step logs (cleaned on green, preserved on red)
 /.ci-local-logs/
 /.ci-local-last-failure.log
-
-# Models / datasets (always fetched, never committed)
-/models/
-/tests/data/
-
-# Recordings (developer scratch)
-/recordings/
 
 # OS noise
 .DS_Store
@@ -48,8 +39,6 @@ Thumbs.db
 # Playwright / E2E
 /playwright-report/
 /test-results/
-/blob-report/
-/tests/e2e/.auth
 
 # Acceptance harness regenerated artifact (timestamp + cents change per run)
 /.acceptance-reports/

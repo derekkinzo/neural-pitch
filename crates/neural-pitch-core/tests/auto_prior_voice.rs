@@ -1,4 +1,4 @@
-//! Tier-1 unit test: after 100 voiced frames at 220 Hz, the auto-prior's
+//! Unit test: after 100 voiced frames at 220 Hz, the auto-prior's
 //! range is within 0.5 Hz of `(220 * 2^-1.5, 220 * 2^+1.5)`.
 #![allow(
     clippy::expect_used,

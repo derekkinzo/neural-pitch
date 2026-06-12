@@ -19,7 +19,8 @@ cpal              = ["dep:cpal"]
 # into Basic Pitch's native 22.05 kHz before windowing, and reused by
 # `stems::resample` for the 44.1 kHz HTDemucs round-trip. `reqwest`
 # (rustls-only, no OpenSSL) drives the on-demand HTDemucs ONNX download
-# in `stems::download` — the model is too large (~80 MB) to commit.
+# in `stems::download` — the model is too large (~316 MB; see
+# `stems::HTDEMUCS_SIZE_BYTES`) to commit.
 neural            = ["dep:ort", "dep:rubato", "dep:reqwest"]
 # pYIN offline backend (Sytronik/pyin = "1.2"). Pulls in the pure-Rust
 # pyin crate plus claxon for the FLAC decode path used by

@@ -9,10 +9,10 @@ front end. Dual-licensed under MIT OR Apache-2.0.
 - **Live tuner.** Real-time pitch detection from the default input device
   — guitar, piano, voice, violin, bass, or anything else with a
   fundamental. Note name, cents-off meter, and recent-history strip update
-  at audio rate. Settings (reference A, transpose, tuning system) persist
-  across launches.
+  at audio rate. Settings (A4 reference, instrument hint, smoothing
+  window, note-label mode) persist across launches.
 - **Recordings.** Capture input audio to FLAC, store it in a per-platform
-  SQLite library, and rename or delete entries from the UI.
+  SQLite library, and delete entries from the UI.
 - **Offline analysis.** Run pYIN over a recording, smooth the contour, and
   cache the results in the library.
 - **Range and vibrato reports.** Per-recording lowest/highest pitch,
@@ -92,6 +92,20 @@ cargo test -p neural-pitch-core --no-default-features
 npm run typecheck && npm run lint
 npx playwright test
 ```
+
+### Local hooks
+
+`scripts/install-hooks.sh` wires the `pre-commit` framework's
+pre-commit, commit-msg, and pre-push hooks. The pre-push hook runs
+`scripts/ci-local.sh quick`, which is the same gate CI enforces. Run it
+once after cloning:
+
+```sh
+scripts/install-hooks.sh
+```
+
+The script fails fast with install instructions if the `pre-commit`
+binary is not on `PATH`.
 
 ### Running the ONNX-backed `#[ignore]`d tests
 

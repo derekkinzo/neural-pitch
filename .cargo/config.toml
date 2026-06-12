@@ -9,3 +9,13 @@ rustflags = ["-D", "warnings"]
 
 [target.x86_64-pc-windows-msvc]
 rustflags = ["-D", "warnings"]
+
+# Disable incremental for the test profile. Each integration test under
+# `tests/*.rs` is its own crate, and the workspace runs the matrix
+# `--all-features` × `--no-default-features` repeatedly. Incremental
+# layers compound across feature-flag flips with little reuse and bloat
+# `target/debug/incremental` into multiple GB. Cold rebuilds remain
+# fast under sccache; turning incremental off keeps the on-disk
+# footprint bounded without measurably hurting CI time.
+[profile.test]
+incremental = false

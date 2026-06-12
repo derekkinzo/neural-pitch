@@ -1,4 +1,4 @@
-//! Quick round-trip verification for the Tier-2 voice fixtures.
+//! Quick round-trip verification for the voice fixtures.
 //!
 //! Decodes one fixture (A4 / 440 Hz) via `claxon`, runs a textbook
 //! parabolic-interpolation FFT pitch estimator, and prints the deviation

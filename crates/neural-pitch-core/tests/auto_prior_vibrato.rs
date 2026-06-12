@@ -1,4 +1,4 @@
-//! Tier-2 unit test: a 5 Hz / ±50-cent vibrato around 440 Hz never widens
+//! Fixture-driven unit test: a 5 Hz / ±50-cent vibrato around 440 Hz never widens
 //! the auto-prior range beyond ±1 octave from the 440 Hz median.
 //!
 //! At a 100 Hz frame rate, 4 s of vibrato = 400 samples = full ring. The

@@ -1,4 +1,4 @@
-//! Tier-1 cancellation test: starting and immediately stopping a recording
+//! Cancellation unit test: starting and immediately stopping a recording
 //! must produce a tiny but valid artifact (`duration_ms < 50`) with a file
 //! present on disk.
 //!

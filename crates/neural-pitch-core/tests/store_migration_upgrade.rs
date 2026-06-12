@@ -1,4 +1,4 @@
-//! Tier-1 migration-upgrade test for `store::RecordingsLibrary`.
+//! Migration-upgrade unit test for `store::RecordingsLibrary`.
 //!
 //! The other `store_*` tests open a fresh `:memory:` DB so refinery only
 //! ever runs every migration against an empty schema. This test exercises

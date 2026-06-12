@@ -1,7 +1,7 @@
 #![allow(missing_docs)]
 #![cfg(feature = "flac")]
 
-//! Tier-1 fidelity test for [`FlacRecordingSink`].
+//! Fidelity unit test for [`FlacRecordingSink`].
 //!
 //! Generate 1 s of 440 Hz at 48 kHz f32, write through `FlacRecordingSink`,
 //! finalize, decode the resulting FLAC with `claxon`, and assert:

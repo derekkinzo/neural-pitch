@@ -9,9 +9,9 @@
 pub mod contour;
 
 // Generic log-domain Viterbi decoder. Gated behind the `neural` feature
-// because its only consumer is the CREPE estimator (also `neural`-gated).
-// A classical backend can lift the gate by adding a feature union if it
-// wants HMM smoothing.
+// because its only consumer is `poly::basic_pitch`, which is itself
+// `neural`-gated. A classical backend can lift the gate by adding a
+// feature union if it wants HMM smoothing.
 #[cfg(feature = "neural")]
 pub mod viterbi;
 

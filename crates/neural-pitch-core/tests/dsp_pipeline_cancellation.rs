@@ -1,4 +1,4 @@
-//! Tier-2 deterministic test: cancelling the [`CancellationToken`] mid-stream
+//! Fixture-driven deterministic test: cancelling the [`CancellationToken`] mid-stream
 //! drives the worker to exit within one packet boundary.
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 

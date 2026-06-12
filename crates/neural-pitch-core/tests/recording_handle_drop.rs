@@ -1,4 +1,4 @@
-//! Tier-1 test: dropping a [`RecordingHandle`] without calling `stop()`
+//! Unit test: dropping a [`RecordingHandle`] without calling `stop()`
 //! flips the cancellation token so the encoder thread terminates instead
 //! of spinning on `recv_timeout` indefinitely.
 //!

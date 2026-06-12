@@ -1,7 +1,7 @@
 #![allow(missing_docs)]
 #![cfg(feature = "flac")]
 
-//! Tier-1 disk-full path for [`FlacRecordingSink`].
+//! Unit test for the disk-full path on [`FlacRecordingSink`].
 //!
 //! Drives a sink whose underlying writer returns `ErrorKind::StorageFull`
 //! after a small prefix of bytes, and asserts:

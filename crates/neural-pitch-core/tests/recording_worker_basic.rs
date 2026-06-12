@@ -1,4 +1,4 @@
-//! Tier-1 happy-path test for the [`RecordingWorker`] consumer loop.
+//! Happy-path unit test for the [`RecordingWorker`] consumer loop.
 //!
 //! Drive the fan-out channel with 1 s of synthetic audio at the canonical
 //! capture geometry (hop=512, sample_rate=48 kHz). Stop the worker via the

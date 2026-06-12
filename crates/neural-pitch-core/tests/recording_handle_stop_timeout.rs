@@ -1,4 +1,4 @@
-//! Tier-1 test: [`RecordingHandle::stop_with_timeout`] returns
+//! Unit test: [`RecordingHandle::stop_with_timeout`] returns
 //! `RecordingError::Join("timeout")` when the encoder thread is wedged in
 //! a slow `finalize()` longer than the supplied budget. Mirrors the
 //! `commands::stop_capture` DSP_JOIN_BUDGET pattern in the Tauri shell.

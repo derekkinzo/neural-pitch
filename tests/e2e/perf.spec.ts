@@ -16,7 +16,7 @@ interface NavigationTimingSubset {
 test.describe("perf — placeholder stub", () => {
   test.skip(
     true,
-    "Tuner UI does not yet expose a real hot path; budgets are defined once one exists to measure.",
+    "Perf budgets pending a decision on the baseline runner CPU class; the rAF-driven NoteDisplay, HistoryStrip canvas, contour canvas, and per-stem wavesurfer waveform are all measurable subjects, but a stable LCP / FPS / longtask threshold cannot land until the CI runner profile is fixed.",
   );
 
   test("LCP under relaxed CI budget", async ({ page, mockTauri }) => {

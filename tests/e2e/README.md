@@ -17,9 +17,22 @@ calls hit a programmable response map without a real Tauri shell.
   recordings library and analysis cache.
 - `range_readout.spec.ts`, `vibrato_readout.spec.ts` — range and vibrato
   reports.
+- `import_button.spec.ts`, `transcribe_button.spec.ts` — file-import and
+  polyphonic-transcription entry points.
+- `playback_loads.spec.ts`, `playback_spectrogram_toggle.spec.ts`,
+  `piano_roll.spec.ts` — recording playback, spectrogram toggle, and
+  piano-roll renderer.
+- `stems_landing.spec.ts`, `stems_progress.spec.ts`,
+  `stems_complete.spec.ts`, `stems_cancel.spec.ts` —
+  HTDemucs stem-separation flow (landing, progress, completion, cancel).
+- `training_landing.spec.ts`, `interval_drill.spec.ts`,
+  `karaoke_ribbon.spec.ts`, `solfege_toggle.spec.ts` — ear-training
+  drills and the movable-do solfege toggle.
 - `a11y.spec.ts`, `recording_a11y.spec.ts`, `recordings_a11y.spec.ts`,
-  `range_vibrato_a11y.spec.ts` — `@axe-core/playwright` scans; fail on any
-  `serious` or `critical` WCAG violation.
+  `range_vibrato_a11y.spec.ts`, `playback_a11y.spec.ts`,
+  `stems_a11y.spec.ts`, `training_a11y.spec.ts`,
+  `transcription_a11y.spec.ts` — `@axe-core/playwright` scans; fail on
+  any `serious` or `critical` WCAG violation.
 - `visual.spec.ts` — `toHaveScreenshot` baseline (Chromium-only;
   `chromium-linux` baselines).
 - `i18n.spec.ts`, `perf.spec.ts` — unconditionally skipped pending real
@@ -49,17 +62,21 @@ port 1420 and reuses an already-running dev server outside CI.
 
 ## Update visual baselines
 
-Updating `*.png` baselines on a developer's local machine is not supported
-because of cross-arch render drift (Playwright issue #13873). The
-supported flow is:
+Regenerating `*.png` baselines directly on a developer's host machine
+produces bytes that drift from CI because of subpixel font hinting and
+freetype version differences (Playwright issue #13873). The supported
+flow is to run `scripts/update-visual-baselines.sh`, which executes
+Playwright inside the official Playwright Docker image so the rendered
+output matches GitHub Actions' `ubuntu-latest` runner:
 
-1. Push the UI change.
-2. CI fails the `visual` spec; the diff PNG is uploaded as an artifact.
-3. Comment `/update-snapshots` on the PR.
-4. The `update-snapshots` workflow re-runs
-   `npx playwright test --update-snapshots --project=chromium` on
-   `ubuntu-latest` and commits the new baselines.
-5. CI re-runs and passes.
+```sh
+scripts/update-visual-baselines.sh
+```
+
+The script regenerates the baselines under
+`tests/e2e/visual.spec.ts-snapshots/`, then re-runs the visual project
+inside the same image to verify the new baselines pass cleanly. Commit
+the regenerated PNGs alongside the UI change.
 
 For local exploration only:
 
@@ -73,10 +90,17 @@ npm run e2e:update -- --project=chromium
 ```ts
 import { test, expect } from "./fixtures";
 
-test("renders tuner", async ({ page, mockTauri }) => {
-  await mockTauri.install({ greet: "Hello, mock!" });
+test("status pill goes live on start_capture", async ({ page, mockTauri }) => {
+  await mockTauri.install({
+    start_capture: () => ({
+      device_name: "Mock Microphone",
+      sample_rate: 48_000,
+      channels: 1,
+    }),
+  });
   await page.goto("/");
-  await expect(page.locator("pre")).toHaveText("Hello, mock!");
+  await expect(page.getByTestId("status-pill")).toHaveAttribute("data-state", "live");
+  await expect(page.getByTestId("status-device")).toHaveText("Mock Microphone");
 });
 ```
 

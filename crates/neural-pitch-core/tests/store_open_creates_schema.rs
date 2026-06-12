@@ -1,4 +1,4 @@
-//! Tier-1 persistence test: opening the library creates the v1 schema.
+//! Persistence unit test: opening the library creates the v1 schema.
 //!
 //! Open `:memory:`, query `schema_version`, assert `version = 1`,
 //! assert `recordings` and `analysis_cache` exist via `sqlite_master`.

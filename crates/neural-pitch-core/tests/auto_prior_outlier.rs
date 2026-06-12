@@ -1,4 +1,4 @@
-//! Tier-1 unit test: 99 voiced 220 Hz frames + 1 voiced 880 Hz frame
+//! Unit test: 99 voiced 220 Hz frames + 1 voiced 880 Hz frame
 //! must not let the octave-doubled outlier dominate. The median picks the
 //! 220 Hz cluster, so the upper bound stays well below 700 Hz.
 #![allow(

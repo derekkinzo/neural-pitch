@@ -1,12 +1,12 @@
 #![allow(missing_docs)]
 #![cfg(feature = "pyin")]
 
-//! pYIN offline acceptance over the voice fixtures (Tier-2).
+//! pYIN offline acceptance over the voice fixtures.
 //!
 //! Runs `analyze_contour` (pYIN backend) over every FLAC fixture under
 //! `tests/fixtures/voice/`, computes the median voiced F0 per fixture
 //! against the MIDI binding from `MANIFEST.toml`, and asserts ≥ 95% of
-//! fixtures land within 5 cents of truth (the Tier-2 acceptance gate).
+//! fixtures land within 5 cents of truth (the fixture acceptance gate).
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 #![allow(clippy::print_stdout)]
 
@@ -101,7 +101,7 @@ fn cents_off(actual_hz: f32, expected_hz: f32) -> f32 {
 }
 
 #[test]
-fn acceptance_pyin_voice_tier_2() {
+fn acceptance_pyin_voice_fixtures() {
     let manifest_dir = env!("CARGO_MANIFEST_DIR");
     let voice_root = PathBuf::from(manifest_dir)
         .join("tests")
@@ -111,7 +111,7 @@ fn acceptance_pyin_voice_tier_2() {
     let fixtures = load_manifest();
     let total = fixtures.len();
     println!(
-        "[pyin-acceptance] running pYIN Tier-2 acceptance over {total} synthetic voice fixtures"
+        "[pyin-acceptance] running pYIN fixture acceptance over {total} synthetic voice fixtures"
     );
 
     let mut passed = 0_usize;
@@ -173,7 +173,7 @@ fn acceptance_pyin_voice_tier_2() {
 
     assert!(
         pass_rate >= 0.95,
-        "pYIN Tier-2 voice acceptance failed: {passed}/{total} = {:.1}% < 95%",
+        "pYIN voice fixture acceptance failed: {passed}/{total} = {:.1}% < 95%",
         pass_rate * 100.0
     );
 }

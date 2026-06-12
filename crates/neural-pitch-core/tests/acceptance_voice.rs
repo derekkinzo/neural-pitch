@@ -23,8 +23,13 @@
 //!   `[ACCEPT-FIXTURE] {filename}: pass={true|false} estimated_midi={N}
 //!     expected={N} cents_error={f}`
 //! - One single-line aggregate JSON with the marker prefix:
-//!   `=== ACCEPTANCE_JSON === { "aggregate": ..., "tier_1_count": ...,
-//!     "tier_2_count": ..., "latency_p50_ms": ..., "latency_p99_ms": ... }`
+//!   `=== ACCEPTANCE_JSON === { "aggregate": ..., "unit_test_count": ...,
+//!     "fixture_test_count": ..., "latency_p50_ms": ..., "latency_p99_ms": ... }`
+//!
+//! The test layout follows the standard test pyramid: small in-process
+//! unit tests under `tests/` (one file per invariant), fixture-driven
+//! tests that feed real FLAC through the live DSP path, and this
+//! end-to-end acceptance harness on top.
 //!
 //! Run it directly with `cargo test -p neural-pitch-core --test acceptance_voice
 //! -- --nocapture` (debug build is fine; release is faster).
@@ -154,7 +159,7 @@ fn median_f32(values: &mut [f32]) -> f32 {
     }
 }
 
-/// Per-fixture report pulled out of `acceptance_voice_tier_2` so it can be
+/// Per-fixture report pulled out of `acceptance_voice_fixture_pyramid` so it can be
 /// rendered into both human-readable lines and the script's wire-format
 /// contract from a single source of truth.
 ///
@@ -257,7 +262,7 @@ fn run_fixture_through_pipeline(
     let sink = Box::new(ChannelFrameSink::new(tx));
     let cancel = CancellationToken::new();
 
-    // VAD threshold: 0.005 RMS matches every Tier-2 dsp_pipeline_*.rs test.
+    // VAD threshold: 0.005 RMS matches every `dsp_pipeline_*.rs` fixture test.
     // Hangover = 4 frames keeps the gate open for ~43 ms (4 hops at 48 k),
     // mirroring the live tuner's behaviour.
     //
@@ -387,28 +392,28 @@ fn percentile_sorted(sorted: &[f32], percentile: f32) -> f32 {
 /// them are renamed, the script's per-key `grep` guard will fail loudly.
 fn render_aggregate_json(
     aggregate: f32,
-    tier_1_count: usize,
-    tier_2_count: usize,
+    unit_test_count: usize,
+    fixture_test_count: usize,
     latency_p50_ms: f32,
     latency_p99_ms: f32,
 ) -> String {
     format!(
-        "{{\"aggregate\":{aggregate:.4},\"tier_1_count\":{tier_1_count},\"tier_2_count\":{tier_2_count},\"latency_p50_ms\":{latency_p50_ms:.3},\"latency_p99_ms\":{latency_p99_ms:.3}}}",
+        "{{\"aggregate\":{aggregate:.4},\"unit_test_count\":{unit_test_count},\"fixture_test_count\":{fixture_test_count},\"latency_p50_ms\":{latency_p50_ms:.3},\"latency_p99_ms\":{latency_p99_ms:.3}}}",
     )
 }
 
-/// Count Tier-1 unit tests. The test pyramid (Tier-1 unit / Tier-2 fixture / Tier-3 acceptance) has
-/// Tier 1 wired and gating CI; the harness is the right place to surface
-/// the count because it owns the closeout-report generation. We report a
-/// conservative count of *integration test files* under `tests/` other
-/// than this acceptance harness — close enough to "Tier-1 invariant test
-/// targets" for the closeout audience and stable across `cargo test
-/// --list` invocations. A more precise count belongs in a dedicated
-/// `cargo test -- --list`-driven script if it becomes load-bearing.
-fn count_tier_1_targets() -> usize {
+/// Count unit-test files under `tests/` (one file per invariant). The
+/// harness is the right place to surface the count because it owns the
+/// closeout-report generation. We report a conservative count of
+/// *integration test files* under `tests/` other than this acceptance
+/// harness — close enough to "invariant test targets" for the closeout
+/// audience and stable across `cargo test --list` invocations. A more
+/// precise count belongs in a dedicated `cargo test -- --list`-driven
+/// script if it becomes load-bearing.
+fn count_unit_test_targets() -> usize {
     // Walk the same `tests/` directory the harness lives in; count `*.rs`
-    // files except this one. Symlinks and subdirectories are ignored —
-    // current layout is flat.
+    // files except the acceptance harnesses themselves. Symlinks and
+    // subdirectories are ignored — current layout is flat.
     let manifest_dir = env!("CARGO_MANIFEST_DIR");
     let tests_dir = PathBuf::from(manifest_dir).join("tests");
     let mut count = 0_usize;
@@ -422,7 +427,7 @@ fn count_tier_1_targets() -> usize {
                 .file_stem()
                 .and_then(|s| s.to_str())
                 .unwrap_or_default();
-            if stem == "acceptance_voice" {
+            if stem == "acceptance_voice" || stem == "acceptance_pyin_voice" {
                 continue;
             }
             count += 1;
@@ -433,7 +438,7 @@ fn count_tier_1_targets() -> usize {
 
 #[test]
 #[allow(clippy::too_many_lines)] // single end-to-end harness; splitting would obscure the contract
-fn acceptance_voice_tier_2() {
+fn acceptance_voice_fixture_pyramid() {
     let manifest_dir = env!("CARGO_MANIFEST_DIR");
     let voice_root = PathBuf::from(manifest_dir)
         .join("tests")
@@ -443,7 +448,7 @@ fn acceptance_voice_tier_2() {
     let fixtures = load_manifest();
     let total = fixtures.len();
     println!(
-        "[voice] running Tier-2 acceptance over {total} synthetic voice fixtures (Generic hint, AutoPrior on)"
+        "[voice] running fixture acceptance over {total} synthetic voice fixtures (Generic hint, AutoPrior on)"
     );
 
     let mut reports: Vec<FixtureReport> = Vec::with_capacity(total);
@@ -597,8 +602,8 @@ fn acceptance_voice_tier_2() {
     }
 
     // Aggregate JSON.
-    let tier_2_count = total;
-    let tier_1_count = count_tier_1_targets();
+    let fixture_test_count = total;
+    let unit_test_count = count_unit_test_targets();
     all_latency_ms.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
     let latency_p50_ms = percentile_sorted(&all_latency_ms, 50.0);
     let latency_p99_ms = percentile_sorted(&all_latency_ms, 99.0);
@@ -606,8 +611,8 @@ fn acceptance_voice_tier_2() {
         "=== ACCEPTANCE_JSON === {}",
         render_aggregate_json(
             pass_rate,
-            tier_1_count,
-            tier_2_count,
+            unit_test_count,
+            fixture_test_count,
             latency_p50_ms,
             latency_p99_ms,
         )
@@ -615,7 +620,7 @@ fn acceptance_voice_tier_2() {
 
     assert!(
         pass_rate >= 0.95,
-        "Tier-2 voice acceptance failed: {passed_count}/{total} = {:.1}% < 95%",
+        "voice fixture acceptance failed: {passed_count}/{total} = {:.1}% < 95%",
         pass_rate * 100.0
     );
 }
@@ -721,8 +726,8 @@ mod harness_math_tests {
         let s = render_aggregate_json(0.95, 24, 13, 1.234, 4.567);
         for key in [
             "aggregate",
-            "tier_1_count",
-            "tier_2_count",
+            "unit_test_count",
+            "fixture_test_count",
             "latency_p50_ms",
             "latency_p99_ms",
         ] {

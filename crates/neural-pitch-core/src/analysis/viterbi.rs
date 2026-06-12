@@ -17,11 +17,12 @@
 //! `t`. After the forward pass the best terminal state argmax-es `delta_T`
 //! and a back-pointer table walks the path back to `t = 0`.
 //!
-//! Wired only for the neural backend — CREPE emits cents-bin frame-level
-//! probabilities and the offline pipeline calls [`decode`] with a
-//! Gaussian transition model centred on the previous state. The decoder
-//! is intentionally backend-agnostic: a classical estimator that wants
-//! HMM smoothing can lift the gate and depend on this module.
+//! Wired only for the neural backend — the Basic Pitch polyphonic
+//! transcriber under [`crate::poly::basic_pitch`] emits per-frame note
+//! probabilities and calls [`decode`] with a Gaussian transition model
+//! centred on the previous state. The decoder is intentionally
+//! backend-agnostic: a classical estimator that wants HMM smoothing can
+//! lift the gate and depend on this module.
 //!
 //! # Hot-path discipline
 //!

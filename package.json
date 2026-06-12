@@ -17,9 +17,11 @@
     "e2e:ui": "playwright test --ui",
     "e2e:update": "playwright test --update-snapshots"
   },
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
     "@tauri-apps/api": "^2",
-    "@tauri-apps/plugin-log": "^2",
     "react": "^19",
     "react-dom": "^19",
     "wavesurfer.js": "^7.12.7",

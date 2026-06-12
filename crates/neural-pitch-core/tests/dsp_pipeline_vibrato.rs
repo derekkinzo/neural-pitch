@@ -1,4 +1,4 @@
-//! Tier-2 deterministic test: 5 Hz vibrato of ±50 cents around 440 Hz,
+//! Fixture-driven deterministic test: 5 Hz vibrato of ±50 cents around 440 Hz,
 //! fed through the full pipeline. The mean absolute `smoothed_cents`
 //! over a 500 ms window must stay under 10 cents (matches the
 //! single-window `yin_vibrato_within_10_cents` unit test).

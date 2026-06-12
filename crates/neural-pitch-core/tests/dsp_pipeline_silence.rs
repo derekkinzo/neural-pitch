@@ -1,4 +1,4 @@
-//! Tier-2 deterministic test: pure silence through the full pipeline must
+//! Fixture-driven deterministic test: pure silence through the full pipeline must
 //! never be reported as voiced.
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 

@@ -1,4 +1,4 @@
-//! Tier-2 test: confirm that [`MockAudioBackend`] increments its
+//! Fixture-driven test: confirm that [`MockAudioBackend`] increments its
 //! `dropped_samples` counter when the SPSC ring overflows. That counter
 //! is the only underrun-visibility signal the audio loop exposes;
 //! without this test, regressions that silently zero the counter (or

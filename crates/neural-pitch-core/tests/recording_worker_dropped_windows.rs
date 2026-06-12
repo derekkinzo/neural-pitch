@@ -1,4 +1,4 @@
-//! Tier-1 backpressure test: when the encoder cannot keep up with the DSP
+//! Backpressure unit test: when the encoder cannot keep up with the DSP
 //! worker's hop-aligned fan-out, the bounded `sync_channel` fills up and
 //! windows are dropped at the producer side — but the recording itself
 //! still finalizes cleanly.

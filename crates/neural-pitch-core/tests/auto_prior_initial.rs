@@ -1,4 +1,4 @@
-//! Tier-1 unit test: a freshly-constructed AutoPrior returns the generic
+//! Unit test: a freshly-constructed AutoPrior returns the generic
 //! 60–2000 Hz range.
 #![allow(
     clippy::expect_used,

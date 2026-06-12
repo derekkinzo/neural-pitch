@@ -1,4 +1,4 @@
-//! Tier-1 disk-full path with fault injection.
+//! Unit test for the disk-full path with fault injection.
 //!
 //! The pre-existing `flac_sink_full_disk.rs` points the sink at
 //! `/dev/full`, but the sink derives `<path>.partial = /dev/full.partial`

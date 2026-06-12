@@ -1,4 +1,4 @@
-//! Tier-1 persistence test: concurrent inserts via shared `Arc` are safe.
+//! Persistence unit test: concurrent inserts via shared `Arc` are safe.
 //!
 //! 4 `std::thread::spawn` × 50 inserts each via cloned `Arc<…>`, join
 //! all, assert `list_recordings(Active).len() == 200` with no panic and

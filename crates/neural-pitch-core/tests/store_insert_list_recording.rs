@@ -1,4 +1,4 @@
-//! Tier-1 persistence test: insert one recording, list it back.
+//! Persistence unit test: insert one recording, list it back.
 //!
 //! Insert one `NewRecording`, list, assert exact field round-trip
 //! including `a4_hz` (REAL) and `user_label = NULL`.

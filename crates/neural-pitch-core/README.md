@@ -2,7 +2,9 @@
 
 Pure-Rust core library for NeuralPitch. Provides:
 
-- `PitchEstimator` trait and YIN/MPM, pYIN, and CREPE-tiny backends.
+- `PitchEstimator` trait with YIN/MPM and pYIN backends. (A
+  CREPE-tiny stub estimator exists for in-tree tests only; the
+  shipping offline pitch path is pYIN.)
 - `PolyEstimator` trait and a Basic Pitch v1 backend
   (Bittner et al., ICASSP 2022) for polyphonic transcription.
 - HTDemucs (Defossez 2021) four-bus stem separation with on-disk model
@@ -14,5 +16,5 @@ Pure-Rust core library for NeuralPitch. Provides:
 - Range, vibrato, and ear-training drill kernels over offline contours.
 
 The crate has no Tauri imports and is platform-portable. The neural
-CREPE-tiny, Basic Pitch, and HTDemucs backends are gated behind the
-`neural` Cargo feature; the default build stays under MIT OR Apache-2.0.
+Basic Pitch and HTDemucs backends are gated behind the `neural` Cargo
+feature; the default build stays under MIT OR Apache-2.0.

@@ -1,4 +1,4 @@
-//! Tier-2 deterministic test: dropping the [`PitchUpdate`] receiver causes
+//! Fixture-driven deterministic test: dropping the [`PitchUpdate`] receiver causes
 //! the worker to exit cleanly with [`FrameSinkError::Disconnected`].
 //!
 //! The disconnect path is the only non-cancellation way for the worker to

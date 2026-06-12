@@ -236,12 +236,12 @@ pub enum TranscribeError {
 /// Headless twin of the `import_audio_file` Tauri command.
 ///
 /// Workflow:
-/// 1. Lower-case extension; reject anything outside `{wav}`.
+/// 1. Lower-case extension; reject anything outside `{wav, flac}`.
 /// 2. `metadata()` for size; reject `> IMPORT_SIZE_LIMIT_BYTES` *before*
 ///    opening the file (cheap rejection — no decoder spin-up cost).
-/// 3. Probe the WAV header inline (RIFF/WAVE/fmt /data). FLAC sources
-///    are read by the live-recording flow only — the on-disk import
-///    flow accepts WAV. MP3 is out of scope.
+/// 3. Probe the source header. WAV uses the inline RIFF parser; FLAC
+///    uses claxon's STREAMINFO. MP3 is out of scope (no decoder bundled
+///    in the default build).
 /// 4. Mint a [`RecordingId`], copy the source file to
 ///    `{recordings_dir}/imports/<uuid>.<ext>` (preserves bytes),
 /// 5. Insert a `NewRecording` with `instrument_profile = "Imported"`,

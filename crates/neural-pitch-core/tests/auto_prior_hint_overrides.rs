@@ -1,4 +1,4 @@
-//! Tier-1 unit test: a pinned `InstrumentHint::Bass` returns the
+//! Unit test: a pinned `InstrumentHint::Bass` returns the
 //! 35–500 Hz range no matter what voiced f0 history is on the ring.
 #![allow(
     clippy::expect_used,

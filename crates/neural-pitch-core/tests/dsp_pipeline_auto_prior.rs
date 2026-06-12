@@ -1,4 +1,4 @@
-//! Tier-2 deterministic test: feed 1 s of 440 Hz sine through the full
+//! Fixture-driven deterministic test: feed 1 s of 440 Hz sine through the full
 //! pipeline and read back the worker's `auto_prior` to confirm the running
 //! median has narrowed the search range below the cold-start generic
 //! 60–2000 Hz prior.

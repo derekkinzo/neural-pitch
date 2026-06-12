@@ -1,4 +1,4 @@
-//! Tier-1 persistence test: soft delete hides rows from `ActiveOnly`.
+//! Persistence unit test: soft delete hides rows from `ActiveOnly`.
 //!
 //! Insert, soft-delete, `ListFilter::ActiveOnly` → empty;
 //! `IncludingDeleted` → 1 row with `deleted_at_unix_ms.is_some()`.
