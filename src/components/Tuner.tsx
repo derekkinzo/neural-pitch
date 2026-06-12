@@ -6,14 +6,15 @@
 //   - useRecordingProgress() — `recording-progress` event subscription
 //   - layout (header / NoteDisplay / CentsMeter / HistoryStrip)
 //   - SettingsDrawer + RecordingsList drawer open/close state
-//   - PermissionNotice + DeviceDisconnectToast + SavedToast (rendered as
-//     siblings of <main>)
+//   - PermissionNotice + DeviceErrorNotice + DeviceDisconnectToast +
+//     SavedToast (rendered as siblings of <main>)
 //
 
 import { useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/Button";
 import { CentsMeter } from "@/components/CentsMeter";
 import { DeviceDisconnectToast } from "@/components/DeviceDisconnectToast";
+import { DeviceErrorNotice } from "@/components/DeviceErrorNotice";
 import { HistoryStrip } from "@/components/HistoryStrip";
 import { NoteDisplay } from "@/components/NoteDisplay";
 import { PermissionNotice } from "@/components/PermissionNotice";
@@ -40,7 +41,21 @@ export function Tuner(): ReactNode {
   const [settingsOpen, setSettingsOpen] = useState<boolean>(false);
   const [libraryOpen, setLibraryOpen] = useState<boolean>(false);
   const deviceStatus = useTunerStore((s) => s.deviceStatus);
+  const startError = useTunerStore((s) => s.startError);
   const setView = useTunerStore((s) => s.setView);
+
+  // Two banner branches gated by the same store snapshot:
+  //   - `permission_denied` is the OS-permission sentinel (hooked from
+  //     the cpal/tauri capture init) and routes to PermissionNotice with
+  //     its tailored copy + Settings deep-link.
+  //   - any other non-null `startError` (no input device, ALSA card
+  //     missing, generic cpal init failure) routes to DeviceErrorNotice
+  //     with a generic "audio backend unavailable" message + a Retry
+  //     that re-issues start_capture.
+  // Mutually exclusive — `permission_denied` always coexists with a
+  // matching `startError`, so the permission branch is checked first.
+  const showPermissionNotice = deviceStatus === "permission_denied";
+  const showDeviceErrorNotice = !showPermissionNotice && startError !== null;
 
   // The Settings + Recordings drawers are rendered as SIBLINGS of <main>
   // (not children) so each drawer's focus-trap can apply `inert` /
@@ -114,7 +129,8 @@ export function Tuner(): ReactNode {
           </div>
         </header>
 
-        {deviceStatus === "permission_denied" ? <PermissionNotice onRetry={retry} /> : null}
+        {showPermissionNotice ? <PermissionNotice onRetry={retry} /> : null}
+        {showDeviceErrorNotice ? <DeviceErrorNotice onRetry={retry} /> : null}
 
         <section className="flex flex-1 flex-col items-center justify-center gap-8 px-6">
           <NoteDisplay ringRef={ringRef} />
