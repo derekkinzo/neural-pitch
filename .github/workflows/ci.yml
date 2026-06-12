@@ -458,10 +458,25 @@ jobs:
           echo "ORT_DYLIB_PATH=${ort_so}" >> "${GITHUB_ENV}"
       - name: Run smoke harness under Xvfb
         run: xvfb-run -a --server-args="-screen 0 1280x800x24" bash scripts/smoke-test.sh
+      - name: Dump smoke logs on failure
+        if: failure()
+        run: |
+          echo "=== summary.jsonl (every step's verdict) ==="
+          find .smoke-reports -name 'summary.jsonl' -exec cat {} \; 2>/dev/null || true
+          echo
+          echo "=== driver.log (smoke-driver.mjs stdout/stderr) ==="
+          find .smoke-reports -name 'driver.log' -exec tail -60 {} \; 2>/dev/null || true
+          echo
+          echo "=== tauri-driver.log ==="
+          find .smoke-reports -name 'tauri-driver.log' -exec tail -30 {} \; 2>/dev/null || true
       - name: Upload smoke reports on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: smoke-reports
-          path: .smoke-reports/
+          # `.smoke-reports/` is a dot-prefixed directory; without
+          # `include-hidden-files: true` actions/upload-artifact@v4
+          # silently skips it.
+          path: .smoke-reports/**/*
+          include-hidden-files: true
           retention-days: 14
