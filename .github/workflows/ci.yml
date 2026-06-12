@@ -428,20 +428,31 @@ jobs:
         # ~/.cargo/bin on warm runs.
         run: cargo install tauri-driver --locked
       - name: Resolve libonnxruntime via onnxruntime-node
-        # Pinned to 1.21.0 to match the local-developer install
-        # documented in scripts/smoke-test.sh. Writing into
-        # $RUNNER_TEMP keeps the working tree free of node_modules so
-        # `git status` stays clean if a contributor copies this step
-        # locally. Exporting ORT_DYLIB_PATH via $GITHUB_ENV lets the
-        # harness's `[[ -z ... ]]` guard pick it up verbatim.
+        # Pinned to 1.21.0 to match the local-developer install in
+        # scripts/smoke-test.sh. Filters by the host arch sub-dir
+        # (`linux/x64/` on the GitHub-hosted ubuntu runner) so we never
+        # hand ort an arch-mismatched dylib — picking the wrong arch
+        # silently degrades the codepath into a 4-minute hang on Basic
+        # Pitch's first call.
         run: |
           set -euo pipefail
+          case "$(uname -s)/$(uname -m)" in
+            Linux/x86_64)  host_napi="linux/x64" ;;
+            Linux/aarch64) host_napi="linux/arm64" ;;
+            Darwin/x86_64) host_napi="darwin/x64" ;;
+            Darwin/arm64)  host_napi="darwin/arm64" ;;
+            *)
+              echo "::error::unsupported runner arch: $(uname -s)/$(uname -m)" >&2
+              exit 1
+              ;;
+          esac
           ort_dir="${RUNNER_TEMP}/ort"
           mkdir -p "${ort_dir}"
           npm install --no-save --prefix "${ort_dir}" onnxruntime-node@1.21.0
-          ort_so="$(find "${ort_dir}/node_modules/onnxruntime-node" -name 'libonnxruntime.so*' | head -n1)"
+          ort_so="$(find "${ort_dir}/node_modules/onnxruntime-node" \
+            -path "*/${host_napi}/libonnxruntime.so*" | head -n1)"
           if [ -z "${ort_so}" ]; then
-            echo "::error::libonnxruntime.so not found under ${ort_dir}" >&2
+            echo "::error::libonnxruntime.so not found under ${ort_dir}/${host_napi}" >&2
             exit 1
           fi
           echo "ORT_DYLIB_PATH=${ort_so}" >> "${GITHUB_ENV}"
