@@ -109,8 +109,9 @@ if [[ -z "${ORT_DYLIB_PATH:-}" ]]; then
     while IFS= read -r found; do
       CANDIDATES+=("${found}")
     done < <(
+      # `-maxdepth 9` reaches `.ort/node_modules/onnxruntime-node/bin/napi-v3/<host_napi>/libonnxruntime.so.1.21.0`.
       find "${REPO_ROOT}/.ort" "${REPO_ROOT}/node_modules" "${HOME}/.npm/_npx" \
-        -maxdepth 6 -path "*/${HOST_NAPI}/libonnxruntime.so*" -print 2>/dev/null || true
+        -maxdepth 9 -path "*/${HOST_NAPI}/libonnxruntime.so*" -print 2>/dev/null || true
     )
   fi
   CANDIDATES+=(

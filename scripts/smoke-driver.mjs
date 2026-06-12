@@ -78,17 +78,41 @@ if (!existsSync(FIXTURE_FLAC)) {
 // on the server side, with the request hanging for the
 // 5-minute pool-timeout default. Closing per-call adds ~1 ms of TCP
 // handshake overhead in exchange for predictable behaviour.
-async function wd(method, path, body) {
+//
+// AbortController bounds every call by `WD_FETCH_TIMEOUT_MS`. Without
+// a per-call deadline a hung WebKitWebDriver endpoint (canvas readback
+// under host memory pressure is the recurring offender) blocks the
+// whole run for undici's 5-minute headers timeout. 60 s is well above
+// any healthy response time and well below the W3C-default script
+// timeout, so an honest stall surfaces fast and the surrounding step
+// harness can capture diagnostics.
+const WD_FETCH_TIMEOUT_MS = 60_000;
+async function wd(method, path, body, opts = {}) {
   const url = `${DRIVER_URL}${path}`;
+  const ctrl = new AbortController();
+  const deadline = opts.timeoutMs ?? WD_FETCH_TIMEOUT_MS;
+  const timer = setTimeout(() => ctrl.abort(), deadline);
   const init = {
     method,
     headers: { "Content-Type": "application/json", Connection: "close" },
+    signal: ctrl.signal,
   };
   if (body !== undefined) init.body = JSON.stringify(body);
-  const res = await fetch(url, init);
-  const text = await res.text();
-  if (!res.ok) throw new Error(`WebDriver ${method} ${path} -> ${res.status}: ${text}`);
-  return text ? JSON.parse(text) : null;
+  try {
+    const res = await fetch(url, init);
+    const text = await res.text();
+    if (!res.ok) throw new Error(`WebDriver ${method} ${path} -> ${res.status}: ${text}`);
+    return text ? JSON.parse(text) : null;
+  } catch (err) {
+    if (err?.name === "AbortError") {
+      throw new Error(
+        `WebDriver ${method} ${path} aborted after ${deadline}ms (driver/webview hung)`,
+      );
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 let sessionId = null;
@@ -143,15 +167,32 @@ async function pageSource() {
   return out.value;
 }
 async function screenshot() {
-  const out = await wd("GET", `/session/${sessionId}/screenshot`);
+  // Tighter per-call deadline than the default 60 s. WebKitWebDriver
+  // sometimes blocks `/screenshot` indefinitely under memory pressure
+  // (canvas readback waits on a swap-paged buffer). A 10 s ceiling
+  // keeps a hung screenshot from inflating step wall-clock; the
+  // surrounding step harness records the abort and continues.
+  const out = await wd("GET", `/session/${sessionId}/screenshot`, undefined, { timeoutMs: 10_000 });
   return Buffer.from(out.value, "base64");
 }
 // Execute a synchronous JS snippet inside the webview. WebDriver's
 // `executeScript` is `/session/<id>/execute/sync` per the W3C spec.
 // Tauri's `invoke()` is async; we wrap it in `Promise.resolve()` and use
 // `executeAsyncScript` (`execute/async`) for any IPC call.
-async function executeAsync(script, args = []) {
-  const out = await wd("POST", `/session/${sessionId}/execute/async`, { script, args });
+// `executeAsync` blocks the WebDriver HTTP response until the wrapped
+// script invokes its callback. Fetch deadline must therefore match the
+// pre-set WebDriver `script` timeout (default 240 s after `newSession`,
+// bumped to 180 s explicitly before the HTDemucs step). Add a small
+// margin so the WebDriver-side timeout fires first with a meaningful
+// payload rather than the fetch aborting it.
+async function executeAsync(script, args = [], opts = {}) {
+  const fetchTimeoutMs = opts.fetchTimeoutMs ?? 250_000;
+  const out = await wd(
+    "POST",
+    `/session/${sessionId}/execute/async`,
+    { script, args },
+    { timeoutMs: fetchTimeoutMs },
+  );
   return out.value;
 }
 // Tighten or relax the WebDriver `script` timeout. The default is
@@ -212,8 +253,20 @@ async function step(name, fn, opts = {}) {
   try {
     const result = await fn();
     await sleep(SCREENSHOT_SETTLE_MS);
-    const png = await screenshot();
-    await writeFile(join(REPORT_DIR, `${id}-${slug(name)}.png`), png);
+    // Screenshot is best-effort. WebKitWebDriver intermittently hangs
+    // on `/screenshot` under memory pressure (canvas readback waits on
+    // a swap-paged buffer), and a hung screenshot must not turn a
+    // green step into a fail. The wd() AbortController bounds the
+    // call; on abort we record the step as PASS without an image.
+    let png = null;
+    try {
+      png = await screenshot();
+    } catch (e) {
+      console.warn(`[${id}] screenshot capture failed: ${e}`);
+    }
+    if (png) {
+      await writeFile(join(REPORT_DIR, `${id}-${slug(name)}.png`), png);
+    }
     const elapsedMs = Date.now() - t0;
     await appendFile(
       SUMMARY,
@@ -248,7 +301,7 @@ async function step(name, fn, opts = {}) {
         startedAt,
         elapsedMs,
         error: String(err),
-        critical: opts.critical ?? false,
+        critical: opts.critical !== false,
       }) + "\n",
     );
     console.error(`FAIL [${id}] ${name} (${elapsedMs}ms): ${err}`);

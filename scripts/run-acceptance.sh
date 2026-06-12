@@ -14,11 +14,11 @@
 #       === ACCEPTANCE_JSON === { ... }
 #
 #     Required keys on the JSON object:
-#       aggregate, tier_1_count, tier_2_count,
+#       aggregate, unit_test_count, fixture_test_count,
 #       latency_p50_ms, latency_p99_ms
 #
 # Output JSON shape (this script writes):
-#   { aggregate, fixtures[], tier_1_count, tier_2_count,
+#   { aggregate, fixtures[], unit_test_count, fixture_test_count,
 #     latency_p50_ms, latency_p99_ms, timestamp, commit_sha }
 #
 # Exit non-zero if aggregate < 0.95 (the acceptance floor).
@@ -59,9 +59,9 @@ trap 'rm -f "${LOG_FILE}"' EXIT
 echo "==> running acceptance harness"
 # `tee` so the operator sees the cargo output in real time and we
 # still have the full log to parse afterwards. `--release` is used
-# because Tier-2 fixtures are CPU-bound; debug builds pad the
-# per-fixture deadline (the harness scales it on cfg(debug_assertions))
-# but release is meaningfully faster on CI.
+# because the fixture acceptance harness is CPU-bound; debug builds pad
+# the per-fixture deadline (the harness scales it on
+# cfg(debug_assertions)) but release is meaningfully faster on CI.
 set +e
 (
   cd "${REPO_ROOT}" && \
@@ -152,7 +152,7 @@ AGG_JSON="${AGG_LINE#=== ACCEPTANCE_JSON === }"
 # Validate required keys are present in the aggregate JSON. We do
 # not fully parse JSON here — a substring check is enough to catch
 # the harness regressing the contract.
-for key in aggregate tier_1_count tier_2_count latency_p50_ms latency_p99_ms; do
+for key in aggregate unit_test_count fixture_test_count latency_p50_ms latency_p99_ms; do
   if ! printf '%s' "${AGG_JSON}" | grep -q "\"${key}\""; then
     echo "error: aggregate JSON missing required key: ${key}" >&2
     echo "  aggregate line was: ${AGG_LINE}" >&2
@@ -172,15 +172,15 @@ extract_number() {
 }
 
 AGGREGATE="$(extract_number aggregate)"
-TIER1="$(extract_number tier_1_count)"
-TIER2="$(extract_number tier_2_count)"
+UNIT_COUNT="$(extract_number unit_test_count)"
+FIXTURE_COUNT="$(extract_number fixture_test_count)"
 P50="$(extract_number latency_p50_ms)"
 P99="$(extract_number latency_p99_ms)"
 
-if [ -z "${AGGREGATE}" ] || [ -z "${TIER1}" ] || [ -z "${TIER2}" ] \
+if [ -z "${AGGREGATE}" ] || [ -z "${UNIT_COUNT}" ] || [ -z "${FIXTURE_COUNT}" ] \
    || [ -z "${P50}" ] || [ -z "${P99}" ]; then
   echo "error: failed to extract one or more aggregate fields" >&2
-  echo "  aggregate=${AGGREGATE} tier_1=${TIER1} tier_2=${TIER2}" >&2
+  echo "  aggregate=${AGGREGATE} unit=${UNIT_COUNT} fixture=${FIXTURE_COUNT}" >&2
   echo "  p50=${P50} p99=${P99}" >&2
   exit 1
 fi
@@ -199,8 +199,8 @@ fi
   printf '{\n'
   printf '  "aggregate": %s,\n' "${AGGREGATE}"
   printf '  "fixtures": [%s],\n' "${FIXTURES_JSON}"
-  printf '  "tier_1_count": %s,\n' "${TIER1}"
-  printf '  "tier_2_count": %s,\n' "${TIER2}"
+  printf '  "unit_test_count": %s,\n' "${UNIT_COUNT}"
+  printf '  "fixture_test_count": %s,\n' "${FIXTURE_COUNT}"
   printf '  "latency_p50_ms": %s,\n' "${P50}"
   printf '  "latency_p99_ms": %s,\n' "${P99}"
   printf '  "timestamp": "%s",\n' "${TIMESTAMP}"
@@ -210,7 +210,7 @@ fi
 
 echo
 echo "==> wrote ${REPORT_PATH}"
-echo "    aggregate=${AGGREGATE} tier_1=${TIER1} tier_2=${TIER2} p50=${P50}ms p99=${P99}ms"
+echo "    aggregate=${AGGREGATE} unit=${UNIT_COUNT} fixture=${FIXTURE_COUNT} p50=${P50}ms p99=${P99}ms"
 
 # --- enforce the floor ---------------------------------------------
 # awk handles the float compare without depending on bc(1).

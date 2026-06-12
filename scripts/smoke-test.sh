@@ -80,8 +80,12 @@ if [[ -z "${ORT_DYLIB_PATH:-}" ]]; then
     while IFS= read -r found; do
       candidates+=("${found}")
     done < <(
+      # `-maxdepth 9` reaches `.ort/node_modules/onnxruntime-node/bin/napi-v3/linux/x64/libonnxruntime.so.1.21.0`
+      # (7 components past the root). The earlier `-maxdepth 6` truncated
+      # the traversal before the file, leaving ORT_DYLIB_PATH unset and
+      # the smoke harness stuck loading whatever the system loader served.
       find "${REPO_ROOT}/.ort" "${REPO_ROOT}/node_modules" "${HOME}/.npm/_npx" \
-        -maxdepth 6 -path "*/${HOST_NAPI}/libonnxruntime.so*" -print 2>/dev/null || true
+        -maxdepth 9 -path "*/${HOST_NAPI}/libonnxruntime.so*" -print 2>/dev/null || true
     )
   fi
   candidates+=(
@@ -189,7 +193,13 @@ DRIVER_URL="http://localhost:${DRIVER_PORT}"
 echo "==> Spawning tauri-driver on ${DRIVER_URL}"
 tauri-driver --port "${DRIVER_PORT}" > "${REPORT_DIR}/tauri-driver.log" 2>&1 &
 DRIVER_PID=$!
-trap 'kill ${DRIVER_PID} 2>/dev/null || true' EXIT
+# Kill the driver AND any leaked app binary. A previous failed run can
+# leave `target/debug/neural-pitch` resident, holding the audio device
+# and competing for memory with the next session — which manifests as
+# unrelated WebDriver hangs (e.g. /screenshot timing out under swap
+# pressure). pkill -f matches the binary path; we silently ignore the
+# absent-process exit code.
+trap 'kill ${DRIVER_PID} 2>/dev/null || true; pkill -f "target/debug/neural-pitch" 2>/dev/null || true' EXIT
 
 # Poll /status until the daemon binds the port; surface the actual
 # tauri-driver stderr if the deadline expires.
