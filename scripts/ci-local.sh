@@ -94,10 +94,30 @@ export RUST_BACKTRACE="${RUST_BACKTRACE:-1}"
 # common cached copy so the local gate's `--include-ignored` ONNX tests
 # do not silently hang. Override by exporting `ORT_DYLIB_PATH` yourself.
 if [[ -z "${ORT_DYLIB_PATH:-}" ]]; then
-  for candidate in \
-    "${HOME}/.bun/install/cache/onnxruntime-node@1.21.0@@@1/bin/napi-v3/linux/x64/libonnxruntime.so.1.21.0" \
-    "/usr/local/lib/libonnxruntime.so" \
-    "/usr/lib/x86_64-linux-gnu/libonnxruntime.so"; do
+  # Resolve the host arch sub-dir under `onnxruntime-node`'s napi layout
+  # so we never hand ort an arch-mismatched dylib. Filter the candidate
+  # list by `*/${HOST_NAPI}/...` instead of relying on directory order.
+  case "$(uname -s)/$(uname -m)" in
+    Linux/x86_64)  HOST_NAPI="linux/x64" ;;
+    Linux/aarch64) HOST_NAPI="linux/arm64" ;;
+    Darwin/x86_64) HOST_NAPI="darwin/x64" ;;
+    Darwin/arm64)  HOST_NAPI="darwin/arm64" ;;
+    *)             HOST_NAPI="" ;;
+  esac
+  declare -a CANDIDATES=()
+  if [[ -n "${HOST_NAPI}" ]]; then
+    while IFS= read -r found; do
+      CANDIDATES+=("${found}")
+    done < <(
+      find "${REPO_ROOT}/.ort" "${REPO_ROOT}/node_modules" "${HOME}/.npm/_npx" \
+        -maxdepth 6 -path "*/${HOST_NAPI}/libonnxruntime.so*" -print 2>/dev/null || true
+    )
+  fi
+  CANDIDATES+=(
+    "/usr/local/lib/libonnxruntime.so"
+    "/usr/lib/x86_64-linux-gnu/libonnxruntime.so"
+  )
+  for candidate in "${CANDIDATES[@]}"; do
     if [[ -f "${candidate}" ]]; then
       export ORT_DYLIB_PATH="${candidate}"
       break
@@ -230,7 +250,7 @@ run_step() {
 }
 
 # ---------------------------------------------------------------------
-# No-leak grep — fail if any tracked file contains an Amazon/internal
+# No-leak grep — fail if any tracked file contains an internal-only
 # reference or a personal-machine path.
 #
 # Self-exclusion mechanism: the grep below has to *contain* the very
@@ -250,9 +270,9 @@ no_leak_grep() {
   # general-purpose pitch-detection app for musicians. The forbidden
   # phrases appearing in copy or marketing surfaces would re-introduce
   # the singer-specific framing that was explicitly dropped.
-  # no-leak: regex-source. 'sight-singing' is a Phase-4 ear-training drill ID — allowlisted under training/ sub-trees.
+  # no-leak: regex-source. 'sight-singing' is the ear-training drill ID — allowlisted under training/ sub-trees.
   local singer_pattern='for singers|sight-singing|app for singers' # no-leak: regex-source
-  # Path allowlist for Phase-4 ear-training drill code. These trees
+  # Path allowlist for ear-training drill code. These trees
   # legitimately reference the drill ID; the singer_pattern grep is
   # precise about which paths it permits — we do NOT blanket-exclude
   # src/components/, only training/ subtrees.
@@ -406,8 +426,9 @@ quick_tier() {
       return 0
     fi
     # Don't rely on `set -e` propagating through function boundaries
-    # (bash 3.2 on macOS handles this inconsistently). Make the
-    # failure path explicit.
+    # (POSIX errexit-in-functions semantics are implementation-defined
+    # and pre-4.4 bash on stock macOS treats them inconsistently).
+    # Make the failure path explicit.
     run_step "${idx}" "${total}" "${n}" "${cmd}" "${hint}" || return $?
   done
 }
@@ -420,7 +441,7 @@ quick_tier() {
 # scripts/update-visual-baselines.sh directly.
 # ---------------------------------------------------------------------
 visual_tier() {
-  # Phase 1 — quick prelude. Never burn ~60s of Docker on a tree that
+  # Quick prelude — never burn ~60s of Docker on a tree that
   # fails cheap checks.
   quick_tier
 

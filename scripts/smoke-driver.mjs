@@ -22,18 +22,38 @@
 // Exit 0 on green; non-zero on first failure. Failure dumps the page DOM
 // + driver log tail to the report dir for triage.
 
-import { mkdir, writeFile, appendFile, readFile } from "node:fs/promises";
+import { mkdir, writeFile, appendFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 
 // -------- arg parse ----------------------------------------------------
-const args = Object.fromEntries(
-  process.argv.slice(2).reduce((acc, cur, i, arr) => {
-    if (cur.startsWith("--") && i + 1 < arr.length) acc.push([cur.slice(2), arr[i + 1]]);
-    return acc;
-  }, []),
-);
+// CLI grammar: `--<name> <value>` or `--<name>=<value>`. A bare `--<name>`
+// followed by another `--<name>` is rejected with a clear error rather
+// than silently consuming the second flag name as the first flag's
+// value. Boolean flags are not used by this script.
+function parseArgs(argv) {
+  const out = {};
+  for (let i = 0; i < argv.length; i++) {
+    const tok = argv[i];
+    if (!tok.startsWith("--")) {
+      throw new Error(`unexpected positional argument: ${tok}`);
+    }
+    const eq = tok.indexOf("=");
+    if (eq !== -1) {
+      out[tok.slice(2, eq)] = tok.slice(eq + 1);
+      continue;
+    }
+    const next = argv[i + 1];
+    if (next === undefined || next.startsWith("--")) {
+      throw new Error(`flag ${tok} requires a value`);
+    }
+    out[tok.slice(2)] = next;
+    i += 1;
+  }
+  return out;
+}
+const args = parseArgs(process.argv.slice(2));
 const BINARY = args.binary;
 const REPORT_DIR = args["report-dir"];
 const FIXTURE_FLAC = args.fixture; // path to a real 24-bit mono 48 kHz FLAC
@@ -50,9 +70,20 @@ if (!existsSync(FIXTURE_FLAC)) {
 }
 
 // -------- WebDriver thin client ---------------------------------------
+//
+// `Connection: close` opts out of Node's keepalive pool. tauri-driver
+// and hyper interact poorly when undici re-uses sockets: a stale
+// pooled connection surfaces as `UND_ERR_HEADERS_TIMEOUT` on the
+// client side and `Error serving connection: hyper::Error(IncompleteMessage)`
+// on the server side, with the request hanging for the
+// 5-minute pool-timeout default. Closing per-call adds ~1 ms of TCP
+// handshake overhead in exchange for predictable behaviour.
 async function wd(method, path, body) {
   const url = `${DRIVER_URL}${path}`;
-  const init = { method, headers: { "Content-Type": "application/json" } };
+  const init = {
+    method,
+    headers: { "Content-Type": "application/json", Connection: "close" },
+  };
   if (body !== undefined) init.body = JSON.stringify(body);
   const res = await fetch(url, init);
   const text = await res.text();
@@ -68,9 +99,22 @@ async function newSession() {
     },
   });
   sessionId = out.value.sessionId;
+  // Bump the WebDriver `script` timeout from the W3C default of 30 s.
+  // Cold-start ONNX inference (Basic Pitch first call) routinely exceeds
+  // 30 s on debug builds; HTDemucs takes another order of magnitude.
+  // Setting it once after session creation covers every subsequent
+  // executeAsync call without per-step ceremony.
+  await wd("POST", `/session/${sessionId}/timeouts`, { script: 240_000 });
 }
 async function endSession() {
-  if (sessionId) await wd("DELETE", `/session/${sessionId}`).catch(() => {});
+  if (sessionId) {
+    // Surface tauri-driver shutdown failures so a hung driver does not
+    // masquerade as a clean teardown — the surrounding `step` harness
+    // already captures stderr per-step.
+    await wd("DELETE", `/session/${sessionId}`).catch((err) => {
+      console.error(`endSession: DELETE /session/${sessionId} failed: ${err}`);
+    });
+  }
 }
 function elemId(v) {
   return v?.ELEMENT ?? v?.["element-6066-11e4-a52e-4f735466cecf"];
@@ -229,7 +273,7 @@ async function main() {
 
   try {
     // ============================================================
-    // PHASE 1 — boot + navigation surface
+    // boot + tuner mount
     // ============================================================
 
     // 1. App boots and the live tuner mounts.
@@ -255,19 +299,24 @@ async function main() {
       const note = await find("css selector", "[data-testid='note-letter']");
       const meter = await find("css selector", "[role='meter']");
       const noteText = await getText(note);
-      // No real mic in headless, so the note display reads "—".
-      if (noteText.trim() !== "—") {
-        throw new Error(`expected "—" (silent), got "${noteText}"`);
+      // The note display renders either a note letter (A-G optionally
+      // sharpened) when the mic picks up a fundamental, or the em-dash
+      // sentinel when input is below the voicing gate. Both shapes prove
+      // the React tree mounted; we accept either rather than pinning to
+      // a specific environment.
+      const ok = /^[A-G][#♯b♭]?$/.test(noteText.trim()) || noteText.trim() === "—";
+      if (!ok) {
+        throw new Error(`unexpected note-letter text: "${noteText}"`);
       }
       return { noteText, meterPresent: !!meter };
     });
 
     // ============================================================
-    // PHASE 2 — settings drawer + select dropdowns
+    // settings drawer + select dropdowns
     // ============================================================
 
     // 3. Settings drawer opens with the A4 + InstrumentHint + NoteLabels
-    //    selects readable (the bug fixed in d791d49).
+    //    selects readable (white-on-white regression guard).
     await step("settings — drawer opens with readable selects", async () => {
       const trigger = await find("css selector", "[data-testid='settings-trigger']");
       await click(trigger);
@@ -338,9 +387,9 @@ async function main() {
     });
 
     // ============================================================
-    // PHASE 3 — recordings library: import a real FLAC via IPC,
-    // then walk the pYIN analyze + Basic Pitch transcribe + HTDemucs
-    // separate paths against it.
+    // recordings library — import + analyze a real FLAC fixture via
+    // IPC. Subsequent sections drive the transcribe + separate paths
+    // against the same recording id.
     // ============================================================
 
     // 5. Import a real FLAC fixture by invoking the Tauri command
@@ -432,11 +481,11 @@ async function main() {
     );
 
     // ============================================================
-    // PHASE 4 — Basic-Pitch transcribe path through the IPC layer.
-    // The real ONNX runner runs end-to-end. The fixture is monophonic,
-    // so we just assert >= 1 note in the response (the assertion the
-    // `--include-ignored` polyphonic test uses 2 notes; here we just
-    // need to prove the wire-up plumbs through).
+    // transcribe path — Basic-Pitch ONNX through the IPC layer. The
+    // real runner runs end-to-end. The fixture is monophonic, so we
+    // assert >= 1 note in the response; the polyphonic case lives
+    // under the `--include-ignored` test in the core crate, here we
+    // just need to prove the wire-up plumbs through.
     // ============================================================
 
     await step(
@@ -470,9 +519,10 @@ async function main() {
     );
 
     // ============================================================
-    // PHASE 5 — HTDemucs stem separation through the IPC layer.
-    // The model is pre-cached at $APPDATA/models/htdemucs.onnx by
-    // smoke-test.sh, so this should NOT trigger a 316 MB download.
+    // stem-separation path — HTDemucs through the IPC layer. The
+    // model is pre-cached at $APPDATA/models/htdemucs.onnx by the
+    // CI workflow / local smoke-test.sh, so this should NOT trigger
+    // a 316 MB download.
     // ============================================================
 
     await step(
@@ -514,17 +564,25 @@ async function main() {
     );
 
     // ============================================================
-    // PHASE 6 — training landing + per-drill smoke
+    // training landing + per-drill prompts
     // ============================================================
 
     await step("training — practice screen renders 5 drill cards", async () => {
       // Navigate via the deep-link the App component handles on mount.
       await wd("POST", `/session/${sessionId}/url`, {
         url: "tauri://localhost/#training",
-      }).catch(async () => {
-        // some tauri-driver builds reject custom schemes — fall back
-        // by clicking through.
-        await wd("POST", `/session/${sessionId}/url`, { url: "/" }).catch(() => {});
+      }).catch(async (customSchemeErr) => {
+        // Some tauri-driver builds reject custom schemes; record the
+        // original error to the report dir so the failure mode stays
+        // diagnosable from artifacts, then fall back by routing
+        // through the default URL.
+        await writeFile(
+          join(REPORT_DIR, "training-nav-fallback.log"),
+          `tauri:// scheme rejected: ${customSchemeErr}\n`,
+        ).catch(() => {});
+        await wd("POST", `/session/${sessionId}/url`, { url: "/" }).catch((fallbackErr) => {
+          console.error(`training-nav fallback also failed: ${fallbackErr}`);
+        });
       });
       const { value } = await waitFor(
         "5 drill-card elements render",
@@ -557,7 +615,7 @@ async function main() {
     });
 
     // ============================================================
-    // PHASE 7 — Cleanup
+    // cleanup
     // ============================================================
 
     await step("cleanup — delete the imported recording", async () => {
@@ -585,8 +643,3 @@ main().catch((err) => {
   console.error("smoke pass aborted:", err);
   process.exit(1);
 });
-
-// Avoid an unused-import warning when readFile is not exercised in a
-// minimal codepath: re-export it for symmetry with future steps that
-// will diff a JSON file directly.
-void readFile;

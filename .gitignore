@@ -57,6 +57,12 @@ Thumbs.db
 # Live-shell smoke harness (timestamped screenshots + summary per run)
 /.smoke-reports/
 
+# Local libonnxruntime.so for the smoke harness — populated via
+# `npm install --no-save --prefix .ort onnxruntime-node@1.21.0` and
+# auto-resolved by `scripts/smoke-test.sh` so the local gate's ONNX
+# tests / smoke runs do not block in dlopen.
+/.ort/
+
 # Local env
 .env
 .env.local

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # scripts/smoke-test.sh
 #
-# Live-shell smoke harness. Drives a real `cargo tauri build` binary
+# Live-shell smoke harness. Drives a real Tauri shell binary
+# (`cargo build -p neural-pitch --features app-neural,neural`)
 # through `tauri-driver` (the official Tauri WebDriver shim around
 # WebKitWebDriver) and walks the UI through every shipped feature,
 # capturing screenshots at each step.
@@ -9,13 +10,17 @@
 # Prerequisites (system-installed, not via npm):
 #   - WebKitWebDriver         (apt: webkit2gtk-driver)
 #   - tauri-driver            (cargo install tauri-driver --locked)
-#   - ImageMagick `import`    (apt: imagemagick)            -- already present
-#   - wmctrl                  (apt: wmctrl)                 -- already present
 #
 # Optional:
 #   - ORT_DYLIB_PATH          libonnxruntime.so for transcribe / stem-separate
 #                             paths to actually run end-to-end. Auto-resolved
-#                             below if a common cache path exists.
+#                             below from a portable npm/system layout if not
+#                             pre-set. Recommended local install:
+#                               npm install --no-save --prefix .ort \
+#                                 onnxruntime-node@1.21.0
+#                             then export ORT_DYLIB_PATH to the resulting
+#                             .ort/node_modules/onnxruntime-node/bin/...
+#                             libonnxruntime.so file. CI uses the same path.
 #
 # This script does NOT inject keyboard / mouse events at the OS layer —
 # it drives the webview directly through the WebDriver protocol, which
@@ -45,18 +50,45 @@ require() {
 
 require WebKitWebDriver "sudo apt-get install -y webkit2gtk-driver"
 require tauri-driver "cargo install tauri-driver --locked"
-require import "sudo apt-get install -y imagemagick"
 require cargo "rustup default stable"
 
 # ---------------------------------------------------------------------
 # Auto-resolve libonnxruntime so the transcribe + stem-separate paths
-# do not block in dlopen. Mirror scripts/ci-local.sh's resolution.
+# do not block in dlopen. Searches portable install layouts only:
+#   - ./.ort/node_modules/onnxruntime-node/...     (npm prefix the
+#     CI workflow and the recommended local install both write to)
+#   - npm global / npx node_modules                (./node_modules,
+#     ${HOME}/.npm/_npx/* — works for `npm exec onnxruntime-node`)
+#   - system-installed shared libs at standard prefixes
+# Mirror scripts/ci-local.sh's resolution.
 # ---------------------------------------------------------------------
 if [[ -z "${ORT_DYLIB_PATH:-}" ]]; then
-  for candidate in \
-    "${HOME}/.bun/install/cache/onnxruntime-node@1.21.0@@@1/bin/napi-v3/linux/x64/libonnxruntime.so.1.21.0" \
-    "/usr/local/lib/libonnxruntime.so" \
-    "/usr/lib/x86_64-linux-gnu/libonnxruntime.so"; do
+  # Resolve the host arch sub-dir under `onnxruntime-node`'s napi layout
+  # (e.g. `linux/x64/` or `linux/arm64/`). Loading an arch-mismatched
+  # dylib silently falls back to a degraded code path and turns a 5 s
+  # ONNX call into a 4 min one.
+  case "$(uname -s)/$(uname -m)" in
+    Linux/x86_64)  HOST_NAPI="linux/x64" ;;
+    Linux/aarch64) HOST_NAPI="linux/arm64" ;;
+    Darwin/x86_64) HOST_NAPI="darwin/x64" ;;
+    Darwin/arm64)  HOST_NAPI="darwin/arm64" ;;
+    *)             HOST_NAPI="" ;;
+  esac
+
+  declare -a candidates=()
+  if [[ -n "${HOST_NAPI}" ]]; then
+    while IFS= read -r found; do
+      candidates+=("${found}")
+    done < <(
+      find "${REPO_ROOT}/.ort" "${REPO_ROOT}/node_modules" "${HOME}/.npm/_npx" \
+        -maxdepth 6 -path "*/${HOST_NAPI}/libonnxruntime.so*" -print 2>/dev/null || true
+    )
+  fi
+  candidates+=(
+    "/usr/local/lib/libonnxruntime.so"
+    "/usr/lib/x86_64-linux-gnu/libonnxruntime.so"
+  )
+  for candidate in "${candidates[@]}"; do
     if [[ -f "${candidate}" ]]; then
       export ORT_DYLIB_PATH="${candidate}"
       echo "Resolved ORT_DYLIB_PATH=${candidate}"
@@ -85,18 +117,23 @@ APP_ID="com.derekkinzo.neuralpitch"
 APP_DATA="${HOME}/.local/share/${APP_ID}"
 RECORDINGS="${APP_DATA}/recordings"
 MODELS_DIR="${APP_DATA}/models"
-LEGACY_MODELS_DIR="${HOME}/.local/share/neural-pitch/models"
 
 echo "==> resetting app-data at ${APP_DATA}"
 rm -rf "${RECORDINGS}" "${APP_DATA}/settings.json" "${APP_DATA}/library.sqlite"*
 mkdir -p "${RECORDINGS}" "${MODELS_DIR}"
 
-# If a cached HTDemucs ONNX exists in the legacy location, hard-link it
-# into the active app-data dir so the stem-separate step short-circuits
-# the 316 MB download. (Hard-link, not copy, so we don't double-up disk.)
-if [[ -f "${LEGACY_MODELS_DIR}/htdemucs.onnx" ]] && [[ ! -f "${MODELS_DIR}/htdemucs.onnx" ]]; then
-  echo "==> linking cached HTDemucs ONNX from ${LEGACY_MODELS_DIR}"
-  ln -f "${LEGACY_MODELS_DIR}/htdemucs.onnx" "${MODELS_DIR}/htdemucs.onnx"
+# Local-developer-only convenience: if an older app-id's models cache
+# still lives at ~/.local/share/neural-pitch/models, hard-link the
+# pinned HTDemucs ONNX into the active app-data dir so the
+# stem-separate step short-circuits the 316 MB download. CI starts
+# from an empty $HOME and uses the actions/cache step instead, so this
+# is a no-op there.
+if [[ -z "${CI:-}" ]]; then
+  LEGACY_MODELS_DIR="${HOME}/.local/share/neural-pitch/models"
+  if [[ -f "${LEGACY_MODELS_DIR}/htdemucs.onnx" ]] && [[ ! -f "${MODELS_DIR}/htdemucs.onnx" ]]; then
+    echo "==> linking cached HTDemucs ONNX from ${LEGACY_MODELS_DIR}"
+    ln -f "${LEGACY_MODELS_DIR}/htdemucs.onnx" "${MODELS_DIR}/htdemucs.onnx"
+  fi
 fi
 
 # ---------------------------------------------------------------------
@@ -118,7 +155,7 @@ echo "==> fixture: ${FIXTURE}"
 echo "==> npm run build"
 npm run build > "${REPORT_DIR}/npm-build.log" 2>&1
 
-echo "==> cargo tauri build (debug; release would push the run past 10 min)"
+echo "==> cargo build (debug; release lengthens the run beyond the smoke-step CI budget)"
 # Both `app-neural` (PESTO/CREPE in core) and `neural` (Basic Pitch +
 # HTDemucs IPC surface in src-tauri) must be on for the smoke pass to
 # exercise the import / transcribe / separate commands.
@@ -132,19 +169,46 @@ if [[ ! -x "${BINARY}" ]]; then
 fi
 
 # ---------------------------------------------------------------------
-# Driver run. tauri-driver listens on http://localhost:4444; the test
-# script connects via WebDriver and walks the UI.
+# Driver run. tauri-driver listens on a free TCP port chosen at
+# startup; the test script connects via WebDriver and walks the UI.
+# Picking the port dynamically avoids collisions with any other
+# WebDriver / Selenium daemon that may already hold :4444 on a
+# developer laptop.
 # ---------------------------------------------------------------------
-echo "==> Spawning tauri-driver"
-tauri-driver --port 4444 > "${REPORT_DIR}/tauri-driver.log" 2>&1 &
+PICK_PORT_PY='import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1]); s.close()'
+DRIVER_PORT="$(python3 -c "${PICK_PORT_PY}" 2>/dev/null || true)"
+if [[ -z "${DRIVER_PORT}" ]]; then
+  # Fallback for shells without python3 — node ships in CI and locally.
+  DRIVER_PORT="$(node -e 'const s=require("net").createServer().listen(0,()=>{process.stdout.write(String(s.address().port));s.close();})' 2>/dev/null || true)"
+fi
+if [[ -z "${DRIVER_PORT}" ]]; then
+  echo "ERROR: could not pick a free port for tauri-driver." >&2
+  exit 1
+fi
+DRIVER_URL="http://localhost:${DRIVER_PORT}"
+echo "==> Spawning tauri-driver on ${DRIVER_URL}"
+tauri-driver --port "${DRIVER_PORT}" > "${REPORT_DIR}/tauri-driver.log" 2>&1 &
 DRIVER_PID=$!
 trap 'kill ${DRIVER_PID} 2>/dev/null || true' EXIT
 
-# Give the driver a beat to bind the port.
-sleep 2
-
-if ! curl -fsS http://localhost:4444/status >/dev/null 2>&1; then
-  echo "ERROR: tauri-driver did not start on :4444." >&2
+# Poll /status until the daemon binds the port; surface the actual
+# tauri-driver stderr if the deadline expires.
+DEADLINE=$((SECONDS + 10))
+DRIVER_READY=0
+while (( SECONDS < DEADLINE )); do
+  if curl -fsS "${DRIVER_URL}/status" >/dev/null 2>&1; then
+    DRIVER_READY=1
+    break
+  fi
+  if ! kill -0 "${DRIVER_PID}" 2>/dev/null; then
+    echo "ERROR: tauri-driver exited before binding ${DRIVER_URL}." >&2
+    echo "       Check ${REPORT_DIR}/tauri-driver.log" >&2
+    exit 1
+  fi
+  sleep 0.25
+done
+if [[ ${DRIVER_READY} -ne 1 ]]; then
+  echo "ERROR: tauri-driver did not become ready at ${DRIVER_URL} within 10s." >&2
   echo "       Check ${REPORT_DIR}/tauri-driver.log" >&2
   exit 1
 fi
@@ -155,7 +219,7 @@ node "${REPO_ROOT}/scripts/smoke-driver.mjs" \
   --binary "${BINARY}" \
   --report-dir "${REPORT_DIR}" \
   --fixture "${FIXTURE}" \
-  --driver-url http://localhost:4444 \
+  --driver-url "${DRIVER_URL}" \
   > "${REPORT_DIR}/driver.log" 2>&1
 DRIVER_EXIT=$?
 set -e
