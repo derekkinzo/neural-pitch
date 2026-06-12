@@ -365,7 +365,23 @@ jobs:
           sudo apt-get install -y \
             libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev \
             librsvg2-dev libsoup-3.0-dev libasound2-dev pkg-config \
-            webkit2gtk-driver xvfb lld
+            webkit2gtk-driver xvfb lld \
+            pulseaudio
+      - name: Start a virtual PulseAudio sink
+        # GitHub-hosted runners have no audio card; cpal fails to open
+        # the default PCM and the tuner shell lands in `data-state=error`
+        # instead of `live`. Spawning a per-user pulseaudio daemon with
+        # a `null-sink` gives cpal a default device to enumerate.
+        run: |
+          set -euo pipefail
+          pulseaudio --start --log-target=stderr --exit-idle-time=-1
+          # Allow a beat for the daemon socket to bind, then create a
+          # null-sink so cpal sees at least one playback device. The
+          # input side uses pulseaudio's `default` source which the
+          # null-sink registers as a monitor.
+          sleep 1
+          pactl load-module module-null-sink sink_name=virt-mic
+          pactl info | head -5
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
