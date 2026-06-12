@@ -113,7 +113,6 @@ pub fn run() {
             commands::get_recording_path,
             commands::list_recordings,
             commands::delete_recording,
-            commands::rename_recording,
             commands::analyze_recording,
             commands::analyze_recording_with_backend,
             commands::get_contour,

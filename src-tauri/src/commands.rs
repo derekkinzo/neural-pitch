@@ -1145,53 +1145,6 @@ pub async fn cancel_analysis(
     Ok(())
 }
 
-/// Validate a rename request for a recording's user-supplied label.
-///
-/// The IPC currently performs validation only — the underlying
-/// `RecordingsLibrary` exposes no rename helper, so the new label is
-/// accepted (or rejected as `NotFound`) but is **not** persisted to
-/// SQLite. Empty / whitespace-only strings would clear the label once
-/// the persistence call lands.
-#[tauri::command]
-#[tracing::instrument(skip(state))]
-pub async fn rename_recording(
-    state: State<'_, crate::state::AppState>,
-    id: String,
-    label: String,
-) -> Result<(), String> {
-    let parsed: neural_pitch_core::store::RecordingId = id
-        .parse()
-        .map_err(|e| format!("invalid recording id: {e}"))?;
-    let new_label = if label.trim().is_empty() {
-        None
-    } else {
-        Some(label)
-    };
-    let library = Arc::clone(&state.library);
-    tokio::task::spawn_blocking(move || {
-        // The library exposes only insert/list/soft_delete/upsert. We
-        // validate the row exists so callers get a clean `NotFound` for
-        // bad ids, but the label-update itself is a no-op: there is no
-        // rename helper on the library surface to call through to.
-        let rows =
-            library.list_recordings(neural_pitch_core::store::ListFilter::IncludingDeleted)?;
-        if !rows.iter().any(|r| r.id == parsed) {
-            return Err(neural_pitch_core::store::StoreError::NotFound(parsed));
-        }
-        tracing::info!(
-            target: "neural_pitch::commands",
-            id = %parsed,
-            label = ?new_label,
-            "rename_recording accepted but not persisted — library has no rename helper",
-        );
-        Ok(())
-    })
-    .await
-    .map_err(|e| format!("rename_recording task panicked: {e}"))?
-    .map_err(|e| format!("rename recording: {e:#}"))?;
-    Ok(())
-}
-
 /// Reconfigure the settings cache.
 ///
 /// Contract: `configure` MAY NOT be called while capture is live;
