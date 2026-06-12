@@ -117,15 +117,9 @@ jobs:
       - name: Build frontend (Tauri requires dist/ for generate_context!)
         run: npm run build
       - uses: Swatinem/rust-cache@v2
-      # Feature-gating hygiene — guard against regressions where
-      # a future change forgets to wrap an `ort` / `ndarray` / `rubato`
-      # import in `#[cfg(feature = "neural")]` (or removes `optional =
-      # true` from one of those deps). Mirrors the reasoning in the
-      # `neural` / `pyin` / `flac` opt-in feature design (see core
-      # Cargo.toml comments and the `pub fn make_estimator` factory): the
-      # minimal build path MUST stay lean for mobile and minimal-CI
-      # deployments. Run only the core crate here — `src-tauri` requires
-      # `cpal`/`flac`/`pyin` for its IPC commands.
+      # no-default-features hygiene: guards against accidental
+      # unconditional `ort`/`ndarray`/`rubato` imports. Core crate only —
+      # `src-tauri` requires `cpal`/`flac`/`pyin` for its IPC commands.
       - name: cargo build --no-default-features (core)
         run: cargo build -p neural-pitch-core --no-default-features
       - name: cargo clippy --no-default-features (core)
@@ -167,9 +161,7 @@ jobs:
     name: test (${{ matrix.os }} / ${{ matrix.toolchain }})
     runs-on: ${{ matrix.os }}
     env:
-      # Override rust-toolchain.toml so the matrix actually exercises
-      # stable + beta (rather than being silently pinned to MSRV by
-      # the toolchain file).
+      # RUSTUP_TOOLCHAIN env wins over rust-toolchain.toml.
       RUSTUP_TOOLCHAIN: ${{ matrix.toolchain }}
     strategy:
       fail-fast: false
@@ -235,10 +227,10 @@ jobs:
         run: cargo build --release --workspace
 
   voice-acceptance:
-    # §13.2 acceptance floor (aggregate >= 0.95) — release gate, runs
-    # the same harness the local pre-push gate does. CI is
-    # authoritative here; the local step is a fast-fail mirror so
-    # contributors discover regressions before push, not after.
+    # Aggregate >= 0.95 voice acceptance floor — release gate, runs the
+    # same harness the local pre-push gate does. CI is authoritative
+    # here; the local step is a fast-fail mirror so contributors discover
+    # regressions before push, not after.
     name: voice-acceptance
     runs-on: ubuntu-latest
     steps:
@@ -285,11 +277,11 @@ jobs:
           retention-days: 14
 
   no-leak:
-    # Hard-rule gate: every tracked file must be free of internal
-    # references and personal-machine paths. The local pre-push gate
-    # (scripts/ci-local.sh) runs the same check, but a contributor
-    # who pushes with --no-verify (or a fork PR with hooks not
-    # installed) would otherwise bypass it. CI is authoritative.
+    # Fail if any tracked file contains an internal-only reference or a
+    # personal-machine path. The local pre-push gate (scripts/ci-local.sh)
+    # runs the same check, but a contributor who pushes with --no-verify
+    # (or a fork PR with hooks not installed) would otherwise bypass it;
+    # CI is authoritative.
     name: no-leak
     runs-on: ubuntu-latest
     steps:
@@ -330,3 +322,135 @@ jobs:
             exit 1
           fi
           echo "no-leak: clean"
+
+  smoke-shell:
+    # Live-shell smoke harness: builds the real Tauri shell with the
+    # `app-neural,neural` feature graph, drives a `tauri-driver`
+    # WebDriver session through the 12-step happy path, and verifies
+    # the stem-separate step against the pinned HTDemucs ONNX. This is
+    # a release-gate job — it runs only on `push` to `main` because the
+    # warm wall-clock is 5–7 min and the cold path pulls a 316 MB model.
+    # Per-PR coverage of the same UI surface lives in `e2e-mock`, which
+    # exercises the IPC contract via `tests/e2e/helpers/tauri-mock.ts`.
+    #
+    # When extending to other OSes (deferred): add a matrix on
+    # `os: [ubuntu-latest, macos-latest, windows-latest]` and branch
+    # the system-deps install, the model cache path
+    # (`~/Library/Application Support/com.derekkinzo.neuralpitch/...`
+    # on macOS, `%APPDATA%\com.derekkinzo.neuralpitch\...` on Windows),
+    # and the libonnxruntime filename (`.dylib` / `onnxruntime.dll`).
+    name: smoke-shell
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      # `rust-lld` has crashed on the runner image when linking the
+      # `app-neural,neural` feature graph; route through system `lld`
+      # to keep the link step deterministic. Falling back to `bfd` is
+      # the next escalation if `lld` itself regresses.
+      RUSTFLAGS: "-D warnings -C link-arg=-fuse-ld=lld"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust toolchain (rust-toolchain.toml pin)
+        # Pin to the same toolchain rust-toolchain.toml uses so
+        # `cargo install tauri-driver --locked` runs under the same
+        # rustc the workspace builds with.
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.88"
+          components: clippy,rustfmt
+      - name: Install Tauri Linux deps + smoke prereqs
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev \
+            librsvg2-dev libsoup-3.0-dev libasound2-dev pkg-config \
+            webkit2gtk-driver xvfb lld
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+      - name: npm install
+        run: npm install
+      - name: Build frontend (Tauri requires dist/ for generate_context!)
+        run: npm run build
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: smoke-shell
+          # `cache-bin: true` so `cargo install tauri-driver --locked`
+          # is restored from `~/.cargo/bin` on warm runs.
+          cache-bin: true
+      - name: Read pinned HTDemucs SHA-256
+        id: htdemucs-sha
+        # Source-of-truth is HTDEMUCS_SHA256 in
+        # crates/neural-pitch-core/src/stems/mod.rs. Extracting the
+        # hex literal here keeps the cache key in lock-step with the
+        # constant; editing the constant always changes the key.
+        run: |
+          set -euo pipefail
+          sha="$(grep -oE '[a-f0-9]{64}' crates/neural-pitch-core/src/stems/mod.rs | head -n1)"
+          if [ -z "${sha}" ]; then
+            echo "::error::could not read HTDEMUCS_SHA256 from stems/mod.rs" >&2
+            exit 1
+          fi
+          echo "sha=${sha}" >> "${GITHUB_OUTPUT}"
+      - name: Cache HTDemucs ONNX (keyed on contract SHA-256)
+        id: htdemucs-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/com.derekkinzo.neuralpitch/models/htdemucs.onnx
+          key: htdemucs-onnx-${{ steps.htdemucs-sha.outputs.sha }}
+      - name: Pre-download HTDemucs ONNX on cache miss
+        # Pull and verify the 316 MB model BEFORE the smoke step so a
+        # cold cache surfaces as a network failure here rather than
+        # blowing the smoke step's wall-clock budget. The pinned URL
+        # mirrors HTDEMUCS_MODEL_URL in stems/mod.rs.
+        if: steps.htdemucs-cache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          dest="${HOME}/.local/share/com.derekkinzo.neuralpitch/models/htdemucs.onnx"
+          mkdir -p "$(dirname "${dest}")"
+          curl -L --fail --retry 3 --retry-delay 5 \
+            -o "${dest}" \
+            "https://huggingface.co/StemSplitio/htdemucs-onnx/resolve/d54ed9eb60e258ea82131c6ee14578628816456a/htdemucs.onnx"
+          actual="$(sha256sum "${dest}" | awk '{print $1}')"
+          expected="${{ steps.htdemucs-sha.outputs.sha }}"
+          if [ "${actual}" != "${expected}" ]; then
+            echo "::error::HTDemucs SHA-256 mismatch: expected ${expected}, got ${actual}" >&2
+            rm -f "${dest}"
+            exit 1
+          fi
+          echo "HTDemucs ONNX verified: ${actual}"
+      - name: Install tauri-driver
+        # --locked uses the tauri-driver crate's own Cargo.lock for
+        # reproducible bins; cache-bin in Swatinem/rust-cache restores
+        # ~/.cargo/bin on warm runs.
+        run: cargo install tauri-driver --locked
+      - name: Resolve libonnxruntime via onnxruntime-node
+        # Pinned to 1.21.0 to match the local-developer install
+        # documented in scripts/smoke-test.sh. Writing into
+        # $RUNNER_TEMP keeps the working tree free of node_modules so
+        # `git status` stays clean if a contributor copies this step
+        # locally. Exporting ORT_DYLIB_PATH via $GITHUB_ENV lets the
+        # harness's `[[ -z ... ]]` guard pick it up verbatim.
+        run: |
+          set -euo pipefail
+          ort_dir="${RUNNER_TEMP}/ort"
+          mkdir -p "${ort_dir}"
+          npm install --no-save --prefix "${ort_dir}" onnxruntime-node@1.21.0
+          ort_so="$(find "${ort_dir}/node_modules/onnxruntime-node" -name 'libonnxruntime.so*' | head -n1)"
+          if [ -z "${ort_so}" ]; then
+            echo "::error::libonnxruntime.so not found under ${ort_dir}" >&2
+            exit 1
+          fi
+          echo "ORT_DYLIB_PATH=${ort_so}" >> "${GITHUB_ENV}"
+      - name: Run smoke harness under Xvfb
+        run: xvfb-run -a --server-args="-screen 0 1280x800x24" bash scripts/smoke-test.sh
+      - name: Upload smoke reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-reports
+          path: .smoke-reports/
+          retention-days: 14
