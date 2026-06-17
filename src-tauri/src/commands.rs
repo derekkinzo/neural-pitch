@@ -472,25 +472,12 @@ pub async fn get_recording_path(
         .parse()
         .map_err(|e| format!("invalid recording id: {e}"))?;
     let library = Arc::clone(&state.library);
-    let recording = tokio::task::spawn_blocking(move || {
-        library.list_recordings(neural_pitch_core::store::ListFilter::IncludingDeleted)
+    let recordings_dir = state.recordings_dir.clone();
+    let abs = tokio::task::spawn_blocking(move || {
+        resolve_recording_path(&library, &recordings_dir, parsed)
     })
     .await
-    .map_err(|e| format!("recording lookup task panicked: {e}"))?
-    .map_err(|e| format!("list recordings: {e:#}"))?;
-    let Some(row) = recording.into_iter().find(|r| r.id == parsed) else {
-        tracing::warn!(
-            target: "neural_pitch::commands",
-            id = %parsed,
-            "recording id not found"
-        );
-        return Err(format!("recording {id} not found"));
-    };
-    let path = state.recordings_dir.join(&row.filename);
-    let abs = path
-        .to_str()
-        .ok_or_else(|| format!("recording path not utf-8: {}", path.display()))?
-        .to_string();
+    .map_err(|e| format!("recording lookup task panicked: {e}"))??;
     tracing::debug!(
         target: "neural_pitch::commands",
         id = %parsed,
@@ -498,6 +485,37 @@ pub async fn get_recording_path(
         "resolved recording path"
     );
     Ok(abs)
+}
+
+/// Resolve a recording id to its absolute on-disk path.
+///
+/// Looks the row up via `list_recordings(IncludingDeleted)`, joins the
+/// stored filename onto `recordings_dir`, and guards the UTF-8 conversion.
+/// Returns `Err("recording {id} not found")` when the id parses but
+/// matches no row, and `Err("recording path not utf-8: ...")` when the
+/// joined path is not valid UTF-8. Extracted from `get_recording_path` so
+/// the id-resolution-to-absolute-path projection is reachable from an
+/// integration test without standing up a Tauri runtime.
+pub fn resolve_recording_path(
+    library: &neural_pitch_core::store::RecordingsLibrary,
+    recordings_dir: &std::path::Path,
+    id: neural_pitch_core::store::RecordingId,
+) -> Result<String, String> {
+    let rows = library
+        .list_recordings(neural_pitch_core::store::ListFilter::IncludingDeleted)
+        .map_err(|e| format!("list recordings: {e:#}"))?;
+    let Some(row) = rows.into_iter().find(|r| r.id == id) else {
+        tracing::warn!(
+            target: "neural_pitch::commands",
+            id = %id,
+            "recording id not found"
+        );
+        return Err(format!("recording {id} not found"));
+    };
+    let path = recordings_dir.join(&row.filename);
+    path.to_str()
+        .map(str::to_string)
+        .ok_or_else(|| format!("recording path not utf-8: {}", path.display()))
 }
 
 /// List every active recording (excludes soft-deleted rows).
@@ -1658,46 +1676,20 @@ pub async fn export_stem(
         .map_err(|e| format!("invalid recording id: {e}"))?;
     let library = Arc::clone(&state.library);
     let dest = PathBuf::from(dest_path);
-    tokio::task::spawn_blocking(move || -> Result<u64, String> {
-        // Resolve the on-disk path through the library so a rename or
-        // re-separate cannot return bytes from a stale FLAC.
-        let row = library
-            .get_stem_result(parsed, crate::stems::HTDEMUCS_SEPARATOR_VERSION)
-            .map_err(|e| format!("library lookup: {e:#}"))?
-            .ok_or_else(|| {
-                format!("no cached stem result for recording {parsed} — run separate_stems first")
-            })?;
-        let src: &str = match stem_kind {
-            crate::stems::StemKind::Vocals => &row.vocals_path,
-            crate::stems::StemKind::Drums => &row.drums_path,
-            crate::stems::StemKind::Bass => &row.bass_path,
-            crate::stems::StemKind::Other => &row.other_path,
-        };
-        // Partial-write + atomic-rename so a crash mid-export does not
-        // corrupt the destination if it already existed.
-        let partial = {
-            let mut p = dest.clone().into_os_string();
-            p.push(".partial");
-            PathBuf::from(p)
-        };
-        let bytes = std::fs::copy(src, &partial)
-            .map_err(|e| format!("copy {src} -> {}: {e}", partial.display()))?;
-        // Best-effort fsync of the partial file before the atomic
-        // rename. Limitation: fsync on a freshly-opened read handle
-        // durabilizes inode metadata only, not the bytes written by the
-        // prior `copy()` call. Strengthening this would require a
-        // write-handle round-trip plus a parent-directory fsync — kept
-        // best-effort here because export targets land outside the app
-        // sandbox where stronger guarantees are out of scope.
-        if let Ok(f) = std::fs::File::open(&partial) {
-            let _ = f.sync_all();
-        }
-        std::fs::rename(&partial, &dest)
-            .map_err(|e| format!("rename {} -> {}: {e}", partial.display(), dest.display()))?;
-        Ok(bytes)
+    tokio::task::spawn_blocking(move || {
+        crate::stems::export_stem_blocking(&library, parsed, stem_kind, &dest)
     })
     .await
     .map_err(|e| format!("export_stem task panicked: {e}"))?
+    .map_err(|e| match e {
+        // Preserve the user-facing "run separate_stems first" copy for the
+        // missing-row case; other variants pass through as a structured
+        // `format!` chain.
+        crate::stems::StemError::RecordingNotFound(id) => {
+            format!("no cached stem result for recording {id} — run separate_stems first")
+        }
+        other => format!("{other:#}"),
+    })
 }
 
 /// Pre-fetch the HTDemucs ONNX model into `$APPDATA/models/`.

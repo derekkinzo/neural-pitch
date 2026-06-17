@@ -510,6 +510,56 @@ pub fn read_stem_audio_blocking(
     Ok(bytes)
 }
 
+/// Copy the cached stem FLAC for `(recording_id, stem)` into `dest`.
+///
+/// Resolves the on-disk path through `stem_results` so a rename or
+/// re-separate cannot copy bytes from a stale FLAC. Writes to
+/// `<dest>.partial`, fsyncs, then atomically renames over `dest` so a
+/// crash mid-export cannot corrupt a pre-existing file at the
+/// destination. Returns the number of bytes copied.
+///
+/// Returns [`StemError::RecordingNotFound`] when no `stem_results` row
+/// matches `(recording_id, HTDEMUCS_SEPARATOR_VERSION)` — the front-end
+/// surfaces a "run separate_stems first" message in that case.
+pub fn export_stem_blocking(
+    library: &RecordingsLibrary,
+    recording_id: RecordingId,
+    stem: StemKind,
+    dest: &Path,
+) -> Result<u64, StemError> {
+    let row = library
+        .get_stem_result(recording_id, HTDEMUCS_SEPARATOR_VERSION)
+        .map_err(|e| StemError::Library(format!("{e:#}")))?
+        .ok_or(StemError::RecordingNotFound(recording_id))?;
+
+    let src: &str = match stem {
+        StemKind::Vocals => &row.vocals_path,
+        StemKind::Drums => &row.drums_path,
+        StemKind::Bass => &row.bass_path,
+        StemKind::Other => &row.other_path,
+    };
+
+    // Partial-write + atomic-rename so a crash mid-export does not corrupt
+    // the destination if it already existed.
+    let partial = {
+        let mut p = dest.to_path_buf().into_os_string();
+        p.push(".partial");
+        PathBuf::from(p)
+    };
+    let bytes = std::fs::copy(src, &partial)?;
+    // Best-effort fsync of the partial file before the atomic rename.
+    // fsync on a freshly-opened read handle durabilizes inode metadata
+    // only, not the bytes written by the prior `copy()` call; stronger
+    // guarantees would require a write-handle round-trip plus a parent-
+    // directory fsync, which is out of scope for export targets landing
+    // outside the app sandbox.
+    if let Ok(f) = std::fs::File::open(&partial) {
+        let _ = f.sync_all();
+    }
+    std::fs::rename(&partial, dest)?;
+    Ok(bytes)
+}
+
 /// Headless twin of the `download_stem_model` Tauri command. Pulls the
 /// HTDemucs ONNX from [`HTDEMUCS_MODEL_URL`] (~316 MB), verifies the
 /// streaming SHA-256 against [`HTDEMUCS_MODEL_SHA256`], and atomically
