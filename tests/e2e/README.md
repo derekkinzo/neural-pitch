@@ -23,8 +23,10 @@ calls hit a programmable response map without a real Tauri shell.
   `piano_roll.spec.ts` — recording playback, spectrogram toggle, and
   piano-roll renderer.
 - `stems_landing.spec.ts`, `stems_progress.spec.ts`,
-  `stems_complete.spec.ts`, `stems_cancel.spec.ts` —
-  HTDemucs stem-separation flow (landing, progress, completion, cancel).
+  `stems_complete.spec.ts`, `stems_cancel.spec.ts`,
+  `stems_export.spec.ts`, `stems_error.spec.ts` —
+  HTDemucs stem-separation flow (landing, progress, completion, cancel +
+  Escape-to-cancel, per-stem export / transcribe, error branch + Retry).
 - `training_landing.spec.ts`, `interval_drill.spec.ts`,
   `karaoke_ribbon.spec.ts`, `solfege_toggle.spec.ts` — ear-training
   drills and the movable-do solfege toggle.

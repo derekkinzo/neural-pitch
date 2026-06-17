@@ -112,4 +112,89 @@ test.describe("recordings list — seed render + ordering", () => {
     const rows = page.getByTestId("recording-row");
     await expect(rows).toHaveCount(3);
   });
+
+  test("Arrow / Home / End move selection in lock-step with the WAI-ARIA listbox", async ({
+    page,
+    mockTauri,
+  }) => {
+    await mockTauri.install({ ...installRecordingsMock(SEED) });
+    await page.goto("/");
+    await page.getByTestId("library-trigger").click();
+
+    const rows = page.getByTestId("recording-row");
+    await expect(rows).toHaveCount(3);
+
+    // Roving tabindex: with no prior selection the first row is the
+    // keyboard-reachable one. Focus it, then drive arrow navigation.
+    const first = rows.nth(0); // violin-improv-003 (most recent)
+    const middle = rows.nth(1); // guitar-take-002
+    const last = rows.nth(2); // voice-note-001 (oldest)
+
+    await first.focus();
+    await page.keyboard.press("ArrowDown");
+    await page.keyboard.press("ArrowDown");
+
+    // Two ArrowDowns land selection on the third (last) row; aria-selected
+    // and the data attribute move together and focus follows.
+    await expect(last).toHaveAttribute("data-selected", "true");
+    await expect(last).toHaveAttribute("aria-selected", "true");
+    await expect(last).toBeFocused();
+
+    // Home jumps selection to the first row.
+    await page.keyboard.press("Home");
+    await expect(first).toHaveAttribute("aria-selected", "true");
+    await expect(last).toHaveAttribute("aria-selected", "false");
+    await expect(first).toBeFocused();
+
+    // End jumps selection to the last row.
+    await page.keyboard.press("End");
+    await expect(last).toHaveAttribute("aria-selected", "true");
+    await expect(first).toHaveAttribute("aria-selected", "false");
+
+    // ArrowUp from the last row steps selection back to the middle row.
+    await page.keyboard.press("ArrowUp");
+    await expect(middle).toHaveAttribute("aria-selected", "true");
+    await expect(middle).toBeFocused();
+  });
+
+  test("Enter and Space activate a focused row and mount its detail panel", async ({
+    page,
+    mockTauri,
+  }) => {
+    await mockTauri.install({ ...installRecordingsMock(SEED) });
+    await page.goto("/");
+    await page.getByTestId("library-trigger").click();
+
+    const rows = page.getByTestId("recording-row");
+    await expect(rows).toHaveCount(3);
+
+    // No selection yet — the detail panel is absent. Focusing a row
+    // directly (without arrow navigation, which would select on move)
+    // isolates the Enter activation branch: focus and selection differ
+    // until the key fires onSelect.
+    await expect(page.getByTestId("recording-detail")).toHaveCount(0);
+
+    const middle = rows.nth(1); // guitar-take-002
+    await middle.focus();
+    await expect(middle).toHaveAttribute("aria-selected", "false");
+    await page.keyboard.press("Enter");
+
+    // Enter on the focused option mounts the detail panel for that id.
+    await expect(middle).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByTestId("recording-detail")).toBeVisible();
+    await expect(page.getByTestId("recording-detail-filename")).toContainText(
+      "guitar-take-002.flac",
+    );
+
+    // Space activates a different focused row — the other half of the
+    // Enter/Space activation case. After the Enter selection above the
+    // last row is no longer the focusable one, so focus it explicitly.
+    const last = rows.nth(2); // voice-note-001
+    await last.focus();
+    await page.keyboard.press(" ");
+    await expect(last).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByTestId("recording-detail-filename")).toContainText(
+      "voice-note-001.flac",
+    );
+  });
 });

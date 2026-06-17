@@ -63,4 +63,39 @@ test.describe("playback panel — spectrogram toggle", () => {
     // Lazy plugin import lands a <canvas> child inside the host.
     await expect(host.locator("canvas").first()).toBeVisible({ timeout: 4000 });
   });
+
+  test("toggling spectrogram off destroys the plugin and re-hides the host", async ({
+    page,
+    mockTauri,
+  }) => {
+    await mockTauri.install({
+      ...installRecordingsMock(SEED),
+      ...installPlaybackMock(),
+    });
+    await installPlaybackRoutes(page);
+
+    await page.goto("/");
+    await page.getByTestId("library-trigger").click();
+    await expect(page.getByTestId("recordings-list")).toBeVisible();
+    await page.getByTestId("recording-row").first().click();
+
+    await expect(page.getByTestId("playback-panel")).toBeVisible();
+
+    const host = page.locator("#spectrogram-host");
+    const toggle = page.getByTestId("spectrogram-toggle");
+
+    // Turn it on first so the off branch has a mounted plugin to destroy.
+    await toggle.click();
+    await expect(toggle).toHaveAttribute("aria-pressed", "true");
+    await expect(toggle).toHaveText(/Hide spectrogram/i);
+    await expect(host.locator("canvas").first()).toBeVisible({ timeout: 4000 });
+
+    // Toggle off: the plugin destroy path drops the canvas, the host is
+    // re-hidden, and the label swaps back to the show-affordance copy.
+    await toggle.click();
+    await expect(toggle).toHaveAttribute("aria-pressed", "false");
+    await expect(toggle).toHaveText(/Show spectrogram/i);
+    await expect(host).toHaveAttribute("hidden", "");
+    await expect(host.locator("canvas")).toHaveCount(0);
+  });
 });

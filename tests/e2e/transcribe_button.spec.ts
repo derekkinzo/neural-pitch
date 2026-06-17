@@ -166,4 +166,36 @@ test.describe("transcribe button", () => {
       forceRefresh: true,
     });
   });
+
+  test("Export MIDI click invokes export_midi with the seeded recording id", async ({
+    page,
+    mockTauri,
+  }) => {
+    await mockTauri.install({
+      ...installRecordingsMock(SEED),
+      ...installAnalysisMock(SUMMARY, CONTOUR),
+      ...installTranscribeMock(TRANSCRIBE, POLY),
+    });
+    await page.goto("/");
+    await page.getByTestId("library-trigger").click();
+    await page.getByTestId("recording-row").first().click();
+
+    await page.getByTestId("transcribe-button").click();
+    await pushTranscribeProgress(page, { recordingId: "rec-tr-001", percent: 100 });
+
+    // Complete branch renders the Export MIDI affordance; drive its click
+    // path — the only way the exportMidi store action is reachable.
+    const exportButton = page.getByTestId("export-midi");
+    await expect(exportButton).toBeVisible();
+
+    // No export call has fired before the click.
+    expect(await getInvokeCalls(page, "export_midi")).toHaveLength(0);
+
+    await exportButton.click();
+
+    // Exactly one export_midi call, carrying the selected recording id.
+    await expect.poll(async () => (await getInvokeCalls(page, "export_midi")).length).toBe(1);
+    const calls = await getInvokeCalls(page, "export_midi");
+    expect(calls[0]?.args).toMatchObject({ recordingId: "rec-tr-001" });
+  });
 });
