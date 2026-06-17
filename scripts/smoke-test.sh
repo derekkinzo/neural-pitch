@@ -163,8 +163,17 @@ echo "==> cargo build (debug; release lengthens the run beyond the smoke-step CI
 # Both `app-neural` (PESTO/CREPE in core) and `neural` (Basic Pitch +
 # HTDemucs IPC surface in src-tauri) must be on for the smoke pass to
 # exercise the import / transcribe / separate commands.
-cargo build -p neural-pitch --features app-neural,neural \
-  > "${REPORT_DIR}/cargo-build.log" 2>&1
+#
+# Retry once on failure: rust-lld occasionally dies with SIGBUS while
+# linking the ~250-rlib graph on a memory-pressured CI runner. The
+# relink runs against a warm cache once the first attempt's memory is
+# reclaimed; a second failure is a real error and aborts the smoke run.
+if ! cargo build -p neural-pitch --features app-neural,neural \
+  > "${REPORT_DIR}/cargo-build.log" 2>&1; then
+  echo "    cargo build failed once (likely a transient SIGBUS link); retrying" >&2
+  cargo build -p neural-pitch --features app-neural,neural \
+    >> "${REPORT_DIR}/cargo-build.log" 2>&1
+fi
 
 BINARY="${REPO_ROOT}/target/debug/neural-pitch"
 if [[ ! -x "${BINARY}" ]]; then
